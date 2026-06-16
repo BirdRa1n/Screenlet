@@ -1,0 +1,119 @@
+.vt-header {
+  height: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-6);
+  background: var(--surface-overlay);
+  backdrop-filter: var(--blur-glass);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+
+/* All interactive elements must opt out of drag */
+.vt-header button,
+.vt-header a,
+.vt-header input,
+.vt-header__page-title {
+  -webkit-app-region: no-drag;
+}
+
+.vt-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.vt-header__page-title {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.vt-header__status {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.vt-header__message {
+  font-size: var(--text-caption);
+  color: var(--success-300);
+}
+
+.vt-header__right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+/* ---- Export format grid ---- */
+
+.vt-export-formats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.vt-export-format {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--duration-base), box-shadow var(--duration-base);
+  position: relative;
+}
+
+.vt-export-format:hover:not(.vt-export-format--disabled) {
+  border-color: var(--border-strong);
+}
+
+.vt-export-format--selected {
+  border-color: var(--primary-400);
+  box-shadow: var(--shadow-glow-primary);
+}
+
+.vt-export-format--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vt-export-format__icon {
+  color: var(--text-tertiary);
+  display: flex;
+  flex-shrink: 0;
+}
+
+.vt-export-format__name {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.vt-export-format__dims {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+
+.vt-export-format__soon {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  background: var(--surface-raised);
+  color: var(--text-tertiary);
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+}
