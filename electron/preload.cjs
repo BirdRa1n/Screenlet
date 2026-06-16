@@ -13,6 +13,11 @@ contextBridge.exposeInMainWorld("vitrineTV", {
   projectsDelete: (id) => ipcRenderer.invoke("projects-delete", id),
   projectsRename: (id, name) => ipcRenderer.invoke("projects-rename", id, name),
 
+  // Library
+  libraryList: () => ipcRenderer.invoke("library-list"),
+  librarySave: (product) => ipcRenderer.invoke("library-save", product),
+  libraryDelete: (id) => ipcRenderer.invoke("library-delete", id),
+
   // Export
   exportVideo: (config, suggestedName) =>
     ipcRenderer.invoke("export-video", config, suggestedName),

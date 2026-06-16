@@ -5,41 +5,40 @@ import { useNavigationStore } from "../store/useNavigationStore";
 import { useAdStore } from "../store/useAdStore";
 import { useProjectsStore } from "../store/useProjectsStore";
 import { toast } from "../store/useToastStore";
+import { FORMAT_DIMENSIONS, type ExportFormat } from "../remotion/types";
 import type { ExportProgress } from "../global";
 import "../styles/layout/Header.css";
 
 /* ---- Export format dialog ---- */
 
-type Format = { id: string; label: string; dims: string; icon: React.ReactNode; available: boolean };
-
-const FORMATS: Format[] = [
-  { id: "tv",        label: "TV / Monitor", dims: "1920 × 1080 · 16:9",  icon: <Tv2 size={18} />,       available: true  },
-  { id: "instagram", label: "Instagram",    dims: "1080 × 1080 · 1:1",   icon: <Smartphone size={18} />, available: false },
-  { id: "stories",   label: "Stories",      dims: "1080 × 1920 · 9:16",  icon: <Smartphone size={18} />, available: false },
-  { id: "tiktok",    label: "TikTok",       dims: "1080 × 1920 · 9:16",  icon: <Smartphone size={18} />, available: false },
-];
+const FORMAT_ICONS: Record<ExportFormat, React.ReactNode> = {
+  tv:        <Tv2 size={18} />,
+  instagram: <Smartphone size={18} />,
+  stories:   <Smartphone size={18} />,
+  tiktok:    <Smartphone size={18} />,
+};
 
 const ExportDialog: React.FC<{
   open: boolean;
   onClose: () => void;
-  onExport: () => void;
+  onExport: (format: ExportFormat) => void;
   exporting: boolean;
 }> = ({ open, onClose, onExport, exporting }) => {
-  const [selected, setSelected] = useState("tv");
+  const [selected, setSelected] = useState<ExportFormat>("tv");
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
       title="Exportar vídeo"
-      description="Escolha o formato de destino para o vídeo."
+      description="Escolha o formato de destino. O layout se adapta automaticamente."
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button
             variant="primary"
-            disabled={exporting || selected !== "tv"}
-            onClick={onExport}
+            disabled={exporting}
+            onClick={() => onExport(selected)}
             icon={<Download size={14} />}
           >
             {exporting ? "Exportando..." : "Exportar MP4"}
@@ -48,24 +47,26 @@ const ExportDialog: React.FC<{
       }
     >
       <div className="vt-export-formats">
-        {FORMATS.map((f) => (
-          <div
-            key={f.id}
-            className={[
-              "vt-export-format",
-              selected === f.id && f.available ? "vt-export-format--selected" : "",
-              !f.available ? "vt-export-format--disabled" : "",
-            ].filter(Boolean).join(" ")}
-            onClick={() => f.available && setSelected(f.id)}
-          >
-            <span className="vt-export-format__icon">{f.icon}</span>
-            <div>
-              <div className="vt-export-format__name">{f.label}</div>
-              <div className="vt-export-format__dims">{f.dims}</div>
+        {(Object.keys(FORMAT_DIMENSIONS) as ExportFormat[]).map((id) => {
+          const f = FORMAT_DIMENSIONS[id];
+          return (
+            <div
+              key={id}
+              className={[
+                "vt-export-format",
+                selected === id ? "vt-export-format--selected" : "",
+              ].join(" ")}
+              onClick={() => setSelected(id)}
+            >
+              <span className="vt-export-format__icon">{FORMAT_ICONS[id]}</span>
+              <div>
+                <div className="vt-export-format__name">{f.label}</div>
+                <div className="vt-export-format__dims">{f.dims}</div>
+              </div>
+              {selected === id && <span className="vt-export-format__check">✓</span>}
             </div>
-            {!f.available && <span className="vt-export-format__soon">Em breve</span>}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </Dialog>
   );
@@ -73,10 +74,7 @@ const ExportDialog: React.FC<{
 
 /* ---- Save dialog ---- */
 
-const SaveDialog: React.FC<{
-  open: boolean;
-  onClose: () => void;
-}> = ({ open, onClose }) => {
+const SaveDialog: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
   const config = useAdStore((s) => s.config);
   const save = useProjectsStore((s) => s.save);
   const [name, setName] = useState(config.storeName || "");
@@ -117,7 +115,7 @@ export const EditorHeader: React.FC<{
   exporting: boolean;
   progress: ExportProgress | null;
   exportMessage: string | null;
-  onExport: () => void;
+  onExport: (format?: ExportFormat) => void;
   exportDisabled: boolean;
 }> = ({ exporting, progress, exportMessage, onExport, exportDisabled }) => {
   const navigate = useNavigationStore((s) => s.navigate);
@@ -163,7 +161,7 @@ export const EditorHeader: React.FC<{
       <ExportDialog
         open={exportOpen}
         onClose={() => setExportOpen(false)}
-        onExport={() => { setExportOpen(false); onExport(); }}
+        onExport={(format) => { setExportOpen(false); onExport(format); }}
         exporting={exporting}
       />
       <SaveDialog open={saveOpen} onClose={() => setSaveOpen(false)} />

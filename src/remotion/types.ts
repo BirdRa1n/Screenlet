@@ -42,6 +42,15 @@ export type AdConfig = {
   scenes: SceneConfig[];
 };
 
+export type ExportFormat = "tv" | "instagram" | "stories" | "tiktok";
+
+export const FORMAT_DIMENSIONS: Record<ExportFormat, { width: number; height: number; label: string; dims: string }> = {
+  tv:        { width: 1920, height: 1080, label: "TV / Monitor",  dims: "1920 × 1080 · 16:9" },
+  instagram: { width: 1080, height: 1080, label: "Instagram",     dims: "1080 × 1080 · 1:1"  },
+  stories:   { width: 1080, height: 1920, label: "Stories",       dims: "1080 × 1920 · 9:16" },
+  tiktok:    { width: 1080, height: 1920, label: "TikTok",        dims: "1080 × 1920 · 9:16" },
+};
+
 export const FPS = 30;
 export const WIDTH = 1920;
 export const HEIGHT = 1080;

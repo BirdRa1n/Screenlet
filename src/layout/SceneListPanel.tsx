@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   DndContext,
@@ -15,9 +15,10 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Megaphone, ShoppingBag, Trash2 } from "lucide-react";
+import { BookMarked, Check, GripVertical, Megaphone, Search, ShoppingBag, Trash2 } from "lucide-react";
 import { useAdStore } from "../store/useAdStore";
-import { Button, IconButton, UploadZone } from "../design-system/components";
+import { Button, Dialog, IconButton, UploadZone } from "../design-system/components";
+import { useLibraryStore, type LibraryProduct } from "../store/useLibraryStore";
 import { toast } from "../store/useToastStore";
 import "../styles/layout/SceneListPanel.css";
 
@@ -30,6 +31,67 @@ export const SceneListPanel: React.FC = () => {
   const addLogoScene = useAdStore((s) => s.addLogoScene);
   const setLogoImage = useAdStore((s) => s.setLogoImage);
   const reorderScenes = useAdStore((s) => s.reorderScenes);
+  const updateScene = useAdStore((s) => s.updateScene);
+
+  const library = useLibraryStore((s) => s.products);
+  const refreshLibrary = useLibraryStore((s) => s.refresh);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState("Todos");
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const handleOpenLibrary = async () => {
+    await refreshLibrary();
+    setSearch("");
+    setActiveCategory("Todos");
+    setSelected([]);
+    setLibraryOpen(true);
+  };
+
+  const categories = useMemo(() => {
+    const cats = Array.from(new Set(library.map((p) => p.category).filter(Boolean)));
+    return ["Todos", ...cats.sort()];
+  }, [library]);
+
+  const filtered = useMemo(() => {
+    let list = activeCategory === "Todos" ? library : library.filter((p) => p.category === activeCategory);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((p) => p.name.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q));
+    }
+    return list;
+  }, [library, activeCategory, search]);
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleImport = () => {
+    const toImport = selected
+      .map((id) => library.find((p) => p.id === id))
+      .filter(Boolean) as LibraryProduct[];
+
+    toImport.forEach((product) => {
+      addProductScene();
+      const newScene = useAdStore.getState().config.scenes.at(-1);
+      if (newScene && newScene.type === "product") {
+        updateScene(newScene.id, {
+          ...newScene,
+          image: product.image,
+          productName: product.name,
+          priceMode: product.priceMode,
+          oldPrice: product.oldPrice,
+          newPrice: product.newPrice,
+          priceSuffix: product.priceSuffix,
+          badgeText: product.badgeText,
+        });
+      }
+    });
+    setLibraryOpen(false);
+    toast.success(`${toImport.length} produto${toImport.length > 1 ? "s" : ""} importado${toImport.length > 1 ? "s" : ""} como cenas.`);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
@@ -131,8 +193,113 @@ export const SceneListPanel: React.FC = () => {
           >
             Logo/Texto
           </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<BookMarked size={14} />}
+            onClick={handleOpenLibrary}
+          >
+            Biblioteca
+          </Button>
         </div>
       </section>
+
+      <Dialog
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        title="Importar da Biblioteca"
+        size="xl"
+        footer={
+          selected.length > 0 ? (
+            <>
+              <span className="vt-lib-picker__count">
+                {selected.length} produto{selected.length > 1 ? "s" : ""} selecionado{selected.length > 1 ? "s" : ""}
+              </span>
+              <Button variant="secondary" onClick={() => setSelected([])}>Limpar</Button>
+              <Button variant="primary" onClick={handleImport}>
+                Importar {selected.length} {selected.length > 1 ? "cenas" : "cena"}
+              </Button>
+            </>
+          ) : undefined
+        }
+      >
+        <div className="vt-lib-picker">
+          {/* Search */}
+          <div className="vt-lib-picker__search-wrap">
+            <Search size={14} className="vt-lib-picker__search-icon" />
+            <input
+              className="vt-lib-picker__search"
+              placeholder="Buscar produto..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          {/* Category pills */}
+          {categories.length > 1 && (
+            <div className="vt-lib-picker__cats">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  className={`vt-lib-picker__cat${activeCategory === cat ? " vt-lib-picker__cat--active" : ""}`}
+                  onClick={() => setActiveCategory(cat)}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Grid */}
+          {library.length === 0 ? (
+            <div className="vt-lib-picker__empty">
+              Nenhum produto salvo na biblioteca ainda.
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="vt-lib-picker__empty">Nenhum resultado encontrado.</div>
+          ) : (
+            <div className="vt-lib-picker__grid">
+              {filtered.map((product) => {
+                const idx = selected.indexOf(product.id);
+                const isSelected = idx !== -1;
+                return (
+                  <button
+                    key={product.id}
+                    className={`vt-lib-picker__card${isSelected ? " vt-lib-picker__card--selected" : ""}`}
+                    onClick={() => toggleSelect(product.id)}
+                  >
+                    {isSelected && (
+                      <div className="vt-lib-picker__badge">{idx + 1}</div>
+                    )}
+                    <div className="vt-lib-picker__img">
+                      {product.image ? (
+                        <img src={product.image} alt={product.name} />
+                      ) : (
+                        <ShoppingBag size={22} />
+                      )}
+                    </div>
+                    <div className="vt-lib-picker__info">
+                      {product.category && (
+                        <span className="vt-lib-picker__cat-tag">{product.category}</span>
+                      )}
+                      <span className="vt-lib-picker__name">{product.name}</span>
+                      <span className="vt-lib-picker__price">
+                        {product.priceMode === "offer"
+                          ? `R$ ${product.oldPrice} → R$ ${product.newPrice}`
+                          : `R$ ${product.newPrice}`}
+                        {product.priceSuffix && ` ${product.priceSuffix}`}
+                      </span>
+                    </div>
+                    {isSelected && (
+                      <div className="vt-lib-picker__check"><Check size={11} /></div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Dialog>
     </aside>
   );
 };

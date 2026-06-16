@@ -199,19 +199,9 @@
 }
 
 .vt-wizard__tpl-preview {
-  height: 120px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 40px;
   position: relative;
-}
-
-.vt-wizard__tpl-preview::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+  overflow: hidden;
+  line-height: 0;
 }
 
 .vt-wizard__tpl-check {

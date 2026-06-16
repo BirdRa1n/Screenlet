@@ -8,3 +8,5 @@ export { Tooltip } from "./Tooltip";
 export { UploadZone } from "./UploadZone";
 export { Dialog } from "./Dialog";
 export { Tabs } from "./Tabs";
+export { ContextMenu, useContextMenu } from "./ContextMenu";
+export type { ContextMenuItem } from "./ContextMenu";

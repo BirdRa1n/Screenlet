@@ -15,7 +15,8 @@ export const LogoScene: React.FC<{
   logoImage: string;
 }> = ({ scene, logoImage }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
+  const sc = Math.min(width / 1920, height / 1080);
 
   const logoSpring = spring({
     frame,
@@ -41,7 +42,7 @@ export const LogoScene: React.FC<{
         alignItems: "center",
         justifyContent: "center",
         flexDirection: "column",
-        gap: 40,
+        gap: 40 * sc,
         fontFamily: "Helvetica, Arial, sans-serif",
       }}
     >
@@ -49,8 +50,8 @@ export const LogoScene: React.FC<{
         <Img
           src={staticFile(logoImage)}
           style={{
-            width: 720,
-            maxHeight: 420,
+            width: 720 * sc,
+            maxHeight: 420 * sc,
             objectFit: "contain",
             transform: `scale(${logoScale})`,
             opacity: logoOpacity,
@@ -61,11 +62,11 @@ export const LogoScene: React.FC<{
       <div
         style={{
           color: scene.taglineColor,
-          fontSize: 46,
+          fontSize: 46 * sc,
           fontWeight: 700,
           letterSpacing: 1,
           textAlign: "center",
-          padding: "0 80px",
+          padding: `0 ${80 * sc}px`,
           opacity: taglineOpacity,
           transform: `translateY(${taglineTranslate}px)`,
         }}

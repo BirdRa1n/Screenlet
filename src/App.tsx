@@ -11,10 +11,11 @@ import { PreviewPanel } from "./layout/PreviewPanel";
 import { InspectorPanel } from "./layout/InspectorPanel";
 import { Dashboard } from "./pages/Dashboard";
 import { Projects } from "./pages/Projects";
+import { Library } from "./pages/Library";
 import { Wizard } from "./pages/Wizard";
 import { Settings } from "./pages/Settings";
+import { FORMAT_DIMENSIONS, type ExportFormat, type AdConfig } from "./remotion/types";
 import type { ExportProgress } from "./global";
-import type { AdConfig } from "./remotion/types";
 import "./styles/app.css";
 
 const pageVariants = {
@@ -36,13 +37,24 @@ export default function App() {
     return window.vitrineTV.onExportProgress((data) => setProgress(data));
   }, []);
 
-  const handleExport = async (overrideConfig?: AdConfig) => {
-    const cfg = overrideConfig ?? config;
+  const handleExport = async (formatOrConfig?: ExportFormat | AdConfig, overrideConfig?: AdConfig) => {
+    let cfg = overrideConfig ?? config;
+    let format: ExportFormat = "tv";
+
+    if (typeof formatOrConfig === "string") {
+      format = formatOrConfig;
+    } else if (formatOrConfig && "scenes" in formatOrConfig) {
+      cfg = formatOrConfig;
+    }
+
+    const { width, height } = FORMAT_DIMENSIONS[format];
+    const exportConfig = { ...cfg, width, height };
+
     setExporting(true);
     setExportMessage(null);
     setProgress(null);
     try {
-      const result = await window.vitrineTV.exportVideo(cfg, "anuncio-vitrinetv.mp4");
+      const result = await window.vitrineTV.exportVideo(exportConfig, `anuncio-vitrinetv-${format}.mp4`);
       if (result.canceled) {
         toast.info("Exportação cancelada.");
         setExportMessage("Exportação cancelada.");
@@ -70,32 +82,33 @@ export default function App() {
               <Dashboard />
             </motion.div>
           )}
-
           {page === "projects" && (
             <motion.div key="projects" className="vt-app__main" {...pageVariants}>
               <Projects />
             </motion.div>
           )}
-
+          {page === "library" && (
+            <motion.div key="library" className="vt-app__main" {...pageVariants}>
+              <Library />
+            </motion.div>
+          )}
           {page === "settings" && (
             <motion.div key="settings" className="vt-app__main" {...pageVariants}>
               <Settings />
             </motion.div>
           )}
-
           {page === "wizard" && (
             <motion.div key="wizard" className="vt-app__main" {...pageVariants}>
-              <Wizard onExport={handleExport} exporting={exporting} />
+              <Wizard onExport={(cfg) => handleExport(cfg)} exporting={exporting} />
             </motion.div>
           )}
-
           {page === "editor" && (
             <motion.div key="editor" className="vt-app__main" {...pageVariants}>
               <EditorHeader
                 exporting={exporting}
                 progress={progress}
                 exportMessage={exportMessage}
-                onExport={() => handleExport()}
+                onExport={(format) => handleExport(format ?? "tv")}
                 exportDisabled={config.scenes.length === 0}
               />
               <div className="vt-app__editor">
