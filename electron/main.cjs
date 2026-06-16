@@ -1,14 +1,22 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, protocol, net } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 
 const isDev = !app.isPackaged;
-const PUBLIC_DIR = isDev
-  ? path.join(__dirname, "..", "public")
-  : path.join(process.resourcesPath, "public");
-const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
+
+// Dev: uploads in project/public/ so Vite serves them for Remotion Player
+// Prod: uploads in userData/ — persists across app updates, never inside asar
+const UPLOADS_DIR = isDev
+  ? path.join(__dirname, "..", "public", "uploads")
+  : path.join(app.getPath("userData"), "uploads");
+
 const PROJECTS_DIR = path.join(app.getPath("userData"), "projects");
+
+// Register app:// BEFORE app is ready (Electron requirement)
+protocol.registerSchemesAsPrivileged([
+  { scheme: "app", privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true } },
+]);
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -22,8 +30,7 @@ function copyIntoUploads(srcPath) {
     .replace(/[^a-zA-Z0-9-_]/g, "_")
     .slice(0, 40);
   const filename = `${Date.now()}-${base}${ext}`;
-  const destPath = path.join(UPLOADS_DIR, filename);
-  fs.copyFileSync(srcPath, destPath);
+  fs.copyFileSync(srcPath, path.join(UPLOADS_DIR, filename));
   return `uploads/${filename}`;
 }
 
@@ -46,13 +53,30 @@ function createWindow() {
     mainWindow.loadURL("http://localhost:5173");
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+    // Load via app:// so staticFile('/uploads/x') resolves correctly inside Remotion Player
+    mainWindow.loadURL("app://index.html");
   }
 }
 
 app.whenReady().then(() => {
   ensureDir(UPLOADS_DIR);
   ensureDir(PROJECTS_DIR);
+
+  // app:// protocol handler — serves app bundle + user uploads from the right locations
+  protocol.handle("app", (request) => {
+    const { pathname } = new URL(request.url);
+
+    // User-uploaded files → userData/uploads/
+    if (pathname.startsWith("/uploads/")) {
+      const filePath = path.join(app.getPath("userData"), pathname);
+      return net.fetch(`file://${filePath}`);
+    }
+
+    // App bundle assets → dist/
+    const distPath = path.join(__dirname, "..", "dist", pathname);
+    return net.fetch(`file://${distPath}`);
+  });
+
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -163,8 +187,15 @@ ipcMain.handle("export-video", async (_event, config, suggestedName) => {
     ? path.join(__dirname, "..", "src", "remotion", "Root.tsx")
     : path.join(process.resourcesPath, "remotion-entry", "Root.tsx");
 
+  // publicDir tells Remotion's webpack server where to find uploads/
+  // Dev: project/public/ — Prod: userData/ (contains uploads/ subdir)
+  const publicDir = isDev
+    ? path.join(__dirname, "..", "public")
+    : app.getPath("userData");
+
   const bundleLocation = await bundle({
     entryPoint: entry,
+    publicDir,
     onProgress: (progress) => {
       mainWindow.webContents.send("export-progress", { phase: "bundling", progress });
     },

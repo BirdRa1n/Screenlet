@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import "./Tabs.css";
+import "../../styles/components/Tabs.css";
 
 type Tab = { value: string; label: string };
 

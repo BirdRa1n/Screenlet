@@ -7,7 +7,7 @@ import { useAdStore } from "../store/useAdStore";
 import { useProjectsStore } from "../store/useProjectsStore";
 import { toast } from "../store/useToastStore";
 import type { ProjectMeta } from "../global";
-import "./Projects.css";
+import "../styles/pages/Projects.css";
 
 export const Projects: React.FC = () => {
   const navigate = useNavigationStore((s) => s.navigate);

@@ -1,7 +1,7 @@
 import React from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useThemeStore, type Theme } from "../store/useThemeStore";
-import "./Settings.css";
+import "../styles/pages/Settings.css";
 
 type ThemeOption = { value: Theme; label: string; description: string; icon: React.ReactNode };
 

@@ -21,7 +21,7 @@ import {
 import { toast } from "../store/useToastStore";
 import { DynamicAd } from "../remotion/DynamicAd";
 import type { PresetId } from "../remotion/presets";
-import "./Wizard.css";
+import "../styles/pages/Wizard.css";
 
 const STEPS = [
   { num: 1 as const, label: "Loja" },
@@ -255,7 +255,7 @@ const StepLoja: React.FC = () => {
       <div className="vt-wizard__fields">
         <Field label="Nome da empresa">
           <TextField
-            placeholder="Ex: Supermercado Popy"
+            placeholder="Ex: Supermercado Central"
             value={w.storeName}
             onChange={(e) => w.setStoreName(e.target.value)}
           />
@@ -361,7 +361,7 @@ const StepProdutos: React.FC = () => {
               <div className="vt-wizard__fields">
                 <Field label="Nome do produto">
                   <TextField
-                    placeholder="Ex: Picanha"
+                    placeholder="Ex: Arroz Integral 1kg"
                     value={p.productName}
                     onChange={(e) =>
                       w.updateProduct(p.id, { productName: e.target.value })

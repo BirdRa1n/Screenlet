@@ -1,6 +1,6 @@
 import React from "react";
 import { motion, type HTMLMotionProps } from "framer-motion";
-import "./Button.css";
+import "../../styles/components/Button.css";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";

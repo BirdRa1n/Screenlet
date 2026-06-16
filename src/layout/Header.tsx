@@ -6,7 +6,7 @@ import { useAdStore } from "../store/useAdStore";
 import { useProjectsStore } from "../store/useProjectsStore";
 import { toast } from "../store/useToastStore";
 import type { ExportProgress } from "../global";
-import "./Header.css";
+import "../styles/layout/Header.css";
 
 /* ---- Export format dialog ---- */
 
@@ -79,7 +79,7 @@ const SaveDialog: React.FC<{
 }> = ({ open, onClose }) => {
   const config = useAdStore((s) => s.config);
   const save = useProjectsStore((s) => s.save);
-  const [name, setName] = useState(config.storeName || "Meu anúncio");
+  const [name, setName] = useState(config.storeName || "");
 
   const handleSave = async () => {
     if (!name.trim()) return;

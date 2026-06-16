@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { UploadCloud } from "lucide-react";
-import "./UploadZone.css";
+import "../../styles/components/UploadZone.css";
 
 type Props = {
   value?: string | null;

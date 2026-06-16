@@ -3,7 +3,7 @@ import { Player } from "@remotion/player";
 import { DynamicAd } from "../remotion/DynamicAd";
 import { useAdStore } from "../store/useAdStore";
 import { totalDuration } from "../remotion/types";
-import "./PreviewPanel.css";
+import "../styles/layout/PreviewPanel.css";
 
 export const PreviewPanel: React.FC = () => {
   const config = useAdStore((s) => s.config);

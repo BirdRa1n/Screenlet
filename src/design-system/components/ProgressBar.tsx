@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import "./ProgressBar.css";
+import "../../styles/components/ProgressBar.css";
 
 export const ProgressBar: React.FC<{
   progress: number;

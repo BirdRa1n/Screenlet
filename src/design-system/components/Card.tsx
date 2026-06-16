@@ -1,6 +1,6 @@
 import React from "react";
 import { motion, type HTMLMotionProps } from "framer-motion";
-import "./Card.css";
+import "../../styles/components/Card.css";
 
 type Props = HTMLMotionProps<"div"> & {
   selected?: boolean;

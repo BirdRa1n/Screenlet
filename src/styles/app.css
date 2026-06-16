@@ -1,25 +1,5 @@
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+/* ---- Root app layout ---- */
 
-html,
-body,
-#root {
-  height: 100%;
-}
-
-body {
-  background: var(--background);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-}
-
-/* Root: sidebar + main side-by-side */
 .vt-app {
   display: flex;
   height: 100vh;

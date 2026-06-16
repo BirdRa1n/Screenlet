@@ -19,7 +19,7 @@ import { GripVertical, Megaphone, ShoppingBag, Trash2 } from "lucide-react";
 import { useAdStore } from "../store/useAdStore";
 import { Button, IconButton, UploadZone } from "../design-system/components";
 import { toast } from "../store/useToastStore";
-import "./SceneListPanel.css";
+import "../styles/layout/SceneListPanel.css";
 
 export const SceneListPanel: React.FC = () => {
   const config = useAdStore((s) => s.config);

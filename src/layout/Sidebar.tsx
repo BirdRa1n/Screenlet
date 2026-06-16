@@ -1,5 +1,4 @@
 import React from "react";
-import { motion } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
@@ -8,12 +7,11 @@ import {
   Images,
   LayoutGrid,
   LayoutTemplate,
-  Plus,
   Settings,
   Video,
 } from "lucide-react";
 import { useNavigationStore, type Page } from "../store/useNavigationStore";
-import "./Sidebar.css";
+import "../styles/layout/Sidebar.css";
 
 type NavItem = {
   icon: React.ReactNode;

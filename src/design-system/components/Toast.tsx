@@ -2,7 +2,7 @@ import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useToastStore } from "../../store/useToastStore";
-import "./Toast.css";
+import "../../styles/components/Toast.css";
 
 export const ToastContainer: React.FC = () => {
   const toasts = useToastStore((s) => s.toasts);

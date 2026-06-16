@@ -7,7 +7,7 @@ import { useAdStore } from "../store/useAdStore";
 import { useProjectsStore } from "../store/useProjectsStore";
 import { toast } from "../store/useToastStore";
 import type { ProjectMeta } from "../global";
-import "./Dashboard.css";
+import "../styles/pages/Dashboard.css";
 
 type TemplateCard = {
   id: string;

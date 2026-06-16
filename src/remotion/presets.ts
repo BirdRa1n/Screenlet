@@ -9,7 +9,7 @@ import {
   type ProductSceneConfig,
 } from "./types";
 
-const LOGO = "assets/logo-popy.png";
+const LOGO = "";
 
 export type PresetId = "generico" | "carnes" | "natal" | "pascoa";
 

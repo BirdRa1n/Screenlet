@@ -15,7 +15,7 @@ import { Wizard } from "./pages/Wizard";
 import { Settings } from "./pages/Settings";
 import type { ExportProgress } from "./global";
 import type { AdConfig } from "./remotion/types";
-import "./App.css";
+import "./styles/app.css";
 
 const pageVariants = {
   initial: { opacity: 0, y: 8 },

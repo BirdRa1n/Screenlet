@@ -1,7 +1,7 @@
 import React from "react";
 import { motion, type HTMLMotionProps } from "framer-motion";
 import { Tooltip } from "./Tooltip";
-import "./IconButton.css";
+import "../../styles/components/IconButton.css";
 
 type Props = Omit<HTMLMotionProps<"button">, "ref" | "children"> & {
   variant?: "default" | "danger";

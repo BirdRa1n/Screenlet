@@ -1,5 +1,5 @@
 import React from "react";
-import "./Field.css";
+import "../../styles/components/Field.css";
 
 export const Field: React.FC<{
   label: string;

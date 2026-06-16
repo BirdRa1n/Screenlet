@@ -16,7 +16,7 @@ import {
   type LogoSceneConfig,
   type ProductSceneConfig,
 } from "../remotion/types";
-import "./InspectorPanel.css";
+import "../styles/layout/InspectorPanel.css";
 
 const PRODUCT_TABS = [
   { value: "content", label: "Conteúdo" },
