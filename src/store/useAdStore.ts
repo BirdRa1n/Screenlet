@@ -10,8 +10,10 @@ import {
 type AdStore = {
   config: AdConfig;
   selectedSceneId: string | null;
+  seekFrame: number | null;
 
   selectScene: (id: string) => void;
+  seekToScene: (id: string) => void;
   setLogoImage: (path: string) => void;
   updateScene: (id: string, scene: SceneConfig) => void;
   removeScene: (id: string) => void;
@@ -27,8 +29,21 @@ const initialConfig = buildPreset("generico");
 export const useAdStore = create<AdStore>((set) => ({
   config: initialConfig,
   selectedSceneId: initialConfig.scenes[0]?.id ?? null,
+  seekFrame: null,
 
   selectScene: (id) => set({ selectedSceneId: id }),
+
+  seekToScene: (id) =>
+    set((state) => {
+      let frame = 0;
+      for (const scene of state.config.scenes) {
+        if (scene.id === id) break;
+        frame += scene.durationInFrames;
+      }
+      const scene = state.config.scenes.find((s) => s.id === id);
+      const offset = Math.min(30, Math.floor((scene?.durationInFrames ?? 0) * 0.35));
+      return { selectedSceneId: id, seekFrame: frame + offset };
+    }),
 
   setLogoImage: (path) =>
     set((state) => ({ config: { ...state.config, logoImage: path } })),
@@ -90,6 +105,7 @@ export const useAdStore = create<AdStore>((set) => ({
     set({
       config,
       selectedSceneId: config.scenes[0]?.id ?? null,
+      seekFrame: null,
     }),
 }));
 
