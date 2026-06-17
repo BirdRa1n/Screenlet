@@ -307,10 +307,10 @@ ipcMain.handle("export-video", async (_event, payload, suggestedName) => {
       },
     });
   } else {
-    // Use the pre-built Remotion bundle (outside .asar via asarUnpack)
+    // Use the pre-built Remotion bundle (asar:false → files are under resources/app/)
     bundleLocation = path.join(
       process.resourcesPath,
-      "app.asar.unpacked",
+      "app",
       "dist",
       "remotion-bundle"
     );
