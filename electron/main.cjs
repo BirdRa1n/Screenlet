@@ -5,6 +5,19 @@ const crypto = require("node:crypto");
 
 const isDev = !app.isPackaged;
 
+// Electron patches fs.readFile/open for .asar paths but NOT fs.chmod.
+// Remotion calls fs.chmodSync on the compositor binary using a path derived from
+// require.resolve, which returns the .asar path even when the file is in .asar.unpacked.
+// This redirect ensures chmod hits the real filesystem path.
+if (!isDev) {
+  const _chmodSync = fs.chmodSync.bind(fs);
+  const _chmod    = fs.chmod.bind(fs);
+  const fixAsar   = (p) =>
+    typeof p === "string" ? p.replace(/\.asar([/\\])/, ".asar.unpacked$1") : p;
+  fs.chmodSync = (p, mode)       => _chmodSync(fixAsar(p), mode);
+  fs.chmod     = (p, mode, cb)   => _chmod(fixAsar(p), mode, cb);
+}
+
 // Dev: uploads in project/public/ so Vite serves them for Remotion Player
 // Prod: uploads in userData/ — persists across app updates, never inside asar
 const UPLOADS_DIR = isDev
@@ -264,6 +277,9 @@ ipcMain.handle("template-delete", (_event, id) => {
 /* ---- Export ---- */
 
 ipcMain.handle("export-video", async (_event, payload, suggestedName) => {
+  // Remotion needs HOME to create ~/.remotion cache dir; it may be unset in packaged Electron
+  if (!process.env.HOME) process.env.HOME = app.getPath("home");
+
   const saveResult = await dialog.showSaveDialog(mainWindow, {
     title: "Exportar vídeo",
     defaultPath: suggestedName || "anuncio.mp4",
