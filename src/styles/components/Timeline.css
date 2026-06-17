@@ -1,0 +1,202 @@
+.vt-timeline {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+  user-select: none;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.vt-timeline__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--surface-2);
+}
+
+.vt-timeline__toggle {
+  margin-left: auto;
+}
+
+/* Ruler */
+.vt-timeline__ruler-row {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.vt-timeline__label-col {
+  width: 120px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+}
+
+.vt-timeline__ruler {
+  flex: 1;
+  height: 20px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.vt-timeline__tick {
+  position: absolute;
+  top: 0;
+  height: 8px;
+  width: 1px;
+  background: var(--border);
+  transform: translateX(-50%);
+}
+
+.vt-timeline__tick-label {
+  position: absolute;
+  top: 8px;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+/* Tracks */
+.vt-timeline__tracks {
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 160px;
+}
+
+.vt-timeline__track {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  height: 28px;
+}
+
+.vt-timeline__track:last-child {
+  border-bottom: none;
+}
+
+.vt-timeline__track-label {
+  width: 120px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.12s;
+  gap: 5px;
+}
+
+.vt-timeline__track-label:hover {
+  background: var(--surface-2);
+}
+
+.vt-timeline__track-label--selected {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-1));
+  color: var(--text-primary);
+}
+
+.vt-timeline__track-label-type {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.vt-timeline__track-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Clip */
+.vt-timeline__clip {
+  position: absolute;
+  top: 4px;
+  height: 20px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 55%, var(--surface-2));
+  border: 1px solid var(--accent);
+  display: flex;
+  align-items: center;
+  padding: 0 5px;
+  font-size: 10px;
+  color: #fff;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.vt-timeline__clip:hover {
+  background: color-mix(in srgb, var(--accent) 75%, var(--surface-2));
+}
+
+.vt-timeline__clip--selected {
+  background: var(--accent);
+  z-index: 2;
+}
+
+/* Resize handles on clip */
+.vt-timeline__clip-resize-l,
+.vt-timeline__clip-resize-r {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.vt-timeline__clip-resize-l { left: 0; border-radius: 4px 0 0 4px; }
+.vt-timeline__clip-resize-r { right: 0; border-radius: 0 4px 4px 0; }
+
+/* Playhead */
+.vt-timeline__playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.vt-timeline__playhead::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid var(--accent);
+}
+
+/* Scene segments in ruler */
+.vt-timeline__scene-seg {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  white-space: nowrap;
+}

@@ -3,6 +3,8 @@ import { buildPreset } from "../remotion/presets";
 import {
   defaultLogoScene,
   defaultProductScene,
+  defaultTemplateScene,
+  defaultVideoScene,
   type AdConfig,
   type SceneConfig,
 } from "../remotion/types";
@@ -21,6 +23,8 @@ type AdStore = {
   reorderScenes: (orderedIds: string[]) => void;
   addProductScene: () => void;
   addLogoScene: () => void;
+  addTemplateScene: (templateId?: string) => void;
+  addVideoScene: () => void;
   loadConfig: (config: AdConfig) => void;
 };
 
@@ -95,6 +99,22 @@ export const useAdStore = create<AdStore>((set) => ({
 
   addLogoScene: () => {
     const scene = defaultLogoScene();
+    set((state) => ({
+      config: { ...state.config, scenes: [...state.config.scenes, scene] },
+      selectedSceneId: scene.id,
+    }));
+  },
+
+  addTemplateScene: (templateId = "") => {
+    const scene = defaultTemplateScene(templateId);
+    set((state) => ({
+      config: { ...state.config, scenes: [...state.config.scenes, scene] },
+      selectedSceneId: scene.id,
+    }));
+  },
+
+  addVideoScene: () => {
+    const scene = defaultVideoScene();
     set((state) => ({
       config: { ...state.config, scenes: [...state.config.scenes, scene] },
       selectedSceneId: scene.id,

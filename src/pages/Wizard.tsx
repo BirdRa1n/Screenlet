@@ -446,15 +446,26 @@ const StepTemplate: React.FC = () => {
               onClick={() => setPreset(tpl.id)}
             >
               <div className="vt-wizard__tpl-preview">
-                <Player
-                  component={DynamicAd}
-                  inputProps={buildPreset(tpl.id)}
-                  durationInFrames={60}
-                  fps={30}
-                  compositionWidth={1920}
-                  compositionHeight={1080}
-                  style={{ width: "100%", aspectRatio: "16/9", pointerEvents: "none", display: "block" }}
-                />
+                {(() => {
+                  const preset = buildPreset(tpl.id);
+                  const total = preset.scenes.reduce((s, c) => s + c.durationInFrames, 0);
+                  const logoFrames = preset.scenes[0]?.durationInFrames ?? 0;
+                  return (
+                    <Player
+                      component={DynamicAd}
+                      inputProps={preset}
+                      durationInFrames={Math.max(total, 1)}
+                      fps={30}
+                      compositionWidth={1920}
+                      compositionHeight={1080}
+                      style={{ width: "100%", aspectRatio: "16/9", pointerEvents: "none", display: "block" }}
+                      initialFrame={Math.min(logoFrames + 30, Math.max(total - 1, 0))}
+                      autoPlay
+                      loop
+                      acknowledgeRemotionLicense
+                    />
+                  );
+                })()}
                 {selected && (
                   <div className="vt-wizard__tpl-check">
                     <Check size={12} />
@@ -497,6 +508,7 @@ const StepPreview: React.FC<{
           style={{ width: "100%", aspectRatio: "16/9" }}
           controls
           loop
+          acknowledgeRemotionLicense
         />
       ) : (
         <div
