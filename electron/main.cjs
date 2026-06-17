@@ -63,18 +63,45 @@ app.whenReady().then(() => {
   ensureDir(PROJECTS_DIR);
 
   // app:// protocol handler — serves app bundle + user uploads from the right locations
+  //
+  // net.fetch("file://...") cannot read files inside .asar archives (electron-builder default).
+  // fs.readFileSync CAN, because Electron patches the fs module to transparently handle .asar.
+  // Uploads live outside the archive in userData, so they still use net.fetch via file://.
   protocol.handle("app", (request) => {
     const { pathname } = new URL(request.url);
 
-    // User-uploaded files → userData/uploads/
+    // User-uploaded files → userData/ (outside .asar, safe to use net.fetch)
     if (pathname.startsWith("/uploads/")) {
       const filePath = path.join(app.getPath("userData"), pathname);
       return net.fetch(`file://${filePath}`);
     }
 
-    // App bundle assets → dist/
-    const distPath = path.join(__dirname, "..", "dist", pathname);
-    return net.fetch(`file://${distPath}`);
+    // App bundle assets → dist/ (may be inside .asar — use fs.readFileSync)
+    const resolved = pathname === "/" ? "/index.html" : pathname;
+    const distPath = path.join(__dirname, "..", "dist", resolved);
+    const MIME = {
+      html: "text/html; charset=utf-8",
+      js:   "application/javascript",
+      css:  "text/css",
+      svg:  "image/svg+xml",
+      png:  "image/png",
+      jpg:  "image/jpeg",
+      jpeg: "image/jpeg",
+      webp: "image/webp",
+      ico:  "image/x-icon",
+      woff: "font/woff",
+      woff2:"font/woff2",
+      ttf:  "font/ttf",
+      json: "application/json",
+    };
+    try {
+      const data = fs.readFileSync(distPath);
+      const ext = path.extname(distPath).slice(1).toLowerCase();
+      const mime = MIME[ext] || "application/octet-stream";
+      return new Response(data, { headers: { "Content-Type": mime } });
+    } catch {
+      return new Response("Not found", { status: 404 });
+    }
   });
 
   createWindow();
@@ -244,24 +271,43 @@ ipcMain.handle("export-video", async (_event, payload, suggestedName) => {
   });
   if (saveResult.canceled || !saveResult.filePath) return { canceled: true };
 
-  const { bundle } = await import("@remotion/bundler");
   const { renderMedia, selectComposition } = await import("@remotion/renderer");
 
-  const entry = isDev
-    ? path.join(__dirname, "..", "src", "remotion", "Root.tsx")
-    : path.join(process.resourcesPath, "remotion-entry", "Root.tsx");
+  let bundleLocation;
 
-  const publicDir = isDev
-    ? path.join(__dirname, "..", "public")
-    : app.getPath("userData");
+  if (isDev) {
+    const { bundle } = await import("@remotion/bundler");
+    bundleLocation = await bundle({
+      entryPoint: path.join(__dirname, "..", "src", "remotion", "Root.tsx"),
+      publicDir: path.join(__dirname, "..", "public"),
+      onProgress: (progress) => {
+        mainWindow.webContents.send("export-progress", { phase: "bundling", progress });
+      },
+    });
+  } else {
+    // Use the pre-built Remotion bundle (outside .asar via asarUnpack)
+    bundleLocation = path.join(
+      process.resourcesPath,
+      "app.asar.unpacked",
+      "dist",
+      "remotion-bundle"
+    );
 
-  const bundleLocation = await bundle({
-    entryPoint: entry,
-    publicDir,
-    onProgress: (progress) => {
-      mainWindow.webContents.send("export-progress", { phase: "bundling", progress });
-    },
-  });
+    // Sync user uploads into the bundle dir so staticFile('/uploads/x') resolves correctly
+    const userUploads = path.join(app.getPath("userData"), "uploads");
+    const bundleUploads = path.join(bundleLocation, "uploads");
+    if (fs.existsSync(userUploads)) {
+      ensureDir(bundleUploads);
+      for (const file of fs.readdirSync(userUploads)) {
+        const dst = path.join(bundleUploads, file);
+        if (!fs.existsSync(dst)) {
+          fs.copyFileSync(path.join(userUploads, file), dst);
+        }
+      }
+    }
+
+    mainWindow.webContents.send("export-progress", { phase: "bundling", progress: 1 });
+  }
 
   // Detect payload type: template-based ({ template, values, width, height })
   // or legacy AdConfig ({ scenes, width, height })
