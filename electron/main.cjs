@@ -21,17 +21,30 @@ try {
 
 const isDev = !app.isPackaged;
 
-// Electron patches fs.readFile/open for .asar paths but NOT fs.chmod.
-// Remotion calls fs.chmodSync on the compositor binary using a path derived from
-// require.resolve, which returns the .asar path even when the file is in .asar.unpacked.
-// This redirect ensures chmod hits the real filesystem path.
+// Electron patches fs (readFile, open, stat…) for .asar paths but NOT fs.chmod
+// nor child_process.spawn. Remotion resolves the compositor binary via require.resolve,
+// which returns the .asar path even when asarUnpack copied it to .asar.unpacked.
+// We patch all three so chmod + spawn both hit the real filesystem path.
 if (!isDev) {
-  const _chmodSync = fs.chmodSync.bind(fs);
-  const _chmod    = fs.chmod.bind(fs);
-  const fixAsar   = (p) =>
+  const cp = require("node:child_process");
+  const fixAsar = (p) =>
     typeof p === "string" ? p.replace(/\.asar([/\\])/, ".asar.unpacked$1") : p;
-  fs.chmodSync = (p, mode)       => _chmodSync(fixAsar(p), mode);
-  fs.chmod     = (p, mode, cb)   => _chmod(fixAsar(p), mode, cb);
+
+  // fs.chmod / fs.chmodSync
+  const _chmodSync = fs.chmodSync.bind(fs);
+  const _chmod     = fs.chmod.bind(fs);
+  fs.chmodSync = (p, mode)     => _chmodSync(fixAsar(p), mode);
+  fs.chmod     = (p, mode, cb) => _chmod(fixAsar(p), mode, cb);
+
+  // child_process.spawn / spawnSync / execFile / execFileSync
+  const _spawn        = cp.spawn.bind(cp);
+  const _spawnSync    = cp.spawnSync.bind(cp);
+  const _execFile     = cp.execFile.bind(cp);
+  const _execFileSync = cp.execFileSync.bind(cp);
+  cp.spawn        = (cmd, ...rest) => _spawn(fixAsar(cmd), ...rest);
+  cp.spawnSync    = (cmd, ...rest) => _spawnSync(fixAsar(cmd), ...rest);
+  cp.execFile     = (cmd, ...rest) => _execFile(fixAsar(cmd), ...rest);
+  cp.execFileSync = (cmd, ...rest) => _execFileSync(fixAsar(cmd), ...rest);
 }
 
 // Dev: uploads in project/public/ so Vite serves them for Remotion Player
