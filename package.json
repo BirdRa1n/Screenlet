@@ -23,14 +23,11 @@
     "directories": {
       "output": "release"
     },
+    "asar": false,
     "files": [
       "dist/**/*",
       "electron/**/*",
       "scripts/**/*"
-    ],
-    "asarUnpack": [
-      "dist/remotion-bundle/**",
-      "node_modules/@remotion/**"
     ],
     "mac": {
       "category": "public.app-category.video",
