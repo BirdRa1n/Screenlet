@@ -29,7 +29,6 @@ import { TemplateRenderer } from "../remotion/TemplateRenderer";
 import { templateTotalFrames, defaultValues } from "../remotion/template-utils";
 import { useTemplateStore } from "../store/useTemplateStore";
 import { useNavigationStore } from "../store/useNavigationStore";
-import { useTemplateInstanceStore } from "../store/useTemplateInstanceStore";
 import { toast } from "../store/useToastStore";
 import type {
   Template,
