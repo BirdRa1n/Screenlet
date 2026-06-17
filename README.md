@@ -1,20 +1,48 @@
-# VitrineTV
+# AdFrame
 
-Editor visual de anúncios em vídeo para televisores em pontos de venda — supermercados, lojas e comércio em geral.
+Editor desktop para criação de vídeos publicitários para supermercados e varejo — TV, Instagram, Stories e TikTok.
 
-Crie apresentações profissionais com produtos, preços e logo da sua marca, e exporte diretamente em **MP4** pronto para exibição em TV.
+Crie anúncios profissionais com produtos, preços e logo da sua marca e exporte diretamente em **MP4**, sem dependências externas.
 
 ---
 
 ## Funcionalidades
 
-- **Editor visual** com painel de cenas, prévia em tempo real e inspetor de propriedades
-- **Cenas de produto** — imagem do produto, nome, preço normal ou oferta (preço de/por), badge personalizável
-- **Cenas de logo/chamada** — exibição da marca com tagline animada
-- **Logo overlay** — aplique a logo da loja em qualquer canto de cada cena
-- **Cores totalmente editáveis** — texto, preços, badges, fundos, por cena
-- **Tema claro / escuro** com persistência
-- **Exportação em MP4** diretamente pelo app, sem dependências externas
+### Editor
+- Painel de cenas com drag-and-drop para reordenar
+- Prévia em tempo real com `@remotion/player`
+- Ao selecionar uma cena, o preview avança automaticamente para aquele ponto do vídeo
+- Inspetor de propriedades com edição de cores, textos, preços e logo
+
+### Cenas
+- **Produto** — imagem, nome, preço único ou oferta (de/por), sufixo, badge personalizável
+- **Logo/Chamada** — exibição da marca com tagline animada
+- **Logo overlay** — aplique a logo em qualquer canto de cada cena
+
+### Exportação multi-formato
+| Formato | Resolução | Proporção |
+|---|---|---|
+| TV / Monitor | 1920 × 1080 | 16:9 |
+| Instagram | 1080 × 1080 | 1:1 |
+| Stories | 1080 × 1920 | 9:16 |
+| TikTok | 1080 × 1920 | 9:16 |
+
+### Biblioteca de Produtos
+- Cadastre produtos reutilizáveis com categorias
+- Busca e filtro por categoria
+- Importe múltiplos produtos no editor com multi-seleção ordenada
+
+### Wizard de criação
+- 5 passos guiados: loja → produtos → template → preview → exportação
+- Importação de produtos via CSV
+- 4 templates visuais com preview real (Genérico, Açougue, Natal, Páscoa)
+
+### Projetos
+- Salve e carregue projetos com nome
+- Histórico com data de atualização
+
+### Configurações
+- Tema claro / escuro / sistema (segue o macOS em tempo real)
 
 ---
 
@@ -22,13 +50,13 @@ Crie apresentações profissionais com produtos, preços e logo da sua marca, e 
 
 | Camada | Tecnologia |
 |---|---|
-| Desktop | Electron 42 |
-| UI | React 19 + Vite 8 |
-| Animações | Framer Motion 12 |
+| Desktop | Electron |
+| UI | React 19 + Vite |
+| Animações | Framer Motion |
 | Vídeo | Remotion 4 |
 | Estado | Zustand 5 |
+| Drag & Drop | dnd-kit |
 | Ícones | Lucide React |
-| Tipografia | Inter (@fontsource) |
 
 ---
 
@@ -42,8 +70,8 @@ Crie apresentações profissionais com produtos, preços e logo da sua marca, e 
 ## Instalação
 
 ```bash
-git clone https://github.com/seu-usuario/vitrinetv.git
-cd vitrinetv
+git clone https://github.com/BirdRa1n/AdFrame.git
+cd AdFrame
 npm install
 ```
 
@@ -64,21 +92,23 @@ npm run dev
 ## Build
 
 ```bash
+# Gera os arquivos em dist/
 npm run build
-```
 
-Gera os arquivos em `dist/`. Para empacotar o instalador do app use [electron-builder](https://www.electron.build/) (não incluído por padrão).
+# Empacota o instalador (macOS)
+npm run dist:mac
+```
 
 ---
 
 ## Como usar
 
-1. **Adicione cenas** usando os botões "+ Produto" ou "+ Logo/Texto" no painel esquerdo
-2. **Selecione uma cena** para editar suas propriedades no painel direito
-3. **Carregue a logo** da loja no topo do painel de cenas (usada em todas as cenas com overlay ativo)
-4. **Ajuste cores, textos e preços** diretamente no inspetor
-5. **Pré-visualize** o vídeo completo no painel central
-6. **Exporte** clicando em "Exportar MP4" no cabeçalho
+1. **Crie um projeto** pelo wizard ou abra um existente em Projetos
+2. **Adicione cenas** com os botões "+ Produto", "+ Logo/Texto" ou importe da Biblioteca
+3. **Selecione uma cena** — o preview avança automaticamente e o inspetor exibe os campos
+4. **Ajuste** cores, textos, preços e imagens no painel direito
+5. **Escolha o formato** de exportação no cabeçalho
+6. **Exporte** em MP4 com um clique
 
 ---
 
@@ -86,16 +116,22 @@ Gera os arquivos em `dist/`. Para empacotar o instalador do app use [electron-bu
 
 ```
 src/
-  design-system/     # tokens CSS + componentes (Button, Field, Card, etc.)
-  layout/            # Header, SceneListPanel, PreviewPanel, InspectorPanel
-  remotion/          # composições de vídeo (DynamicAd, ProductScene, LogoScene)
-  store/             # Zustand (useAdStore, useThemeStore)
+  design-system/
+    components/      # Button, Dialog, Field, UploadZone, ContextMenu, etc.
+  layout/            # Sidebar, Header, SceneListPanel, PreviewPanel, InspectorPanel
+  pages/             # Dashboard, Wizard, Projects, Library, Settings
+  remotion/          # DynamicAd, ProductScene, LogoScene, presets, types
+  store/             # useAdStore, useWizardStore, useLibraryStore, useProjectsStore, etc.
+  styles/
+    components/      # CSS dos componentes do design system
+    layout/          # CSS dos painéis e layout
+    pages/           # CSS das páginas
+    tokens.css       # Variáveis de design (cores, espaçamento, tipografia)
 electron/
-  main.cjs           # processo principal: diálogo de arquivo + exportação
-  preload.cjs        # bridge window.vitrineTV
+  main.cjs           # Processo principal: protocolo app://, diálogos, exportação
+  preload.cjs        # Bridge window.adFrame
 public/
-  assets/            # logo e imagens de exemplo
-  uploads/           # imagens carregadas pelo usuário (gerado em tempo de execução)
+  assets/            # Imagens de exemplo e assets estáticos
 ```
 
 ---
