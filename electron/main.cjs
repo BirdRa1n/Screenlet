@@ -4,9 +4,20 @@ const fs = require("node:fs");
 const os = require("node:os");
 const crypto = require("node:crypto");
 
-// Remotion and other tools need HOME to create ~/.remotion cache.
-// In packaged Electron on macOS the env var can be missing or empty.
-process.env.HOME = process.env.HOME || os.homedir();
+// Remotion needs HOME to create ~/.remotion cache.
+// os.homedir() reads HOME env var first — if it's empty it returns "".
+// os.userInfo().homedir reads /etc/passwd directly, bypassing HOME.
+// We use that as the authoritative fallback.
+try {
+  const userHome = os.userInfo().homedir;
+  if (!process.env.HOME || process.env.HOME === "/") {
+    process.env.HOME = userHome || os.tmpdir();
+  }
+} catch {
+  if (!process.env.HOME || process.env.HOME === "/") {
+    process.env.HOME = os.tmpdir();
+  }
+}
 
 const isDev = !app.isPackaged;
 
