@@ -317,7 +317,9 @@ ipcMain.handle("export-video", async (_event, payload, suggestedName) => {
 
     // Sync user uploads into the bundle dir so staticFile('/uploads/x') resolves correctly
     const userUploads = path.join(app.getPath("userData"), "uploads");
-    const bundleUploads = path.join(bundleLocation, "uploads");
+    // Remotion bundle injects window.remotion_staticBase = '/public/' so
+    // staticFile('uploads/x') resolves to /public/uploads/x on the bundle server.
+    const bundleUploads = path.join(bundleLocation, "public", "uploads");
     if (fs.existsSync(userUploads)) {
       ensureDir(bundleUploads);
       for (const file of fs.readdirSync(userUploads)) {
