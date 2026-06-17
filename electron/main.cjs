@@ -1,7 +1,12 @@
 const { app, BrowserWindow, ipcMain, dialog, protocol, net } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const os = require("node:os");
 const crypto = require("node:crypto");
+
+// Remotion and other tools need HOME to create ~/.remotion cache.
+// In packaged Electron on macOS the env var can be missing or empty.
+process.env.HOME = process.env.HOME || os.homedir();
 
 const isDev = !app.isPackaged;
 
@@ -277,9 +282,6 @@ ipcMain.handle("template-delete", (_event, id) => {
 /* ---- Export ---- */
 
 ipcMain.handle("export-video", async (_event, payload, suggestedName) => {
-  // Remotion needs HOME to create ~/.remotion cache dir; it may be unset in packaged Electron
-  if (!process.env.HOME) process.env.HOME = app.getPath("home");
-
   const saveResult = await dialog.showSaveDialog(mainWindow, {
     title: "Exportar vídeo",
     defaultPath: suggestedName || "anuncio.mp4",
