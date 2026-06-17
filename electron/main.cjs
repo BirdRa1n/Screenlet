@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, protocol, net } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, protocol, net, globalShortcut } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -90,6 +90,11 @@ function createWindow() {
 app.whenReady().then(() => {
   ensureDir(UPLOADS_DIR);
   ensureDir(PROJECTS_DIR);
+
+  // Cmd+Option+I (macOS) / Ctrl+Shift+I (Win/Linux) opens DevTools in any build
+  globalShortcut.register("CommandOrControl+Shift+I", () => {
+    mainWindow?.webContents.toggleDevTools();
+  });
 
   // app:// protocol handler — serves app bundle + user uploads from the right locations
   //
