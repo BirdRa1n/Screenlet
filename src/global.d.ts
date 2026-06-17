@@ -16,7 +16,7 @@ export type ProjectMeta = {
 
 declare global {
   interface Window {
-    vitrineTV: {
+    adFrame: {
       // Files
       selectImage: () => Promise<string | null>;
       copyFile: (srcPath: string) => Promise<string>;

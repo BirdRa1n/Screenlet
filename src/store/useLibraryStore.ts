@@ -25,7 +25,7 @@ export const useLibraryStore = create<LibraryStore>((set) => ({
   products: [],
 
   refresh: async () => {
-    const list = await window.vitrineTV.libraryList();
+    const list = await window.adFrame.libraryList();
     set({ products: list });
   },
 
@@ -38,13 +38,13 @@ export const useLibraryStore = create<LibraryStore>((set) => ({
       id: existing?.id ?? makeId(),
       createdAt: existing?.createdAt ?? new Date().toISOString(),
     };
-    await window.vitrineTV.librarySave(item);
-    const list = await window.vitrineTV.libraryList();
+    await window.adFrame.librarySave(item);
+    const list = await window.adFrame.libraryList();
     set({ products: list });
   },
 
   remove: async (id) => {
-    await window.vitrineTV.libraryDelete(id);
+    await window.adFrame.libraryDelete(id);
     set((s) => ({ products: s.products.filter((p) => p.id !== id) }));
   },
 }));

@@ -1,6 +1,6 @@
 {
   "name": "vitrinetv",
-  "productName": "VitrineTV",
+  "productName": "AdFrame",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -19,7 +19,7 @@
   },
   "build": {
     "appId": "com.vitrinetv.app",
-    "productName": "VitrineTV",
+    "productName": "AdFrame",
     "directories": {
       "output": "release"
     },
@@ -45,7 +45,7 @@
       "target": ["AppImage", "deb"]
     },
     "dmg": {
-      "title": "VitrineTV",
+      "title": "AdFrame",
       "contents": [
         { "x": 130, "y": 220 },
         { "x": 410, "y": 220, "type": "link", "path": "/Applications" }

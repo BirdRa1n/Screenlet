@@ -311,7 +311,7 @@ const StepProdutos: React.FC = () => {
   const w = useWizardStore();
 
   const handleCsvImport = async () => {
-    const raw = await window.vitrineTV.selectCsv();
+    const raw = await window.adFrame.selectCsv();
     if (!raw) return;
     const parsed = parseCsv(raw);
     if (parsed.length === 0) {

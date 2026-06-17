@@ -68,7 +68,7 @@ export const Settings: React.FC = () => {
           <div className="vt-settings__about">
             <div className="vt-settings__about-row">
               <span className="vt-settings__about-key">Aplicativo</span>
-              <span className="vt-settings__about-val">VitrineTV</span>
+              <span className="vt-settings__about-val">AdFrame</span>
             </div>
             <div className="vt-settings__about-row">
               <span className="vt-settings__about-key">Versão</span>

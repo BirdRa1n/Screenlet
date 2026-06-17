@@ -34,7 +34,7 @@ export default function App() {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    return window.vitrineTV.onExportProgress((data) => setProgress(data));
+    return window.adFrame.onExportProgress((data) => setProgress(data));
   }, []);
 
   const handleExport = async (formatOrConfig?: ExportFormat | AdConfig, overrideConfig?: AdConfig) => {
@@ -54,7 +54,7 @@ export default function App() {
     setExportMessage(null);
     setProgress(null);
     try {
-      const result = await window.vitrineTV.exportVideo(exportConfig, `anuncio-vitrinetv-${format}.mp4`);
+      const result = await window.adFrame.exportVideo(exportConfig, `anuncio-adframe-${format}.mp4`);
       if (result.canceled) {
         toast.info("Exportação cancelada.");
         setExportMessage("Exportação cancelada.");
