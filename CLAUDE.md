@@ -14,8 +14,11 @@ npm run electron:dev
 # Production build
 npm run build
 
+# Package installer (macOS DMG)
+npm run dist:mac
+
 # Type check
-npx tsc -b
+npx tsc --noEmit
 
 # Lint
 npm run lint
@@ -23,34 +26,49 @@ npm run lint
 
 ## Architecture
 
-VitrineTV is an Electron desktop app for creating video ads (for TV displays in supermarkets). It combines a Vite+React UI with Remotion for video rendering and export.
+AdFrame is an Electron desktop app for creating video ads (TV, Instagram, Stories, TikTok) targeting supermarkets and retail. It combines a Vite+React UI with Remotion for video rendering and export.
 
 ### Process model
-- **`electron/main.cjs`** — Electron main process (CommonJS). Handles file dialogs (`selectImage`), copies uploads to `public/uploads/`, and runs Remotion's `bundle()` + `renderMedia()` for MP4 export. Public dir is explicitly set: `publicDir: path.join(process.cwd(), "public")`.
-- **`electron/preload.cjs`** — Exposes `window.vitrineTV` via `contextBridge`: `{ selectImage, exportVideo, onExportProgress }`.
+- **`electron/main.cjs`** — Electron main process (CommonJS). Registers `app://` protocol, handles file dialogs, copies uploads to `userData/uploads/` in production and `public/uploads/` in dev. Runs Remotion `bundle()` + `renderMedia()` for MP4 export. Library and project data persisted as JSON under `userData/`.
+- **`electron/preload.cjs`** — Exposes `window.adFrame` via `contextBridge`: `selectImage`, `copyFile`, `selectCsv`, `projectsList/Save/Load/Delete/Rename`, `libraryList/Save/Delete`, `exportVideo`, `onExportProgress`.
 - **`src/`** — React renderer process (ESM, Vite).
 
-### State
-- **`src/store/useAdStore.ts`** — Zustand store for the full ad config (list of scenes + selected scene ID). Key actions: `addProductScene`, `addLogoScene`, `updateScene`, `moveScene`, `removeScene`, `setLogoImage`.
-- **`src/store/useThemeStore.ts`** — Dark/light theme. Reads system preference on first run, persists to `localStorage`. Applies `data-theme` attribute on `<html>`.
+### Routing
+Single-page with Zustand-driven navigation. `Page = "dashboard" | "wizard" | "editor" | "projects" | "library" | "settings"` in `src/store/useNavigationStore.ts`. Pages rendered conditionally in `src/App.tsx`.
+
+### State (Zustand stores)
+- **`useAdStore`** — Full ad config + selected scene ID + `seekFrame` for player sync. Key actions: `addProductScene`, `addLogoScene`, `updateScene`, `removeScene`, `reorderScenes`, `seekToScene`, `loadConfig`.
+- **`useWizardStore`** — Multi-step wizard state (store info, products, preset, export format).
+- **`useNavigationStore`** — Current page + sidebar collapsed state.
+- **`useThemeStore`** — `"dark" | "light" | "system"`. System mode listens to `prefers-color-scheme` in real time. Applies `data-theme` on `<html>`.
+- **`useLibraryStore`** — Product library CRUD, synced with IPC (`libraryList/Save/Delete`).
+- **`useProjectsStore`** — Projects CRUD, synced with IPC.
+- **`useToastStore`** — Toast notifications.
 
 ### Design system
-- **`src/design-system/tokens.css`** — Single source of truth for all CSS custom properties. Theme-sensitive tokens (backgrounds, text, borders, `--input-bg`) are split between `:root[data-theme="dark"]` and `:root[data-theme="light"]` blocks. Import this file first in `src/main.tsx`.
-- **`src/design-system/components/`** — `Button`, `IconButton`, `Field`/`TextField`/`SelectField`/`ColorField`/`Checkbox`, `Card`, `ProgressBar`. All use token-based CSS. Never hardcode neutral color values (e.g. `var(--neutral-950)`) in component CSS — use semantic tokens like `--input-bg` so themes work.
+- **`src/styles/tokens.css`** — Single source of truth for all CSS custom properties. Theme tokens split between `[data-theme="dark"]` and `[data-theme="light"]`.
+- **`src/styles/`** — All CSS centralized here under `components/`, `layout/`, `pages/`. No CSS files alongside `.tsx` files.
+- **`src/design-system/components/`** — `Button`, `IconButton`, `Field`/`TextField`/`SelectField`/`ColorField`/`Checkbox`, `Card`, `Dialog`, `ProgressBar`, `Tabs`, `Toast`, `Tooltip`, `UploadZone`, `ContextMenu`. All exported from `index.ts`.
+- Never hardcode color values — use semantic tokens (`--input-bg`, `--text-primary`, etc.).
 
-### Layout
-Three-panel layout in `src/layout/`:
-- `SceneListPanel` (left, 300px) — logo upload + scene list with reorder/delete
-- `PreviewPanel` (center, flex:1) — Remotion `<Player>` at 16:9
-- `InspectorPanel` (right, 320px) — scene-specific fields, animates between scenes with Framer Motion `AnimatePresence`
+### Layout (Editor)
+Three-panel layout rendered when `page === "editor"`:
+- `SceneListPanel` (left, 300px) — logo upload, sortable scene list (dnd-kit), library import picker
+- `PreviewPanel` (center, flex:1) — Remotion `<Player>` with `seekTo` sync on scene select
+- `InspectorPanel` (right, 320px) — scene fields, animated with Framer Motion `AnimatePresence`
 
 ### Remotion / video
-- **`src/remotion/types.ts`** — `ProductSceneConfig` and `LogoSceneConfig` types + factory defaults.
+- **`src/remotion/types.ts`** — `ProductSceneConfig`, `LogoSceneConfig`, `ExportFormat`, `FORMAT_DIMENSIONS`. Defaults via `defaultProductScene()` / `defaultLogoScene()`.
 - **`src/remotion/DynamicAd.tsx`** — Root composition; maps scenes to `<ProductScene>` or `<LogoScene>` inside `<Sequence>`.
-- Asset paths are stored **without a leading slash** (e.g. `"assets/logo.png"`, `"uploads/123-file.png"`). Components call `staticFile(path)` at render time — never store paths with `/` prefix or `staticFile()` baked in.
-- `public/uploads/` is where runtime user-uploaded images land (gitignored).
+- **`src/remotion/presets.ts`** — `buildPreset(id: PresetId): AdConfig` for generico / carnes / natal / pascoa.
+- **Multi-format**: `ExportFormat = "tv" | "instagram" | "stories" | "tiktok"`. Scenes scale with `sc = Math.min(width/1920, height/1080)` and switch layout for portrait/square.
+- Asset paths stored **without leading slash** (e.g. `"uploads/123-file.png"`). Components call `staticFile(path)` at render time.
+- Production: `app://` protocol serves `dist/` and `userData/uploads/` for the Remotion Player in the renderer.
 
 ### Key gotchas
-- Electron main is CJS (`require`/`module.exports`); everything under `src/` is ESM.
-- Framer Motion's `HTMLMotionProps` includes `MotionValue` as a valid child type. To allow `React.ReactNode` children in wrapped components use `Omit<HTMLMotionProps<"button">, "ref" | "children"> & { children?: React.ReactNode }`.
-- `useSelectedScene()` in `useAdStore` uses two separate `useStore` selectors (one for the list, one for the ID) to avoid infinite re-render loops.
+- `electron/main.cjs` is CJS; everything under `src/` is ESM.
+- `protocol.registerSchemesAsPrivileged` must be called **before** `app.whenReady()`.
+- In production, `publicDir` for `bundle()` is `app.getPath("userData")` (contains `uploads/` subdir).
+- Framer Motion `ease` values must be cast: `ease: "easeOut" as const` to satisfy TypeScript.
+- `useSelectedScene()` uses two separate selectors (scenes list + selectedId) to avoid re-render loops.
+- `seekToScene(id)` sets `seekFrame`; `PreviewPanel` watches via `useEffect` and calls `playerRef.seekTo()`. Offset: `min(30, floor(duration × 0.35))` frames to skip intro animations.

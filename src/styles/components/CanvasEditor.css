@@ -1,0 +1,157 @@
+.vt-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-0);
+  overflow: hidden;
+  user-select: none;
+}
+
+.vt-canvas__stage {
+  position: relative;
+  box-shadow: 0 4px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.vt-canvas__stage--selecting {
+  cursor: crosshair;
+}
+
+/* Layer on canvas */
+.vt-canvas__layer {
+  position: absolute;
+  cursor: move;
+  outline: none;
+  transition: none;
+}
+
+.vt-canvas__layer--selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  z-index: 9999 !important;
+}
+
+.vt-canvas__layer--text {
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: flex;
+  align-items: center;
+}
+
+.vt-canvas__layer--image,
+.vt-canvas__layer--logo {
+  overflow: hidden;
+}
+
+.vt-canvas__layer--image img,
+.vt-canvas__layer--logo img {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.vt-canvas__layer--shape {
+  overflow: hidden;
+}
+
+.vt-canvas__layer--badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Resize handles */
+.vt-canvas__handles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+.vt-canvas__handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #fff;
+  border: 2px solid var(--accent);
+  border-radius: 2px;
+  pointer-events: all;
+  transform: translate(-50%, -50%);
+  transition: transform 0.1s;
+}
+
+.vt-canvas__handle:hover {
+  transform: translate(-50%, -50%) scale(1.3);
+}
+
+.vt-canvas__handle--tl { top: 0;   left: 0;   cursor: nw-resize; }
+.vt-canvas__handle--tc { top: 0;   left: 50%; cursor: n-resize; }
+.vt-canvas__handle--tr { top: 0;   left: 100%; cursor: ne-resize; }
+.vt-canvas__handle--ml { top: 50%; left: 0;   cursor: w-resize; }
+.vt-canvas__handle--mr { top: 50%; left: 100%; cursor: e-resize; }
+.vt-canvas__handle--bl { top: 100%; left: 0;  cursor: sw-resize; }
+.vt-canvas__handle--bc { top: 100%; left: 50%; cursor: s-resize; }
+.vt-canvas__handle--br { top: 100%; left: 100%; cursor: se-resize; }
+
+/* Ruler lines */
+.vt-canvas__ruler-h,
+.vt-canvas__ruler-v {
+  position: absolute;
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+  pointer-events: none;
+  z-index: 10001;
+}
+.vt-canvas__ruler-h { height: 1px; left: 0; right: 0; }
+.vt-canvas__ruler-v { width: 1px; top: 0; bottom: 0; }
+
+/* Toolbar above canvas */
+.vt-canvas__toolbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  z-index: 10002;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+.vt-canvas__toolbar-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.vt-canvas__zoom {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  min-width: 38px;
+  text-align: center;
+}
+
+/* Empty state */
+.vt-canvas__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  pointer-events: none;
+}

@@ -31,7 +31,23 @@ export type ProductSceneConfig = {
   logoPosition: LogoCorner;
 };
 
-export type SceneConfig = LogoSceneConfig | ProductSceneConfig;
+export type TemplateSceneConfig = {
+  type: "template";
+  id: string;
+  templateId: string;
+  values: Record<string, string>;
+  durationInFrames: number;
+};
+
+export type VideoSceneConfig = {
+  type: "video";
+  id: string;
+  src: string;
+  volume: number;
+  durationInFrames: number;
+};
+
+export type SceneConfig = LogoSceneConfig | ProductSceneConfig | TemplateSceneConfig | VideoSceneConfig;
 
 export type AdConfig = {
   logoImage: string;
@@ -40,6 +56,7 @@ export type AdConfig = {
   width: number;
   height: number;
   scenes: SceneConfig[];
+  templates?: import("./template-types").Template[];
 };
 
 export type ExportFormat = "tv" | "instagram" | "stories" | "tiktok";
@@ -77,6 +94,22 @@ export const defaultLogoScene = (): LogoSceneConfig => ({
   taglineColor: "#ffffff",
   bg: "#0B5E1F",
   durationInFrames: 60,
+});
+
+export const defaultTemplateScene = (templateId = ""): TemplateSceneConfig => ({
+  type: "template",
+  id: makeId(),
+  templateId,
+  values: {},
+  durationInFrames: 150,
+});
+
+export const defaultVideoScene = (): VideoSceneConfig => ({
+  type: "video",
+  id: makeId(),
+  src: "",
+  volume: 1,
+  durationInFrames: 150,
 });
 
 export const defaultProductScene = (): ProductSceneConfig => ({

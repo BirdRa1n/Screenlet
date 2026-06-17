@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld("adFrame", {
   // Files
   selectImage: () => ipcRenderer.invoke("select-image"),
   copyFile: (srcPath) => ipcRenderer.invoke("copy-file", srcPath),
+  selectVideo: () => ipcRenderer.invoke("select-video"),
   selectCsv: () => ipcRenderer.invoke("select-csv"),
 
   // Projects
@@ -12,6 +13,11 @@ contextBridge.exposeInMainWorld("adFrame", {
   projectsLoad: (id) => ipcRenderer.invoke("projects-load", id),
   projectsDelete: (id) => ipcRenderer.invoke("projects-delete", id),
   projectsRename: (id, name) => ipcRenderer.invoke("projects-rename", id, name),
+
+  // Templates
+  templateList: () => ipcRenderer.invoke("template-list"),
+  templateSave: (template) => ipcRenderer.invoke("template-save", template),
+  templateDelete: (id) => ipcRenderer.invoke("template-delete", id),
 
   // Library
   libraryList: () => ipcRenderer.invoke("library-list"),

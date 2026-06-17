@@ -15,7 +15,10 @@ import {
   type LogoCorner,
   type LogoSceneConfig,
   type ProductSceneConfig,
+  type TemplateSceneConfig,
+  type VideoSceneConfig,
 } from "../remotion/types";
+import { useTemplateStore } from "../store/useTemplateStore";
 import "../styles/layout/InspectorPanel.css";
 
 const PRODUCT_TABS = [
@@ -44,6 +47,16 @@ export const InspectorPanel: React.FC = () => {
           >
             {scene.type === "logo" ? (
               <LogoInspector
+                scene={scene}
+                onChange={(s) => updateScene(scene.id, s)}
+              />
+            ) : scene.type === "template" ? (
+              <TemplateInspector
+                scene={scene}
+                onChange={(s) => updateScene(scene.id, s)}
+              />
+            ) : scene.type === "video" ? (
+              <VideoInspector
                 scene={scene}
                 onChange={(s) => updateScene(scene.id, s)}
               />
@@ -110,6 +123,103 @@ const LogoInspector: React.FC<{
     </Field>
   </>
 );
+
+const TemplateInspector: React.FC<{
+  scene: TemplateSceneConfig;
+  onChange: (scene: TemplateSceneConfig) => void;
+}> = ({ scene, onChange }) => {
+  const templates = useTemplateStore((s) => s.templates);
+  const template = templates.find((t) => t.id === scene.templateId);
+
+  return (
+    <>
+      <Field label="Template">
+        <SelectField
+          value={scene.templateId}
+          onChange={(e) => onChange({ ...scene, templateId: e.target.value, values: {} })}
+        >
+          <option value="">Selecionar template…</option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </SelectField>
+      </Field>
+
+      {template && template.variables.map((v) => (
+        <Field key={v.key} label={v.label + (v.required ? " *" : "")}>
+          <TextField
+            value={scene.values[v.key] ?? v.defaultValue ?? ""}
+            onChange={(e) => onChange({ ...scene, values: { ...scene.values, [v.key]: e.target.value } })}
+            placeholder={v.defaultValue || v.label}
+          />
+        </Field>
+      ))}
+
+      <Field label="Duração (segundos)">
+        <TextField
+          type="number"
+          min={1}
+          step={0.5}
+          value={scene.durationInFrames / 30}
+          onChange={(e) => onChange({ ...scene, durationInFrames: Math.round(Number(e.target.value) * 30) })}
+        />
+      </Field>
+    </>
+  );
+};
+
+const VideoInspector: React.FC<{
+  scene: VideoSceneConfig;
+  onChange: (scene: VideoSceneConfig) => void;
+}> = ({ scene, onChange }) => {
+  const handleUpload = async () => {
+    const path = await window.adFrame.selectVideo();
+    if (path) onChange({ ...scene, src: path });
+  };
+
+  return (
+    <>
+      <Field label="Arquivo de vídeo">
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            onClick={handleUpload}
+            style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-primary)", cursor: "pointer", fontSize: 12 }}
+          >
+            {scene.src ? "Trocar vídeo" : "Selecionar vídeo"}
+          </button>
+          {scene.src && (
+            <span style={{ fontSize: 11, color: "var(--text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {scene.src.split("/").pop()}
+            </span>
+          )}
+        </div>
+      </Field>
+
+      <Field label="Volume">
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={scene.volume}
+          onChange={(e) => onChange({ ...scene, volume: Number(e.target.value) })}
+          style={{ width: "100%" }}
+        />
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{Math.round(scene.volume * 100)}%</span>
+      </Field>
+
+      <Field label="Duração (segundos)">
+        <TextField
+          type="number"
+          min={1}
+          step={0.5}
+          value={scene.durationInFrames / 30}
+          onChange={(e) => onChange({ ...scene, durationInFrames: Math.round(Number(e.target.value) * 30) })}
+        />
+      </Field>
+    </>
+  );
+};
 
 const ProductInspector: React.FC<{
   scene: ProductSceneConfig;

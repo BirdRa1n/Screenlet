@@ -19,6 +19,7 @@ declare global {
     adFrame: {
       // Files
       selectImage: () => Promise<string | null>;
+      selectVideo: () => Promise<string | null>;
       copyFile: (srcPath: string) => Promise<string>;
       selectCsv: () => Promise<string | null>;
 
@@ -29,6 +30,11 @@ declare global {
       projectsLoad: (id: string) => Promise<unknown>;
       projectsDelete: (id: string) => Promise<void>;
       projectsRename: (id: string, name: string) => Promise<void>;
+
+      // Templates
+      templateList: () => Promise<import("./remotion/template-types").Template[]>;
+      templateSave: (template: import("./remotion/template-types").Template) => Promise<void>;
+      templateDelete: (id: string) => Promise<void>;
 
       // Library
       libraryList: () => Promise<import("./store/useLibraryStore").LibraryProduct[]>;
