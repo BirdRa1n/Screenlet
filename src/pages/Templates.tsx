@@ -34,7 +34,6 @@ const cardVariant = {
 
 export const Templates: React.FC = () => {
   const { templates, refresh, duplicate, remove, importTemplate } = useTemplateStore();
-  const navigate = useNavigationStore((s) => s.navigate);
   const navigateToBuilder = useNavigationStore((s) => s.navigateToBuilder);
   const [activeTag, setActiveTag] = useState<string>("Todos");
 

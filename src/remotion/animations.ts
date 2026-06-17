@@ -17,7 +17,7 @@ function progress(frame: number, anim: LayerAnimation): Interpolatable {
     frame,
     [anim.startFrame, anim.startFrame + anim.durationInFrames],
     [0, 1],
-    { clamp: true, easing: getEasing(anim.easing) }
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: getEasing(anim.easing) }
   );
 }
 

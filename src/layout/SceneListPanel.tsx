@@ -26,7 +26,6 @@ import "../styles/layout/SceneListPanel.css";
 export const SceneListPanel: React.FC = () => {
   const config = useAdStore((s) => s.config);
   const selectedSceneId = useAdStore((s) => s.selectedSceneId);
-  const selectScene = useAdStore((s) => s.selectScene);
   const seekToScene = useAdStore((s) => s.seekToScene);
   const removeScene = useAdStore((s) => s.removeScene);
   const addProductScene = useAdStore((s) => s.addProductScene);

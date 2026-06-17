@@ -87,12 +87,6 @@ export const CanvasEditor: React.FC<Props> = ({
   const scaleX = stageSize.w / 1920;
   const scaleY = stageSize.h / 1080;
 
-  const toStage = (val: number, axis: "x" | "w") =>
-    val * (axis === "x" ? scaleX : scaleX);
-  const toTemplate = (val: number) => val / scaleX;
-
-  const selectedLayer = scene.layers.find((l) => l.id === selectedLayerId) ?? null;
-
   /* ── Pointer events ──────────────────────────────────────────────────── */
 
   const startDrag = useCallback(
@@ -188,11 +182,11 @@ export const CanvasEditor: React.FC<Props> = ({
     >
       {/* Toolbar */}
       <div className="vt-canvas__toolbar">
-        <IconButton label="Zoom out" variant="ghost" onClick={() => setZoom((z) => Math.max(0.25, z - 0.1))}>
+        <IconButton label="Zoom out" variant="default" onClick={() => setZoom((z) => Math.max(0.25, z - 0.1))}>
           <ZoomOut size={13} />
         </IconButton>
         <span className="vt-canvas__zoom">{Math.round(zoom * 100)}%</span>
-        <IconButton label="Zoom in" variant="ghost" onClick={() => setZoom((z) => Math.min(4, z + 0.1))}>
+        <IconButton label="Zoom in" variant="default" onClick={() => setZoom((z) => Math.min(4, z + 0.1))}>
           <ZoomIn size={13} />
         </IconButton>
         <div className="vt-canvas__toolbar-sep" />

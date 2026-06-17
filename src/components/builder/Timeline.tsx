@@ -121,7 +121,7 @@ export const Timeline: React.FC<Props> = ({
           {(currentFrame / fps).toFixed(2)}s / {(totalFrames / fps).toFixed(1)}s
         </span>
         <div className="vt-timeline__toggle">
-          <IconButton label={collapsed ? "Expandir" : "Recolher"} variant="ghost" onClick={() => setCollapsed((c) => !c)}>
+          <IconButton label={collapsed ? "Expandir" : "Recolher"} variant="default" onClick={() => setCollapsed((c) => !c)}>
             {collapsed ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           </IconButton>
         </div>

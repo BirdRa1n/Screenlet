@@ -22,7 +22,7 @@ import {
   AlignStartHorizontal,
   AlignEndHorizontal,
 } from "lucide-react";
-import { Button, IconButton, Tabs } from "../design-system/components";
+import { Button, IconButton } from "../design-system/components";
 import { CanvasEditor } from "../components/builder/CanvasEditor";
 import { Timeline } from "../components/builder/Timeline";
 import { TemplateRenderer } from "../remotion/TemplateRenderer";
@@ -93,7 +93,6 @@ function emptyTemplate(): Template {
 export const TemplateBuilder: React.FC<{ templateId?: string }> = ({ templateId }) => {
   const { templates, save, duplicate } = useTemplateStore();
   const navigate = useNavigationStore((s) => s.navigate);
-  const setTemplateInstance = useTemplateInstanceStore((s) => s.setTemplate);
   const playerRef = useRef<PlayerRef>(null);
 
   const existing = templateId ? templates.find((t) => t.id === templateId) : null;
@@ -267,7 +266,7 @@ export const TemplateBuilder: React.FC<{ templateId?: string }> = ({ templateId 
                   {template.scenes.length > 1 && (
                     <IconButton
                       label="Remover"
-                      variant="ghost"
+                      variant="default"
                       onClick={(e) => {
                         e.stopPropagation();
                         removeScene(scene.id);
@@ -310,7 +309,7 @@ export const TemplateBuilder: React.FC<{ templateId?: string }> = ({ templateId 
                     </span>
                     <IconButton
                       label="Remover"
-                      variant="ghost"
+                      variant="default"
                       onClick={(e) => {
                         e.stopPropagation();
                         removeLayer(layer.id);
@@ -741,7 +740,7 @@ const LayerProps: React.FC<{
 
 const TextLayerProps: React.FC<{ layer: TextLayer; onChange: (p: Partial<TemplateLayer>) => void }> = ({ layer, onChange }) => {
   const [localText, setLocalText] = React.useState(layer.text);
-  const timerRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = React.useRef<ReturnType<typeof setTimeout>>(undefined as unknown as ReturnType<typeof setTimeout>);
   const onChangeRef = React.useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -832,7 +831,7 @@ const ShapeLayerProps: React.FC<{ layer: ShapeLayer; onChange: (p: Partial<Templ
 
 const BadgeLayerProps: React.FC<{ layer: BadgeLayer; onChange: (p: Partial<TemplateLayer>) => void }> = ({ layer, onChange }) => {
   const [localText, setLocalText] = React.useState(layer.text);
-  const timerRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = React.useRef<ReturnType<typeof setTimeout>>(undefined as unknown as ReturnType<typeof setTimeout>);
   const onChangeRef = React.useRef(onChange);
   onChangeRef.current = onChange;
   const layerIdRef = React.useRef(layer.id);

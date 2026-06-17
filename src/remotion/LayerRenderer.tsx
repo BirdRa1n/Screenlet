@@ -10,7 +10,7 @@ type Props = {
   values?: Record<string, string>;
 };
 
-export const LayerRenderer: React.FC<Props> = ({ layer, logoSrc, sceneFrame, values = {} }) => {
+export const LayerRenderer: React.FC<Props> = ({ layer, logoSrc, sceneFrame }) => {
   if (!layer.visible) return null;
 
   const animStyles = resolveLayerAnimations(sceneFrame, layer.animations, layer.opacity);
