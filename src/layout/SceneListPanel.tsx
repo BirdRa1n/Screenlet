@@ -26,6 +26,7 @@ export const SceneListPanel: React.FC = () => {
   const config = useAdStore((s) => s.config);
   const selectedSceneId = useAdStore((s) => s.selectedSceneId);
   const selectScene = useAdStore((s) => s.selectScene);
+  const seekToScene = useAdStore((s) => s.seekToScene);
   const removeScene = useAdStore((s) => s.removeScene);
   const addProductScene = useAdStore((s) => s.addProductScene);
   const addLogoScene = useAdStore((s) => s.addLogoScene);
@@ -151,7 +152,7 @@ export const SceneListPanel: React.FC = () => {
                       label={label}
                       type={scene.type}
                       isSelected={isSelected}
-                      onSelect={() => selectScene(scene.id)}
+                      onSelect={() => seekToScene(scene.id)}
                       onRemove={() => {
                         removeScene(scene.id);
                         toast.info("Cena removida.");

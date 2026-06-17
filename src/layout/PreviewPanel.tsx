@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Player, type PlayerRef } from "@remotion/player";
 import { Pencil } from "lucide-react";
 import { DynamicAd } from "../remotion/DynamicAd";
@@ -10,11 +10,18 @@ export const PreviewPanel: React.FC = () => {
   const config = useAdStore((s) => s.config);
   const selectScene = useAdStore((s) => s.selectScene);
   const selectedSceneId = useAdStore((s) => s.selectedSceneId);
+  const seekFrame = useAdStore((s) => s.seekFrame);
   const duration = useMemo(
     () => totalDuration(config.scenes),
     [config.scenes]
   );
   const playerRef = useRef<PlayerRef>(null);
+
+  useEffect(() => {
+    if (seekFrame !== null && playerRef.current) {
+      playerRef.current.seekTo(seekFrame);
+    }
+  }, [seekFrame]);
 
   const handleFrameClick = useCallback(() => {
     if (!playerRef.current || config.scenes.length === 0) return;
