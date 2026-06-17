@@ -1,28 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { Player } from "@remotion/player";
 import { FolderOpen, LayoutTemplate, MoreHorizontal, Pencil, Plus, Trash2, Video } from "lucide-react";
 import { Button, Dialog, IconButton, TextField, Field } from "../design-system/components";
 import { useNavigationStore } from "../store/useNavigationStore";
 import { useAdStore } from "../store/useAdStore";
 import { useProjectsStore } from "../store/useProjectsStore";
+import { useTemplateStore } from "../store/useTemplateStore";
+import { useTemplateInstanceStore } from "../store/useTemplateInstanceStore";
 import { toast } from "../store/useToastStore";
+import { TemplateRenderer } from "../remotion/TemplateRenderer";
+import { templateTotalFrames, defaultValues } from "../remotion/template-utils";
+import type { Template } from "../remotion/template-types";
 import type { ProjectMeta } from "../global";
 import "../styles/pages/Dashboard.css";
-
-type TemplateCard = {
-  id: string;
-  name: string;
-  description: string;
-  emoji: string;
-  gradient: string;
-};
-
-const TEMPLATES: TemplateCard[] = [
-  { id: "generico", name: "Genérico", description: "Produtos do dia a dia", emoji: "🛒", gradient: "linear-gradient(135deg, #4a30b8 0%, #6e56f8 60%, #8b7bff 100%)" },
-  { id: "carnes", name: "Açougue", description: "Promoções de carnes", emoji: "🥩", gradient: "linear-gradient(135deg, #b91c1c 0%, #ef4444 60%, #f87171 100%)" },
-  { id: "natal", name: "Natal", description: "Ofertas de fim de ano", emoji: "🎄", gradient: "linear-gradient(135deg, #166534 0%, #16a34a 60%, #4ade80 100%)" },
-  { id: "pascoa", name: "Páscoa", description: "Especial de Páscoa", emoji: "🐣", gradient: "linear-gradient(135deg, #7e22ce 0%, #a855f7 60%, #d8b4fe 100%)" },
-];
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } } as const;
 const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.28, ease: "easeOut" as const } } } as const;
@@ -30,8 +21,13 @@ const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transiti
 export const Dashboard: React.FC = () => {
   const navigate = useNavigationStore((s) => s.navigate);
   const { projects, refresh } = useProjectsStore();
+  const { templates, refresh: refreshTemplates } = useTemplateStore();
+  const setTemplateInstance = useTemplateInstanceStore((s) => s.setTemplate);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { refresh(); refreshTemplates(); }, [refresh, refreshTemplates]);
+
+  // Show at most 4 builtin templates on dashboard
+  const featuredTemplates = templates.filter((t) => t.builtin).slice(0, 4);
 
   return (
     <motion.div className="vt-dash" variants={container} initial="hidden" animate="show">
@@ -54,17 +50,24 @@ export const Dashboard: React.FC = () => {
       <motion.div className="vt-dash__stats" variants={item}>
         <StatCard icon={<FolderOpen size={17} />} iconClass="primary" value={String(projects.length)} label="Projetos salvos" />
         <StatCard icon={<Video size={17} />} iconClass="success" value="0" label="Vídeos exportados" />
-        <StatCard icon={<LayoutTemplate size={17} />} iconClass="warning" value={String(TEMPLATES.length)} label="Templates disponíveis" />
+        <StatCard icon={<LayoutTemplate size={17} />} iconClass="warning" value={String(templates.length)} label="Templates disponíveis" />
       </motion.div>
 
       {/* Templates */}
       <motion.section className="vt-dash__section" variants={item}>
         <div className="vt-dash__section-header">
           <h2 className="vt-dash__section-title">Templates prontos</h2>
+          <Button variant="secondary" size="sm" onClick={() => navigate("templates")}>
+            Ver todos
+          </Button>
         </div>
         <div className="vt-dash__templates">
-          {TEMPLATES.map((tpl) => (
-            <TemplateCardItem key={tpl.id} template={tpl} onClick={() => navigate("wizard")} />
+          {featuredTemplates.map((tpl) => (
+            <TemplateCardItem
+              key={tpl.id}
+              template={tpl}
+              onClick={() => { setTemplateInstance(tpl); navigate("template-wizard"); }}
+            />
           ))}
         </div>
       </motion.section>
@@ -186,14 +189,40 @@ const StatCard: React.FC<{ icon: React.ReactNode; iconClass: "primary" | "succes
   </div>
 );
 
-const TemplateCardItem: React.FC<{ template: TemplateCard; onClick: () => void }> = ({ template, onClick }) => (
-  <motion.div className="vt-dash__template-card" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={onClick}>
-    <div className="vt-dash__template-preview" style={{ background: template.gradient }}>
-      <span className="vt-dash__template-preview-icon">{template.emoji}</span>
-    </div>
-    <div className="vt-dash__template-info">
-      <div className="vt-dash__template-name">{template.name}</div>
-      <div className="vt-dash__template-desc">{template.description}</div>
-    </div>
-  </motion.div>
-);
+const TemplateCardItem: React.FC<{ template: Template; onClick: () => void }> = ({ template, onClick }) => {
+  const [hovered, setHovered] = useState(false);
+  const totalFrames = templateTotalFrames(template);
+  const values = defaultValues(template);
+  const previewFrame = Math.min((template.scenes[0]?.durationInFrames ?? 0) + 30, Math.max(totalFrames - 1, 0));
+
+  return (
+    <motion.div
+      className="vt-dash__template-card"
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
+    >
+      <div className="vt-dash__template-preview" style={{ overflow: "hidden", padding: 0, background: "#000" }}>
+        <Player
+          component={TemplateRenderer}
+          inputProps={{ template, values }}
+          durationInFrames={Math.max(totalFrames, 1)}
+          fps={template.fps}
+          compositionWidth={template.width}
+          compositionHeight={template.height}
+          style={{ width: "100%", aspectRatio: "16/9", display: "block", pointerEvents: "none" }}
+          initialFrame={previewFrame}
+          autoPlay={hovered}
+          loop
+          acknowledgeRemotionLicense
+        />
+      </div>
+      <div className="vt-dash__template-info">
+        <div className="vt-dash__template-name">{template.name}</div>
+        <div className="vt-dash__template-desc">{template.description}</div>
+      </div>
+    </motion.div>
+  );
+};

@@ -1,0 +1,344 @@
+.vt-twiz {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--surface-0);
+  overflow: hidden;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+
+.vt-twiz__topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-1);
+  flex-shrink: 0;
+}
+
+.vt-twiz__tpl-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+/* ── Steps indicator ─────────────────────────────────────────────────────── */
+
+.vt-twiz__steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 16px 24px 0;
+  flex-shrink: 0;
+}
+
+.vt-twiz__step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vt-twiz__step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  border: 2px solid var(--border);
+  color: var(--text-tertiary);
+  background: var(--surface-1);
+  transition: all 0.18s;
+}
+
+.vt-twiz__step--active .vt-twiz__step-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.vt-twiz__step--done .vt-twiz__step-dot {
+  border-color: var(--success, #22c55e);
+  background: var(--success, #22c55e);
+  color: #fff;
+}
+
+.vt-twiz__step-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.vt-twiz__step--active .vt-twiz__step-label,
+.vt-twiz__step--done .vt-twiz__step-label {
+  color: var(--text-primary);
+}
+
+.vt-twiz__step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  margin: 0 8px;
+  min-width: 24px;
+  max-width: 60px;
+  transition: background 0.18s;
+}
+
+.vt-twiz__step-line--done {
+  background: var(--success, #22c55e);
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+
+.vt-twiz__body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+}
+
+/* ── Step 1: Variables ───────────────────────────────────────────────────── */
+
+.vt-twiz__vars-layout {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  width: 100%;
+  overflow: hidden;
+}
+
+.vt-twiz__vars-form {
+  padding: 24px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.vt-twiz__vars-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--surface-0);
+}
+
+.vt-twiz__section-heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.vt-twiz__var-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Variable field */
+.vt-twiz__var-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.vt-twiz__var-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vt-twiz__var-required {
+  color: var(--danger, #ef4444);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.vt-twiz__var-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.14s;
+}
+
+.vt-twiz__var-input:focus {
+  border-color: var(--accent);
+}
+
+.vt-twiz__var-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vt-twiz__var-color-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.vt-twiz__var-upload {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vt-twiz__var-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.vt-twiz__var-thumb-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  border: 1px dashed var(--border);
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+/* ── Step 2: Preview ─────────────────────────────────────────────────────── */
+
+.vt-twiz__preview-layout {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+.vt-twiz__preview-wrap {
+  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.4);
+  border-radius: 6px;
+  overflow: hidden;
+  max-width: 100%;
+  width: min(860px, 100%);
+}
+
+.vt-twiz__preview-meta {
+  display: flex;
+  gap: 24px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* ── Step 3: Export ──────────────────────────────────────────────────────── */
+
+.vt-twiz__export-layout {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 32px;
+}
+
+.vt-twiz__format-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 680px;
+}
+
+.vt-twiz__format-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 12px;
+  border-radius: 10px;
+  border: 2px solid var(--border);
+  background: var(--surface-1);
+  cursor: pointer;
+  transition: all 0.14s;
+}
+
+.vt-twiz__format-card:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.vt-twiz__format-card--active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-1));
+}
+
+.vt-twiz__format-icon {
+  color: var(--text-tertiary);
+}
+
+.vt-twiz__format-card--active .vt-twiz__format-icon {
+  color: var(--accent);
+}
+
+.vt-twiz__format-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.vt-twiz__format-res {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+
+.vt-twiz__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-1);
+  flex-shrink: 0;
+}
+
+.vt-twiz__footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.vt-twiz__footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

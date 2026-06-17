@@ -103,6 +103,16 @@ ipcMain.handle("select-image", async () => {
   return copyIntoUploads(result.filePaths[0]);
 });
 
+ipcMain.handle("select-video", async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: "Selecionar vídeo",
+    properties: ["openFile"],
+    filters: [{ name: "Vídeos", extensions: ["mp4", "webm", "mov", "mkv"] }],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return copyIntoUploads(result.filePaths[0]);
+});
+
 ipcMain.handle("select-csv", async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: "Importar planilha",
@@ -197,9 +207,36 @@ ipcMain.handle("library-delete", (_event, id) => {
   if (fs.existsSync(file)) fs.unlinkSync(file);
 });
 
+/* ---- Templates ---- */
+
+const TEMPLATES_DIR = path.join(app.getPath("userData"), "templates");
+
+ipcMain.handle("template-list", () => {
+  ensureDir(TEMPLATES_DIR);
+  return fs
+    .readdirSync(TEMPLATES_DIR)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => {
+      try { return JSON.parse(fs.readFileSync(path.join(TEMPLATES_DIR, f), "utf8")); }
+      catch { return null; }
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+});
+
+ipcMain.handle("template-save", (_event, template) => {
+  ensureDir(TEMPLATES_DIR);
+  fs.writeFileSync(path.join(TEMPLATES_DIR, `${template.id}.json`), JSON.stringify(template, null, 2));
+});
+
+ipcMain.handle("template-delete", (_event, id) => {
+  const file = path.join(TEMPLATES_DIR, `${id}.json`);
+  if (fs.existsSync(file)) fs.unlinkSync(file);
+});
+
 /* ---- Export ---- */
 
-ipcMain.handle("export-video", async (_event, config, suggestedName) => {
+ipcMain.handle("export-video", async (_event, payload, suggestedName) => {
   const saveResult = await dialog.showSaveDialog(mainWindow, {
     title: "Exportar vídeo",
     defaultPath: suggestedName || "anuncio.mp4",
@@ -214,8 +251,6 @@ ipcMain.handle("export-video", async (_event, config, suggestedName) => {
     ? path.join(__dirname, "..", "src", "remotion", "Root.tsx")
     : path.join(process.resourcesPath, "remotion-entry", "Root.tsx");
 
-  // publicDir tells Remotion's webpack server where to find uploads/
-  // Dev: project/public/ — Prod: userData/ (contains uploads/ subdir)
   const publicDir = isDev
     ? path.join(__dirname, "..", "public")
     : app.getPath("userData");
@@ -228,25 +263,32 @@ ipcMain.handle("export-video", async (_event, config, suggestedName) => {
     },
   });
 
+  // Detect payload type: template-based ({ template, values, width, height })
+  // or legacy AdConfig ({ scenes, width, height })
+  const isTemplatePayload = payload && payload.template && payload.template.scenes;
+
+  const compositionId = isTemplatePayload ? "TemplateAd" : "DynamicAd";
+  const inputProps = payload;
+
+  const durationInFrames = isTemplatePayload
+    ? payload.template.scenes.reduce((sum, s) => sum + s.durationInFrames, 0)
+    : payload.scenes.reduce((sum, s) => sum + s.durationInFrames, 0);
+
+  const width = isTemplatePayload ? (payload.width ?? payload.template.width ?? 1920) : (payload.width ?? 1920);
+  const height = isTemplatePayload ? (payload.height ?? payload.template.height ?? 1080) : (payload.height ?? 1080);
+
   const composition = await selectComposition({
     serveUrl: bundleLocation,
-    id: "DynamicAd",
-    inputProps: config,
+    id: compositionId,
+    inputProps,
   });
 
-  const durationInFrames = config.scenes.reduce((sum, s) => sum + s.durationInFrames, 0);
-
   await renderMedia({
-    composition: {
-      ...composition,
-      durationInFrames,
-      width: config.width ?? 1920,
-      height: config.height ?? 1080,
-    },
+    composition: { ...composition, durationInFrames, width, height },
     serveUrl: bundleLocation,
     codec: "h264",
     outputLocation: saveResult.filePath,
-    inputProps: config,
+    inputProps,
     onProgress: ({ progress }) => {
       mainWindow.webContents.send("export-progress", { phase: "rendering", progress });
     },

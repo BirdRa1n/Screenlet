@@ -15,8 +15,9 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { BookMarked, Check, GripVertical, Megaphone, Search, ShoppingBag, Trash2 } from "lucide-react";
+import { BookMarked, Check, Clapperboard, Film, GripVertical, Megaphone, Search, ShoppingBag, Trash2 } from "lucide-react";
 import { useAdStore } from "../store/useAdStore";
+import { useTemplateStore } from "../store/useTemplateStore";
 import { Button, Dialog, IconButton, UploadZone } from "../design-system/components";
 import { useLibraryStore, type LibraryProduct } from "../store/useLibraryStore";
 import { toast } from "../store/useToastStore";
@@ -30,7 +31,18 @@ export const SceneListPanel: React.FC = () => {
   const removeScene = useAdStore((s) => s.removeScene);
   const addProductScene = useAdStore((s) => s.addProductScene);
   const addLogoScene = useAdStore((s) => s.addLogoScene);
+  const addTemplateScene = useAdStore((s) => s.addTemplateScene);
+  const addVideoScene = useAdStore((s) => s.addVideoScene);
   const setLogoImage = useAdStore((s) => s.setLogoImage);
+
+  const allTemplates = useTemplateStore((s) => s.templates);
+  const refreshTemplates = useTemplateStore((s) => s.refresh);
+  const [templatePickerOpen, setTemplatePickerOpen] = React.useState(false);
+
+  const handleOpenTemplatePicker = async () => {
+    await refreshTemplates();
+    setTemplatePickerOpen(true);
+  };
   const reorderScenes = useAdStore((s) => s.reorderScenes);
   const updateScene = useAdStore((s) => s.updateScene);
 
@@ -143,6 +155,10 @@ export const SceneListPanel: React.FC = () => {
                   const label =
                     scene.type === "logo"
                       ? scene.tagline || "Logo / Chamada"
+                      : scene.type === "template"
+                      ? allTemplates.find((t) => t.id === scene.templateId)?.name || "Template"
+                      : scene.type === "video"
+                      ? scene.src.split("/").pop() || "Vídeo"
                       : scene.productName || "Produto";
 
                   return (
@@ -202,8 +218,68 @@ export const SceneListPanel: React.FC = () => {
           >
             Biblioteca
           </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Clapperboard size={14} />}
+            onClick={handleOpenTemplatePicker}
+          >
+            Template
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Film size={14} />}
+            onClick={async () => {
+              const path = await window.adFrame.selectVideo();
+              if (!path) return;
+              addVideoScene();
+              const newScene = useAdStore.getState().config.scenes.at(-1);
+              if (newScene && newScene.type === "video") {
+                useAdStore.getState().updateScene(newScene.id, { ...newScene, src: path });
+              }
+              toast.success("Cena de vídeo adicionada.");
+            }}
+          >
+            Vídeo
+          </Button>
         </div>
       </section>
+
+      <Dialog
+        open={templatePickerOpen}
+        onClose={() => setTemplatePickerOpen(false)}
+        title="Escolher Template"
+        size="xl"
+      >
+        <div className="vt-lib-picker">
+          {allTemplates.length === 0 ? (
+            <div className="vt-lib-picker__empty">Nenhum template encontrado.</div>
+          ) : (
+            <div className="vt-lib-picker__grid">
+              {allTemplates.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  className="vt-lib-picker__card"
+                  onClick={() => {
+                    addTemplateScene(tpl.id);
+                    setTemplatePickerOpen(false);
+                    toast.success(`Template "${tpl.name}" adicionado como cena.`);
+                  }}
+                >
+                  <div className="vt-lib-picker__img" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Clapperboard size={28} />
+                  </div>
+                  <div className="vt-lib-picker__info">
+                    <span className="vt-lib-picker__name">{tpl.name}</span>
+                    <span className="vt-lib-picker__price">{tpl.scenes.length} cenas</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Dialog>
 
       <Dialog
         open={libraryOpen}
@@ -308,7 +384,7 @@ export const SceneListPanel: React.FC = () => {
 const SortableSceneChip: React.FC<{
   id: string;
   label: string;
-  type: "logo" | "product";
+  type: "logo" | "product" | "template" | "video";
   isSelected: boolean;
   onSelect: () => void;
   onRemove: () => void;
@@ -351,7 +427,7 @@ const SortableSceneChip: React.FC<{
       </span>
 
       <span className="vt-scene-chip__icon">
-        {type === "logo" ? <Megaphone size={14} /> : <ShoppingBag size={14} />}
+        {type === "logo" ? <Megaphone size={14} /> : type === "template" ? <Clapperboard size={14} /> : type === "video" ? <Film size={14} /> : <ShoppingBag size={14} />}
       </span>
 
       <span className="vt-scene-chip__label">{label}</span>
