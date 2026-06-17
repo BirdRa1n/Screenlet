@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type Page = "dashboard" | "wizard" | "editor" | "projects" | "settings";
+export type Page = "dashboard" | "wizard" | "editor" | "projects" | "library" | "settings";
 
 type NavigationStore = {
   page: Page;

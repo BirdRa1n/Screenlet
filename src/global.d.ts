@@ -24,10 +24,16 @@ declare global {
 
       // Projects
       projectsList: () => Promise<ProjectMeta[]>;
+
       projectsSave: (config: unknown, name: string) => Promise<string>;
       projectsLoad: (id: string) => Promise<unknown>;
       projectsDelete: (id: string) => Promise<void>;
       projectsRename: (id: string, name: string) => Promise<void>;
+
+      // Library
+      libraryList: () => Promise<import("./store/useLibraryStore").LibraryProduct[]>;
+      librarySave: (product: import("./store/useLibraryStore").LibraryProduct) => Promise<void>;
+      libraryDelete: (id: string) => Promise<void>;
 
       // Export
       exportVideo: (config: unknown, suggestedName?: string) => Promise<ExportResult>;

@@ -20,7 +20,7 @@ import {
 } from "../store/useWizardStore";
 import { toast } from "../store/useToastStore";
 import { DynamicAd } from "../remotion/DynamicAd";
-import type { PresetId } from "../remotion/presets";
+import { buildPreset, type PresetId } from "../remotion/presets";
 import "../styles/pages/Wizard.css";
 
 const STEPS = [
@@ -80,9 +80,9 @@ type FormatOption = {
 
 const FORMATS: FormatOption[] = [
   { id: "tv", name: "TV / Monitor", dims: "1920 × 1080", icon: <Tv2 size={20} />, available: true },
-  { id: "instagram", name: "Instagram", dims: "1080 × 1080", icon: <Smartphone size={20} />, available: false },
-  { id: "stories", name: "Stories", dims: "1080 × 1920", icon: <Smartphone size={20} />, available: false },
-  { id: "tiktok", name: "TikTok", dims: "1080 × 1920", icon: <Smartphone size={20} />, available: false },
+  { id: "instagram", name: "Instagram", dims: "1080 × 1080", icon: <Smartphone size={20} />, available: true },
+  { id: "stories", name: "Stories", dims: "1080 × 1920", icon: <Smartphone size={20} />, available: true },
+  { id: "tiktok", name: "TikTok", dims: "1080 × 1920", icon: <Smartphone size={20} />, available: true },
 ];
 
 const paneVariants = {
@@ -229,7 +229,7 @@ export const Wizard: React.FC<{
               </Button>
               <Button
                 variant="primary"
-                disabled={exporting || w.exportFormat !== "tv"}
+                disabled={exporting}
                 onClick={handleExportNow}
               >
                 {exporting ? "Exportando..." : "Exportar MP4"}
@@ -445,11 +445,16 @@ const StepTemplate: React.FC = () => {
               whileTap={{ scale: 0.98 }}
               onClick={() => setPreset(tpl.id)}
             >
-              <div
-                className="vt-wizard__tpl-preview"
-                style={{ background: tpl.gradient }}
-              >
-                <span>{tpl.emoji}</span>
+              <div className="vt-wizard__tpl-preview">
+                <Player
+                  component={DynamicAd}
+                  inputProps={buildPreset(tpl.id)}
+                  durationInFrames={60}
+                  fps={30}
+                  compositionWidth={1920}
+                  compositionHeight={1080}
+                  style={{ width: "100%", aspectRatio: "16/9", pointerEvents: "none", display: "block" }}
+                />
                 {selected && (
                   <div className="vt-wizard__tpl-check">
                     <Check size={12} />

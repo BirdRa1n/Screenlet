@@ -170,6 +170,33 @@ ipcMain.handle("projects-rename", (_event, id, newName) => {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 });
 
+/* ---- Library ---- */
+
+const LIBRARY_DIR = path.join(app.getPath("userData"), "library");
+
+ipcMain.handle("library-list", () => {
+  ensureDir(LIBRARY_DIR);
+  return fs
+    .readdirSync(LIBRARY_DIR)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => {
+      try { return JSON.parse(fs.readFileSync(path.join(LIBRARY_DIR, f), "utf8")); }
+      catch { return null; }
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+});
+
+ipcMain.handle("library-save", (_event, product) => {
+  ensureDir(LIBRARY_DIR);
+  fs.writeFileSync(path.join(LIBRARY_DIR, `${product.id}.json`), JSON.stringify(product, null, 2));
+});
+
+ipcMain.handle("library-delete", (_event, id) => {
+  const file = path.join(LIBRARY_DIR, `${id}.json`);
+  if (fs.existsSync(file)) fs.unlinkSync(file);
+});
+
 /* ---- Export ---- */
 
 ipcMain.handle("export-video", async (_event, config, suggestedName) => {

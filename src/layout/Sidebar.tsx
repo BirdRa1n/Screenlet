@@ -24,7 +24,7 @@ const NAV_MAIN: NavItem[] = [
   { icon: <LayoutGrid size={16} />, label: "Dashboard", page: "dashboard" },
   { icon: <FolderOpen size={16} />, label: "Projetos", page: "projects" },
   { icon: <LayoutTemplate size={16} />, label: "Templates", disabled: true },
-  { icon: <Images size={16} />, label: "Biblioteca", disabled: true },
+  { icon: <Images size={16} />, label: "Biblioteca", page: "library" },
   { icon: <Video size={16} />, label: "Vídeos Gerados", disabled: true },
 ];
 
