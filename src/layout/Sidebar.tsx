@@ -48,7 +48,7 @@ export const Sidebar: React.FC = () => {
           <span className="vt-sidebar__brand-icon">
             <Film size={16} strokeWidth={2.25} />
           </span>
-          <span className="vt-sidebar__brand-name">VitrineTV</span>
+          <span className="vt-sidebar__brand-name">AdFrame</span>
         </div>
       </div>
 

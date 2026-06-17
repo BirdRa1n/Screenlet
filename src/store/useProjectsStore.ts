@@ -19,29 +19,29 @@ export const useProjectsStore = create<ProjectsStore>((set) => ({
 
   refresh: async () => {
     set({ loading: true });
-    const projects = await window.vitrineTV.projectsList();
+    const projects = await window.adFrame.projectsList();
     set({ projects, loading: false });
   },
 
   save: async (config, name) => {
-    const id = await window.vitrineTV.projectsSave(config, name);
-    const projects = await window.vitrineTV.projectsList();
+    const id = await window.adFrame.projectsSave(config, name);
+    const projects = await window.adFrame.projectsList();
     set({ projects });
     return id;
   },
 
   load: async (id) => {
-    const config = await window.vitrineTV.projectsLoad(id);
+    const config = await window.adFrame.projectsLoad(id);
     return config as AdConfig | null;
   },
 
   remove: async (id) => {
-    await window.vitrineTV.projectsDelete(id);
+    await window.adFrame.projectsDelete(id);
     set((s) => ({ projects: s.projects.filter((p) => p.id !== id) }));
   },
 
   rename: async (id, name) => {
-    await window.vitrineTV.projectsRename(id, name);
+    await window.adFrame.projectsRename(id, name);
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, name } : p)),
     }));

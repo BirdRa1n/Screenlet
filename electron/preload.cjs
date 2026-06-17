@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("vitrineTV", {
+contextBridge.exposeInMainWorld("adFrame", {
   // Files
   selectImage: () => ipcRenderer.invoke("select-image"),
   copyFile: (srcPath) => ipcRenderer.invoke("copy-file", srcPath),

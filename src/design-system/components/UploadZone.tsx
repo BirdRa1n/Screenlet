@@ -23,7 +23,7 @@ export const UploadZone: React.FC<Props> = ({
 
   // Click → Electron native dialog (no hidden <input> intercepting)
   const handleClick = async () => {
-    const path = await window.vitrineTV.selectImage();
+    const path = await window.adFrame.selectImage();
     if (path) onUpload(path);
   };
 
@@ -35,7 +35,7 @@ export const UploadZone: React.FC<Props> = ({
     if (!file) return;
     const nativePath = (file as File & { path?: string }).path;
     if (nativePath) {
-      const uploaded = await window.vitrineTV.copyFile(nativePath);
+      const uploaded = await window.adFrame.copyFile(nativePath);
       onUpload(uploaded);
     }
   };
