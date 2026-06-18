@@ -1,7 +1,7 @@
 .vt-timeline {
   display: flex;
   flex-direction: column;
-  background: var(--surface-1);
+  background: var(--surface);
   border-top: 1px solid var(--border);
   user-select: none;
   flex-shrink: 0;
@@ -16,7 +16,7 @@
   border-bottom: 1px solid var(--border);
   font-size: 11px;
   color: var(--text-tertiary);
-  background: var(--surface-2);
+  background: var(--surface-raised);
 }
 
 .vt-timeline__toggle {
@@ -96,11 +96,11 @@
 }
 
 .vt-timeline__track-label:hover {
-  background: var(--surface-2);
+  background: var(--surface-raised);
 }
 
 .vt-timeline__track-label--selected {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface-1));
+  background: color-mix(in srgb, var(--primary-500) 12%, var(--surface));
   color: var(--text-primary);
 }
 
@@ -127,8 +127,8 @@
   top: 4px;
   height: 20px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--accent) 55%, var(--surface-2));
-  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--primary-500) 55%, var(--surface-raised));
+  border: 1px solid var(--primary-500);
   display: flex;
   align-items: center;
   padding: 0 5px;
@@ -142,11 +142,11 @@
 }
 
 .vt-timeline__clip:hover {
-  background: color-mix(in srgb, var(--accent) 75%, var(--surface-2));
+  background: color-mix(in srgb, var(--primary-500) 75%, var(--surface-raised));
 }
 
 .vt-timeline__clip--selected {
-  background: var(--accent);
+  background: var(--primary-500);
   z-index: 2;
 }
 
@@ -169,7 +169,7 @@
   top: 0;
   bottom: 0;
   width: 2px;
-  background: var(--accent);
+  background: var(--primary-500);
   pointer-events: none;
   z-index: 10;
 }
@@ -183,7 +183,7 @@
   height: 0;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
-  border-top: 8px solid var(--accent);
+  border-top: 8px solid var(--primary-500);
 }
 
 /* Scene segments in ruler */

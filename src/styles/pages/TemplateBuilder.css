@@ -12,7 +12,7 @@
   gap: 12px;
   padding: 12px 20px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-1);
+  background: var(--surface);
   flex-shrink: 0;
 }
 
@@ -35,7 +35,7 @@
 
 .vt-tb__title input:hover,
 .vt-tb__title input:focus {
-  background: var(--surface-2);
+  background: var(--surface-raised);
   border-radius: 4px;
   padding: 2px 6px;
 }
@@ -99,12 +99,12 @@
 }
 
 .vt-tb__scene-item:hover {
-  background: var(--surface-2);
+  background: var(--surface-raised);
 }
 
 .vt-tb__scene-item--active {
-  background: var(--surface-2);
-  border-color: var(--accent);
+  background: var(--surface-raised);
+  border-color: var(--primary-500);
 }
 
 .vt-tb__scene-icon {
@@ -154,10 +154,10 @@
   color: var(--text-secondary);
 }
 
-.vt-tb__layer-item:hover { background: var(--surface-2); }
+.vt-tb__layer-item:hover { background: var(--surface-raised); }
 .vt-tb__layer-item--active {
-  background: var(--surface-2);
-  border-color: var(--accent);
+  background: var(--surface-raised);
+  border-color: var(--primary-500);
   color: var(--text-primary);
 }
 
@@ -237,14 +237,14 @@
   padding: 6px 8px;
   border-radius: 5px;
   border: 1px solid var(--border);
-  background: var(--surface-2);
+  background: var(--surface-raised);
   color: var(--text-primary);
   font-size: 12px;
   outline: none;
 }
 
 .vt-tb__field-input:focus {
-  border-color: var(--accent);
+  border-color: var(--primary-500);
 }
 
 .vt-tb__vars {
@@ -266,7 +266,7 @@
 .vt-tb__var-name {
   font-family: monospace;
   font-size: 11px;
-  color: var(--accent);
+  color: var(--primary-500);
   min-width: 100px;
 }
 
