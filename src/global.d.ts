@@ -69,6 +69,7 @@ declare global {
 
       // Platform info
       platform: NodeJS.Platform;
+      setTitleBarTheme: (isDark: boolean) => Promise<void>;
 
       // Storage location
       storageGetDir: () => Promise<string>;

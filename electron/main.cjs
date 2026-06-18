@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, protocol, net, globalShortcut, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, protocol, net, globalShortcut, shell, nativeTheme } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -104,8 +104,19 @@ function copyIntoUploads(srcPath) {
 
 let mainWindow;
 
+// Colors must match --neutral-950 (dark bg) and --neutral-50 (light bg) in tokens.css.
+const OVERLAY_DARK  = { color: "#0a0b0e", symbolColor: "#f7f8fa" };
+const OVERLAY_LIGHT = { color: "#f7f8fa", symbolColor: "#0a0b0e" };
+
+function updateTitleBarOverlay(isDark) {
+  if (process.platform === "darwin" || !mainWindow) return;
+  const colors = isDark ? OVERLAY_DARK : OVERLAY_LIGHT;
+  mainWindow.setTitleBarOverlay({ height: 36, ...colors });
+}
+
 function createWindow() {
   const isMac = process.platform === "darwin";
+  const darkMode = nativeTheme.shouldUseDarkColors;
 
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -114,7 +125,11 @@ function createWindow() {
     // Windows/Linux: hidden title bar with a native overlay that keeps ─ □ ✕ controls.
     ...(isMac
       ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 14, y: 10 } }
-      : { titleBarStyle: "hidden", titleBarOverlay: { height: 36 }, autoHideMenuBar: true }),
+      : {
+          titleBarStyle: "hidden",
+          titleBarOverlay: { height: 36, ...(darkMode ? OVERLAY_DARK : OVERLAY_LIGHT) },
+          autoHideMenuBar: true,
+        }),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -849,6 +864,13 @@ ipcMain.handle("iptv-set-ip", (_, ip) => {
   }
   return iptvStatus();
 });
+
+// Sync title bar overlay color with app theme (Windows only).
+// The renderer calls this whenever the resolved dark/light state changes.
+ipcMain.handle("set-titlebar-theme", (_, isDark) => updateTitleBarOverlay(isDark));
+
+// Also follow the OS theme when the user's app preference is "system".
+nativeTheme.on("updated", () => updateTitleBarOverlay(nativeTheme.shouldUseDarkColors));
 
 app.on("before-quit", () => {
   if (iptvServer) iptvServer.close();

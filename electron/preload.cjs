@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld("adFrame", {
 
   // Platform info
   platform: process.platform,
+  setTitleBarTheme: (isDark) => ipcRenderer.invoke("set-titlebar-theme", isDark),
 
   // Storage location
   storageGetDir: () => ipcRenderer.invoke("storage-get-dir"),

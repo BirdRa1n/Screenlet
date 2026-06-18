@@ -18,6 +18,7 @@ function applyTheme(theme: Theme) {
   const resolved = theme === "system" ? getSystemTheme() : theme;
   document.documentElement.setAttribute("data-theme", resolved);
   localStorage.setItem(STORAGE_KEY, theme);
+  window.adFrame?.setTitleBarTheme?.(resolved === "dark");
 }
 
 type ThemeStore = {
