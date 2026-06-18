@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld("adFrame", {
   iptvStatus: () => ipcRenderer.invoke("iptv-status"),
   iptvStart: () => ipcRenderer.invoke("iptv-start"),
   iptvStop: () => ipcRenderer.invoke("iptv-stop"),
+  iptvSetIp: (ip) => ipcRenderer.invoke("iptv-set-ip", ip),
 
   // Export / render
   exportVideo: (config, suggestedName, fps) =>

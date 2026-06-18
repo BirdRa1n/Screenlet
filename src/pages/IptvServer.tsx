@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { AlertTriangle, CalendarClock, Check, Copy, List, Radio, Tv2 } from "lucide-react";
-import { Button } from "../design-system/components";
+import { Button, Field, SelectField } from "../design-system/components";
 import { useChannelStore } from "../store/useChannelStore";
 import { useIptvStore } from "../store/useIptvStore";
 import { toast } from "../store/useToastStore";
@@ -8,7 +8,7 @@ import "../styles/pages/IptvServer.css";
 
 export const IptvServer: React.FC = () => {
   const { channels, refresh: refreshChannels } = useChannelStore();
-  const { status, refresh: refreshStatus, start, stop } = useIptvStore();
+  const { status, refresh: refreshStatus, start, stop, setIp } = useIptvStore();
   const [toggling, setToggling] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -19,9 +19,16 @@ export const IptvServer: React.FC = () => {
 
   const activeChannels = channels.filter((c) => c.enabled).length;
   const playlistChannels = channels.filter((c) => c.playlist?.length > 0).length;
-  const primaryIp = status.ips[0] ?? "127.0.0.1";
+  const primaryIp = status.selectedIp;
   const m3uUrl = `http://${primaryIp}:${status.port}/playlist.m3u`;
   const epgUrl = `http://${primaryIp}:${status.port}/epg.xml`;
+
+  const ipLabel = (ip: string) => {
+    if (/^192\.168\./.test(ip) || /^10\./.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip))
+      return `${ip}  (rede local)`;
+    if (/^100\./.test(ip)) return `${ip}  (Tailscale/VPN)`;
+    return ip;
+  };
 
   const handleToggle = async () => {
     setToggling(true);
@@ -82,6 +89,22 @@ export const IptvServer: React.FC = () => {
           {toggling ? "Aguarde…" : status.running ? "Parar servidor" : "Iniciar servidor"}
         </Button>
       </div>
+
+      {/* Network interface selector */}
+      {status.ips.length > 0 && (
+        <div className="vt-iptv__iface-row">
+          <Field label="Interface de rede">
+            <SelectField
+              value={primaryIp}
+              onChange={(e) => setIp(e.target.value)}
+            >
+              {status.ips.map((ip) => (
+                <option key={ip} value={ip}>{ipLabel(ip)}</option>
+              ))}
+            </SelectField>
+          </Field>
+        </div>
+      )}
 
       {/* ffmpeg warning */}
       {!status.ffmpegAvailable && playlistChannels > 0 && (

@@ -131,6 +131,10 @@
   border-color: var(--border-strong);
 }
 
+.vt-iptv__iface-row {
+  max-width: 400px;
+}
+
 .vt-iptv__warning {
   display: flex;
   align-items: flex-start;

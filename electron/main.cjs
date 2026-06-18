@@ -432,11 +432,36 @@ const IPTV_PORT = 7095;
 
 function getLocalIPs() {
   const nets = os.networkInterfaces();
-  return Object.values(nets)
+  const all = Object.values(nets)
     .flat()
-    .filter((n) => n.family === "IPv4" && !n.internal)
-    .map((n) => n.address);
+    .filter((n) => n.family === "IPv4" && !n.internal);
+
+  // Rank so true private LAN addresses always come before VPN/Tailscale ranges.
+  const rank = (ip) => {
+    if (/^192\.168\./.test(ip)) return 0;
+    if (/^10\./.test(ip)) return 1;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return 2;
+    return 9; // Tailscale (100.x.x.x) and other VPN adapters last
+  };
+
+  return all.sort((a, b) => rank(a.address) - rank(b.address)).map((n) => n.address);
 }
+
+// ── IPTV config (selected IP preference) ─────────────────────────────────────
+const IPTV_CONFIG_FILE = path.join(app.getPath("userData"), "iptv-config.json");
+
+function loadIptvConfig() {
+  try {
+    if (fs.existsSync(IPTV_CONFIG_FILE)) return JSON.parse(fs.readFileSync(IPTV_CONFIG_FILE, "utf8"));
+  } catch {}
+  return {};
+}
+
+function saveIptvConfig(cfg) {
+  try { fs.writeFileSync(IPTV_CONFIG_FILE, JSON.stringify(cfg)); } catch {}
+}
+
+let iptvConfig = loadIptvConfig();
 
 // sourceId = "uploads/filename.mp4" — resolve to the correct directory for dev vs prod
 function resolveUploadPath(sourceId) {
@@ -492,18 +517,20 @@ function readAllSchedules() {
     .filter(Boolean);
 }
 
+function getSelectedIp() {
+  const ips = getLocalIPs();
+  if (iptvConfig.selectedIp && ips.includes(iptvConfig.selectedIp)) return iptvConfig.selectedIp;
+  return ips[0] || "127.0.0.1";
+}
+
 function generateM3u() {
   const channels = readAllChannels().filter((c) => c.enabled);
-  const ips = getLocalIPs();
-  const host = ips[0] || "127.0.0.1";
+  const host = getSelectedIp();
 
   let m3u = `#EXTM3U x-tvg-url="http://${host}:${IPTV_PORT}/epg.xml"\n`;
   for (const ch of channels) {
     m3u += `#EXTINF:-1 tvg-id="${ch.id}" tvg-name="${ch.name}" group-title="Screenlet",${ch.name}\n`;
-    // VLC loop directive for channels in loop mode
-    if (ch.loopSourceId) {
-      m3u += `#EXTVLCOPT:input-repeat=65535\n`;
-    }
+    if (ch.loop) m3u += `#EXTVLCOPT:input-repeat=65535\n`;
     m3u += `http://${host}:${IPTV_PORT}/channel/${ch.id}\n`;
   }
   return m3u;
@@ -775,7 +802,14 @@ function handleIptvRequest(req, res) {
 }
 
 function iptvStatus() {
-  return { running: !!iptvServer, port: IPTV_PORT, ips: getLocalIPs(), ffmpegAvailable: !!findFfmpegBinary() };
+  const ips = getLocalIPs();
+  return {
+    running: !!iptvServer,
+    port: IPTV_PORT,
+    ips,
+    selectedIp: getSelectedIp(),
+    ffmpegAvailable: !!findFfmpegBinary(),
+  };
 }
 
 ipcMain.handle("iptv-status", () => iptvStatus());
@@ -800,6 +834,15 @@ ipcMain.handle("iptv-stop", () => {
       resolve(iptvStatus());
     });
   });
+});
+
+ipcMain.handle("iptv-set-ip", (_, ip) => {
+  const ips = getLocalIPs();
+  if (ips.includes(ip)) {
+    iptvConfig.selectedIp = ip;
+    saveIptvConfig(iptvConfig);
+  }
+  return iptvStatus();
 });
 
 app.on("before-quit", () => {

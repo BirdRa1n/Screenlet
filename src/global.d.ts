@@ -65,6 +65,7 @@ declare global {
       iptvStatus: () => Promise<import("./store/useIptvStore").IptvStatus>;
       iptvStart: () => Promise<import("./store/useIptvStore").IptvStatus>;
       iptvStop: () => Promise<import("./store/useIptvStore").IptvStatus>;
+      iptvSetIp: (ip: string) => Promise<import("./store/useIptvStore").IptvStatus>;
 
       // Storage location
       storageGetDir: () => Promise<string>;
