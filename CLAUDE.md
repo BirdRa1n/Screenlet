@@ -126,6 +126,9 @@ Factory defaults: `defaultLogoScene()`, `defaultProductScene()`, `defaultTemplat
 
 At export time, when any scene is `type: "template"`, `AdConfig.templates[]` must be included in the payload so `DynamicAd` can look up the full Template object (Zustand store is not available in the Remotion render process).
 
+### Asset bundle (`public/assets/`)
+Static assets shipped with the app live in `public/assets/`. The naming convention is **English kebab-case** (e.g. `picanha-steak.png`, `milk-can.png`). The subfolder for sample product images is `products/`. Paths are referenced in templates and presets without a leading slash (`"assets/products/picanha-steak.png"`), resolved at render time via `staticFile()`.
+
 ### Template system (`src/remotion/template-types.ts`)
 Layer types: `text`, `image`, `logo`, `shape`, `badge`, `price`, `video`. Image and logo layers support `flipX?: boolean` and `flipY?: boolean`.
 

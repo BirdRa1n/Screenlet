@@ -44,7 +44,7 @@ export function buildPreset(id: PresetId): AdConfig {
             durationInFrames: 60,
           }),
           productScene({
-            image: "assets/produtos/picanha_final.png",
+            image: "assets/products/picanha-steak.png",
             productName: "Picanha Bovina",
             priceMode: "offer",
             oldPrice: "79,90",
@@ -57,7 +57,7 @@ export function buildPreset(id: PresetId): AdConfig {
             durationInFrames: 150,
           }),
           productScene({
-            image: "assets/produtos/costela_final.png",
+            image: "assets/products/beef-ribs.png",
             productName: "Costela Bovina",
             priceMode: "offer",
             oldPrice: "39,90",
@@ -87,7 +87,7 @@ export function buildPreset(id: PresetId): AdConfig {
             durationInFrames: 60,
           }),
           productScene({
-            image: "assets/produtos/panetone_final.png",
+            image: "assets/products/panettone.png",
             productName: "Panetone Tradicional",
             priceMode: "offer",
             oldPrice: "45,00",
@@ -100,7 +100,7 @@ export function buildPreset(id: PresetId): AdConfig {
             durationInFrames: 150,
           }),
           productScene({
-            image: "assets/produtos/espumante_final.png",
+            image: "assets/products/sparkling-wine.png",
             productName: "Espumante Brut",
             priceMode: "offer",
             oldPrice: "39,90",
@@ -130,7 +130,7 @@ export function buildPreset(id: PresetId): AdConfig {
             durationInFrames: 60,
           }),
           productScene({
-            image: "assets/produtos/ovo_pascoa_final.png",
+            image: "assets/products/easter-egg.png",
             productName: "Ovo de Chocolate",
             priceMode: "offer",
             oldPrice: "89,90",
@@ -161,7 +161,7 @@ export function buildPreset(id: PresetId): AdConfig {
             durationInFrames: 60,
           }),
           productScene({
-            image: "assets/produtos/duracel.webp",
+            image: "assets/products/toothpick-stack.png",
             productName: "Pilhas Duracell AA",
             priceMode: "offer",
             oldPrice: "14,00",
@@ -174,7 +174,7 @@ export function buildPreset(id: PresetId): AdConfig {
             durationInFrames: 165,
           }),
           productScene({
-            image: "assets/produtos/ninho.webp",
+            image: "assets/products/milk-can.png",
             productName: "Leite Ninho Fases 1+ 800g",
             priceMode: "offer",
             oldPrice: "65,00",

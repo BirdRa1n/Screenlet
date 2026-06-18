@@ -19,7 +19,7 @@ export const templateGenerico: Template = {
     { key: "LOGO",          label: "Logo",              type: "image", defaultValue: "" },
     { key: "BRAND_COLOR",   label: "Cor da marca",      type: "color", defaultValue: "#6e56f8" },
     { key: "PRODUCT_NAME",  label: "Nome do produto",   type: "text",  defaultValue: "Nome do Produto",         required: true },
-    { key: "PRODUCT_IMAGE", label: "Imagem do produto", type: "image", defaultValue: "assets/produtos/ninho.webp" },
+    { key: "PRODUCT_IMAGE", label: "Imagem do produto", type: "image", defaultValue: "assets/products/milk-can.png" },
     { key: "OLD_PRICE",     label: "Preço anterior",    type: "text",  defaultValue: "65,00" },
     { key: "NEW_PRICE",     label: "Preço atual",       type: "text",  defaultValue: "59,95",                   required: true },
     { key: "PRICE_SUFFIX",  label: "Sufixo",            type: "text",  defaultValue: "" },

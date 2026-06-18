@@ -18,7 +18,7 @@ export const templateNatal: Template = {
     { key: "STORE_NAME",    label: "Nome da loja",      type: "text",  defaultValue: "Supermercado",           required: true },
     { key: "LOGO",          label: "Logo",              type: "image", defaultValue: "" },
     { key: "PRODUCT_NAME",  label: "Nome do produto",   type: "text",  defaultValue: "Panetone Tradicional",   required: true },
-    { key: "PRODUCT_IMAGE", label: "Imagem do produto", type: "image", defaultValue: "assets/produtos/panetone_final.png" },
+    { key: "PRODUCT_IMAGE", label: "Imagem do produto", type: "image", defaultValue: "assets/products/panettone.png" },
     { key: "OLD_PRICE",     label: "Preço anterior",    type: "text",  defaultValue: "45,00" },
     { key: "NEW_PRICE",     label: "Preço atual",       type: "text",  defaultValue: "32,90",                  required: true },
     { key: "PRICE_SUFFIX",  label: "Sufixo",            type: "text",  defaultValue: "" },

@@ -18,7 +18,7 @@ export const templateCarnes: Template = {
     { key: "STORE_NAME",    label: "Nome da loja",      type: "text",  defaultValue: "Açougue Central",        required: true },
     { key: "LOGO",          label: "Logo",              type: "image", defaultValue: "" },
     { key: "PRODUCT_NAME",  label: "Nome do produto",   type: "text",  defaultValue: "Picanha Bovina",         required: true },
-    { key: "PRODUCT_IMAGE", label: "Imagem do produto", type: "image", defaultValue: "assets/produtos/picanha_final.png" },
+    { key: "PRODUCT_IMAGE", label: "Imagem do produto", type: "image", defaultValue: "assets/products/picanha-steak.png" },
     { key: "OLD_PRICE",     label: "Preço anterior",    type: "text",  defaultValue: "79,90" },
     { key: "NEW_PRICE",     label: "Preço atual",       type: "text",  defaultValue: "69,90",                  required: true },
     { key: "PRICE_SUFFIX",  label: "Sufixo",            type: "text",  defaultValue: "/kg" },
