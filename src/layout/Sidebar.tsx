@@ -1,14 +1,14 @@
 import React from "react";
 import {
-  CalendarClock,
   ChevronLeft,
   ChevronRight,
+  Film,
   FolderOpen,
   Images,
   LayoutGrid,
   LayoutTemplate,
   Radio,
-  Tv,
+  Settings,
   Tv2,
 } from "lucide-react";
 import { useNavigationStore, type Page } from "../store/useNavigationStore";
@@ -26,11 +26,11 @@ const NAV_CONTENT: NavItem[] = [
   { icon: <FolderOpen size={16} />, label: "Projetos", page: "projects" },
   { icon: <LayoutTemplate size={16} />, label: "Templates", page: "templates" },
   { icon: <Images size={16} />, label: "Biblioteca", page: "library" },
+  { icon: <Film size={16} />, label: "Vídeos", page: "renders" },
 ];
 
 const NAV_PROGRAMMING: NavItem[] = [
   { icon: <Tv2 size={16} />, label: "Canais", page: "channels" },
-  { icon: <CalendarClock size={16} />, label: "Programação", page: "schedules" },
 ];
 
 const NAV_IPTV: NavItem[] = [
@@ -38,7 +38,7 @@ const NAV_IPTV: NavItem[] = [
 ];
 
 const NAV_BOTTOM: NavItem[] = [
-  { icon: <Tv size={16} />, label: "Configurações", page: "settings" },
+  { icon: <Settings size={16} />, label: "Configurações", page: "settings" },
 ];
 
 export const Sidebar: React.FC = () => {
@@ -47,13 +47,7 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigationStore((s) => s.navigate);
   const toggleSidebar = useNavigationStore((s) => s.toggleSidebar);
 
-  const isActive = (item: NavItem) => {
-    if (!item.page) return false;
-    if (item.page === page) return true;
-    // Keep "Programação" highlighted when editing a schedule
-    if (item.page === "schedules" && page === "schedule-builder") return true;
-    return false;
-  };
+  const isActive = (item: NavItem) => item.page === page;
 
   const makeGroup = (items: NavItem[]) =>
     items.map((item) => (
@@ -94,7 +88,7 @@ export const Sidebar: React.FC = () => {
         <div className="vt-sidebar__nav-divider" />
 
         <div className="vt-sidebar__nav-group">
-          <span className="vt-sidebar__nav-section">Programming</span>
+          <span className="vt-sidebar__nav-section">Broadcasting</span>
           {makeGroup(NAV_PROGRAMMING)}
         </div>
 

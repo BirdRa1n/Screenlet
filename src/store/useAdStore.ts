@@ -13,6 +13,7 @@ type AdStore = {
   config: AdConfig;
   selectedSceneId: string | null;
   seekFrame: number | null;
+  currentProjectName: string | null;
 
   selectScene: (id: string) => void;
   seekToScene: (id: string) => void;
@@ -26,6 +27,7 @@ type AdStore = {
   addTemplateScene: (templateId?: string) => void;
   addVideoScene: () => void;
   loadConfig: (config: AdConfig) => void;
+  setCurrentProjectName: (name: string | null) => void;
 };
 
 const initialConfig = buildPreset("generico");
@@ -34,6 +36,7 @@ export const useAdStore = create<AdStore>((set) => ({
   config: initialConfig,
   selectedSceneId: initialConfig.scenes[0]?.id ?? null,
   seekFrame: null,
+  currentProjectName: null,
 
   selectScene: (id) => set({ selectedSceneId: id }),
 
@@ -126,7 +129,10 @@ export const useAdStore = create<AdStore>((set) => ({
       config,
       selectedSceneId: config.scenes[0]?.id ?? null,
       seekFrame: null,
+      currentProjectName: null,
     }),
+
+  setCurrentProjectName: (name) => set({ currentProjectName: name }),
 }));
 
 export function useSelectedScene(): SceneConfig | null {

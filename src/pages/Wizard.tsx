@@ -28,7 +28,7 @@ const STEPS = [
   { num: 2 as const, label: "Produtos" },
   { num: 3 as const, label: "Template" },
   { num: 4 as const, label: "Preview" },
-  { num: 5 as const, label: "Exportar" },
+  { num: 5 as const, label: "Renderizar" },
 ];
 
 type TemplateOption = {
@@ -232,7 +232,7 @@ export const Wizard: React.FC<{
                 disabled={exporting}
                 onClick={handleExportNow}
               >
-                {exporting ? "Exportando..." : "Exportar MP4"}
+                {exporting ? "Renderizando…" : "Renderizar MP4"}
               </Button>
             </>
           )}

@@ -1,6 +1,6 @@
 {
-  "name": "vitrinetv",
-  "productName": "AdFrame",
+  "name": "screenlet",
+  "productName": "Screenlet",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -12,22 +12,32 @@
     "preview": "vite preview",
     "electron": "electron .",
     "electron:dev": "concurrently -k -n VITE,ELECTRON -c blue,green \"vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron .\"",
-    "dist": "npm run build && electron-builder",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist": "node scripts/install-cross-compositors.mjs && npm run build && electron-builder",
+    "dist:mac": "node scripts/install-cross-compositors.mjs && npm run build && electron-builder --mac",
+    "dist:mac:arm64": "node scripts/install-cross-compositors.mjs && npm run build && electron-builder --mac --arm64",
+    "dist:mac:intel": "node scripts/install-cross-compositors.mjs && npm run build && electron-builder --mac --x64",
+    "dist:win": "node scripts/install-cross-compositors.mjs && npm run build && electron-builder --win",
+    "dist:linux": "node scripts/install-cross-compositors.mjs && npm run build && electron-builder --linux"
   },
   "build": {
-    "appId": "com.vitrinetv.app",
-    "productName": "AdFrame",
+    "appId": "com.screenlet.app",
+    "productName": "Screenlet",
     "directories": {
       "output": "release"
     },
     "asar": false,
+    "asarUnpack": [
+      "node_modules/@remotion/compositor-*/**/*"
+    ],
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "scripts/**/*"
+      "scripts/**/*",
+      "node_modules/@remotion/compositor-darwin-arm64/**/*",
+      "node_modules/@remotion/compositor-darwin-x64/**/*",
+      "node_modules/@remotion/compositor-win32-x64-msvc/**/*",
+      "node_modules/@remotion/compositor-linux-x64-gnu/**/*",
+      "node_modules/@remotion/compositor-linux-arm64-gnu/**/*"
     ],
     "mac": {
       "category": "public.app-category.video",
@@ -64,7 +74,7 @@
       ]
     },
     "dmg": {
-      "title": "AdFrame",
+      "title": "Screenlet",
       "contents": [
         {
           "x": 130,
@@ -98,6 +108,13 @@
     "react-dom": "^19.2.7",
     "remotion": "^4.0.478",
     "zustand": "^5.0.14"
+  },
+  "optionalDependencies": {
+    "@remotion/compositor-darwin-arm64": "4.0.478",
+    "@remotion/compositor-darwin-x64": "4.0.478",
+    "@remotion/compositor-win32-x64-msvc": "4.0.478",
+    "@remotion/compositor-linux-x64-gnu": "4.0.478",
+    "@remotion/compositor-linux-arm64-gnu": "4.0.478"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

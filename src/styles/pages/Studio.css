@@ -1,0 +1,339 @@
+.vt-studio {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--background);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Header ---- */
+
+.vt-studio__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  /* left padding clears the macOS traffic-light buttons (⬤⬤⬤ at x≈14, ~68px wide) */
+  padding: 0 var(--space-6) 0 80px;
+  height: 52px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+.vt-studio__header button,
+.vt-studio__header select {
+  -webkit-app-region: no-drag;
+}
+
+.vt-studio__back {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+  color: var(--text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast), background var(--duration-fast);
+  font-family: var(--font-sans);
+}
+
+.vt-studio__back:hover {
+  color: var(--text-primary);
+  background: var(--surface-raised);
+}
+
+.vt-studio__title {
+  flex: 1;
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.vt-studio__close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+
+.vt-studio__close:hover {
+  color: var(--text-primary);
+  background: var(--surface-raised);
+}
+
+/* ---- Body: two-column layout ---- */
+
+.vt-studio__body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  overflow: hidden;
+}
+
+/* ---- Library (left panel) ---- */
+
+.vt-studio__library {
+  border-right: 1px solid var(--border);
+  padding: var(--space-6);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.vt-studio__panel-title {
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.vt-studio__panel-sub {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  margin-top: -8px;
+}
+
+.vt-studio__library-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-4);
+  color: var(--text-tertiary);
+  font-size: var(--text-caption);
+  text-align: center;
+}
+
+.vt-studio__library-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vt-studio__library-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--duration-fast);
+}
+
+.vt-studio__library-item:hover {
+  border-color: var(--border-strong);
+}
+
+.vt-studio__library-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.vt-studio__library-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vt-studio__library-name {
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vt-studio__library-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.vt-studio__library-add {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--primary-500) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-500) 30%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--primary-400);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+
+.vt-studio__library-add:hover {
+  background: color-mix(in srgb, var(--primary-500) 22%, transparent);
+  border-color: var(--primary-400);
+}
+
+/* ---- Playlist (right panel) ---- */
+
+.vt-studio__playlist {
+  padding: var(--space-6);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.vt-studio__playlist-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  color: var(--text-tertiary);
+  font-size: var(--text-body);
+  padding: var(--space-10);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.vt-studio__playlist-empty-hint {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+}
+
+.vt-studio__playlist-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vt-studio__playlist-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--duration-fast);
+}
+
+.vt-studio__playlist-item:hover {
+  border-color: var(--border-strong);
+}
+
+.vt-studio__playlist-num {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: var(--weight-semibold);
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.vt-studio__playlist-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.vt-studio__playlist-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.vt-studio__playlist-name {
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.vt-studio__playlist-transition {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.vt-studio__transition-label {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.vt-studio__transition-select {
+  appearance: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-2);
+  font-size: var(--text-caption);
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--duration-fast);
+}
+
+.vt-studio__transition-select:hover,
+.vt-studio__transition-select:focus {
+  border-color: var(--border-strong);
+}
+
+.vt-studio__playlist-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* ---- Footer ---- */
+
+.vt-studio__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--surface);
+}
+
+.vt-studio__footer-actions {
+  display: flex;
+  gap: var(--space-2);
+}

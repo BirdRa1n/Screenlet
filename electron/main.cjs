@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, protocol, net, globalShortcut } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, protocol, net, globalShortcut, shell } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -7,9 +7,7 @@ const http = require("node:http");
 const { spawn, execSync } = require("node:child_process");
 
 // Remotion needs HOME to create ~/.remotion cache.
-// os.homedir() reads HOME env var first — if it's empty it returns "".
-// os.userInfo().homedir reads /etc/passwd directly, bypassing HOME.
-// We use that as the authoritative fallback.
+// os.userInfo().homedir reads /etc/passwd directly, bypassing the HOME env var.
 try {
   const userHome = os.userInfo().homedir;
   if (!process.env.HOME || process.env.HOME === "/") {
@@ -23,14 +21,65 @@ try {
 
 const isDev = !app.isPackaged;
 
+// ── Remotion browser management ──────────────────────────────────────────────
+// Chrome is cached in userData/remotion-root/node_modules/.remotion so it
+// survives app updates (the app bundle's node_modules gets replaced on update).
+let cachedBrowserExecutable = null;
 
-// Dev: uploads in project/public/ so Vite serves them for Remotion Player
-// Prod: uploads in userData/ — persists across app updates, never inside asar
-const UPLOADS_DIR = isDev
-  ? path.join(__dirname, "..", "public", "uploads")
-  : path.join(app.getPath("userData"), "uploads");
+function computeConcurrency() {
+  const ramGb = os.totalmem() / 1024 / 1024 / 1024;
+  const cpus  = os.cpus().length;
+  // Each Remotion worker consumes ~600 MB. Reserve 2 GB for OS + app.
+  const byRam = Math.floor((ramGb - 2) / 0.6);
+  const byCpu = Math.max(1, Math.floor(cpus / 2));
+  return Math.max(1, Math.min(byRam, byCpu, 8));
+}
 
-const PROJECTS_DIR = path.join(app.getPath("userData"), "projects");
+async function warmRemotionBrowser() {
+  try {
+    const userData = app.getPath("userData");
+    const remotionRoot = path.join(userData, "remotion-root");
+    ensureDir(remotionRoot);
+    // Remotion walks cwd upward until it finds package.json, then stores
+    // Chrome at {dir}/node_modules/.remotion — using userData as that root
+    // makes the cache survive app reinstalls/updates.
+    const pkgPath = path.join(remotionRoot, "package.json");
+    if (!fs.existsSync(pkgPath)) {
+      fs.writeFileSync(pkgPath, JSON.stringify({ name: "screenlet-cache", version: "1.0.0" }));
+    }
+    const origCwd = process.cwd();
+    process.chdir(remotionRoot);
+    const { ensureBrowser } = await import("@remotion/renderer");
+    const result = await ensureBrowser({ logLevel: "verbose" });
+    cachedBrowserExecutable = result.path;
+    process.chdir(origCwd);
+    console.log("[Screenlet] Browser ready:", cachedBrowserExecutable);
+  } catch (err) {
+    // Non-fatal — renderMedia will download Chrome on-demand if this fails
+    console.warn("[Screenlet] Browser pre-warm failed:", err.message);
+  }
+}
+
+// Allow the user to override the default storage location.
+// The custom path is persisted in userData (app config), not in Documents.
+function loadStorageDir() {
+  const configFile = path.join(app.getPath("userData"), "storage-config.json");
+  try {
+    if (fs.existsSync(configFile)) {
+      const { baseDir } = JSON.parse(fs.readFileSync(configFile, "utf8"));
+      if (baseDir) return baseDir;
+    }
+  } catch {}
+  return path.join(app.getPath("documents"), "Screenlet");
+}
+
+// All user data lives in ~/Documents/Screenlet (or user-chosen folder) so it
+// survives reinstalls, shows up in Finder, and syncs via iCloud / OneDrive.
+const SCREENLET_DIR = loadStorageDir();
+
+const UPLOADS_DIR  = path.join(SCREENLET_DIR, "assets");
+const PROJECTS_DIR = path.join(SCREENLET_DIR, "projects");
+const EXPORTS_DIR  = path.join(SCREENLET_DIR, "exports");
 
 // Register app:// BEFORE app is ready (Electron requirement)
 protocol.registerSchemesAsPrivileged([
@@ -78,8 +127,10 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  ensureDir(SCREENLET_DIR);
   ensureDir(UPLOADS_DIR);
   ensureDir(PROJECTS_DIR);
+  ensureDir(EXPORTS_DIR);
 
   // Cmd+Option+I (macOS) / Ctrl+Shift+I (Win/Linux) opens DevTools in any build
   globalShortcut.register("CommandOrControl+Shift+I", () => {
@@ -94,9 +145,9 @@ app.whenReady().then(() => {
   protocol.handle("app", (request) => {
     const { pathname } = new URL(request.url);
 
-    // User-uploaded files → userData/ (outside .asar, safe to use net.fetch)
+    // User-uploaded files → UPLOADS_DIR (outside .asar, safe to use net.fetch)
     if (pathname.startsWith("/uploads/")) {
-      const filePath = path.join(app.getPath("userData"), pathname);
+      const filePath = path.join(UPLOADS_DIR, path.basename(pathname));
       return net.fetch(`file://${filePath}`);
     }
 
@@ -132,6 +183,9 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // Pre-warm Chrome in the background so the first render doesn't trigger a download.
+  warmRemotionBrowser();
 });
 
 app.on("window-all-closed", () => {
@@ -233,7 +287,7 @@ ipcMain.handle("projects-rename", (_event, id, newName) => {
 
 /* ---- Library ---- */
 
-const LIBRARY_DIR = path.join(app.getPath("userData"), "library");
+const LIBRARY_DIR = path.join(SCREENLET_DIR, "library");
 
 ipcMain.handle("library-list", () => {
   ensureDir(LIBRARY_DIR);
@@ -260,7 +314,7 @@ ipcMain.handle("library-delete", (_event, id) => {
 
 /* ---- Templates ---- */
 
-const TEMPLATES_DIR = path.join(app.getPath("userData"), "templates");
+const TEMPLATES_DIR = path.join(SCREENLET_DIR, "templates");
 
 ipcMain.handle("template-list", () => {
   ensureDir(TEMPLATES_DIR);
@@ -287,7 +341,7 @@ ipcMain.handle("template-delete", (_event, id) => {
 
 /* ---- Channels ---- */
 
-const CHANNELS_DIR = path.join(app.getPath("userData"), "channels");
+const CHANNELS_DIR = path.join(SCREENLET_DIR, "channels");
 
 ipcMain.handle("channel-list", () => {
   ensureDir(CHANNELS_DIR);
@@ -314,7 +368,7 @@ ipcMain.handle("channel-delete", (_event, id) => {
 
 /* ---- Schedules ---- */
 
-const SCHEDULES_DIR = path.join(app.getPath("userData"), "schedules");
+const SCHEDULES_DIR = path.join(SCREENLET_DIR, "schedules");
 
 ipcMain.handle("schedule-list", () => {
   ensureDir(SCHEDULES_DIR);
@@ -339,6 +393,38 @@ ipcMain.handle("schedule-delete", (_event, id) => {
   if (fs.existsSync(file)) fs.unlinkSync(file);
 });
 
+/* ---- Rendered exports ---- */
+
+ipcMain.handle("exports-list", () => {
+  ensureDir(EXPORTS_DIR);
+  const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".mkv"];
+  return fs.readdirSync(EXPORTS_DIR)
+    .filter((f) => VIDEO_EXTS.some((ext) => f.toLowerCase().endsWith(ext)))
+    .map((filename) => {
+      try {
+        const filePath = path.join(EXPORTS_DIR, filename);
+        const stat = fs.statSync(filePath);
+        return {
+          filename,
+          name: path.basename(filename, path.extname(filename)),
+          size: stat.size,
+          createdAt: (stat.birthtime || stat.mtime).toISOString(),
+        };
+      } catch { return null; }
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+});
+
+ipcMain.handle("exports-delete", (_event, filename) => {
+  const filePath = path.join(EXPORTS_DIR, path.basename(filename));
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+});
+
+ipcMain.handle("exports-reveal", (_event, filename) => {
+  shell.showItemInFolder(path.join(EXPORTS_DIR, path.basename(filename)));
+});
+
 /* ---- IPTV Server ---- */
 
 let iptvServer = null;
@@ -358,22 +444,34 @@ function resolveUploadPath(sourceId) {
 }
 
 function findFfmpegBinary() {
-  // Common Homebrew paths on macOS
-  const candidates = [
-    "/opt/homebrew/bin/ffmpeg",
-    "/usr/local/bin/ffmpeg",
-    "/usr/bin/ffmpeg",
-  ];
+  const candidates = process.platform === "win32"
+    ? [
+        "C:\\ffmpeg\\bin\\ffmpeg.exe",
+        "C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe",
+        "C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe",
+        path.join(os.homedir(), "ffmpeg", "bin", "ffmpeg.exe"),
+        path.join(os.homedir(), "scoop", "apps", "ffmpeg", "current", "bin", "ffmpeg.exe"),
+        "C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe",
+      ]
+    : [
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        "/usr/bin/ffmpeg",
+      ];
+
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
-  // Fall back to PATH
+
   try {
     const cmd = process.platform === "win32" ? "where ffmpeg" : "which ffmpeg";
-    return execSync(cmd, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+    const result = execSync(cmd, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+    const first = result.split(/\r?\n/)[0].trim();
+    if (first) return first;
   } catch {
-    return null;
+    // not in PATH
   }
+  return null;
 }
 
 function readAllChannels() {
@@ -475,7 +573,76 @@ function handleIptvRequest(req, res) {
       return;
     }
 
-    // --- Loop mode: stream a single video infinitely via ffmpeg ---
+    // --- Playlist mode: stream ordered videos (new format) ---
+    const playlistItems = (channel.playlist || []).filter(
+      (item) => item.filename && fs.existsSync(path.join(EXPORTS_DIR, item.filename))
+    );
+
+    if (playlistItems.length > 0) {
+      const ffmpeg = findFfmpegBinary();
+      if (!ffmpeg) {
+        res.writeHead(503, { "Content-Type": "text/plain" });
+        res.end("ffmpeg não encontrado — instale o ffmpeg para transmitir via IPTV");
+        return;
+      }
+
+      // Write a concat file for ffmpeg
+      const concatFile = path.join(os.tmpdir(), `screenlet-pl-${channelId}.txt`);
+      const lines = ["ffconcat version 1.0"];
+      for (const item of playlistItems) {
+        const p = path.join(EXPORTS_DIR, item.filename).replace(/\\/g, "/");
+        lines.push(`file '${p.replace(/'/g, "'\\''")}'`);
+      }
+      fs.writeFileSync(concatFile, lines.join("\n"));
+
+      res.writeHead(200, {
+        "Content-Type": "video/mp2t",
+        "Transfer-Encoding": "chunked",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      });
+
+      let loopActive = true;
+      let currentProc = null;
+
+      const startPlaylist = () => {
+        if (!loopActive || res.destroyed) return;
+        currentProc = spawn(ffmpeg, [
+          "-f", "concat", "-safe", "0", "-i", concatFile,
+          "-c:v", "libx264", "-c:a", "aac",
+          "-preset", "ultrafast", "-tune", "zerolatency",
+          "-f", "mpegts", "pipe:1",
+        ], { stdio: ["ignore", "pipe", "pipe"] });
+
+        currentProc.stdout.pipe(res, { end: false });
+        currentProc.stderr.on("data", (d) => {
+          const line = d.toString().split("\n")[0].trim();
+          if (line) console.log("[iptv-playlist]", line);
+        });
+        currentProc.on("close", () => {
+          currentProc = null;
+          if (loopActive && channel.loop && !res.destroyed) setImmediate(startPlaylist);
+          else if (!channel.loop) { try { res.end(); } catch {} }
+        });
+        currentProc.on("error", (err) => {
+          console.error("[iptv-playlist] error:", err.message);
+          currentProc = null;
+          if (loopActive && channel.loop && !res.destroyed) setTimeout(startPlaylist, 500);
+        });
+        currentProc.stdout.on("error", () => { if (currentProc) currentProc.kill("SIGTERM"); });
+      };
+
+      req.on("close", () => {
+        loopActive = false;
+        if (currentProc) currentProc.kill("SIGTERM");
+        try { fs.unlinkSync(concatFile); } catch {}
+      });
+
+      startPlaylist();
+      return;
+    }
+
+    // --- Legacy: single loop video (loopSourceId on old channel format) ---
     if (channel.loopSourceId) {
       const videoPath = resolveUploadPath(channel.loopSourceId);
       if (!fs.existsSync(videoPath)) {
@@ -493,21 +660,53 @@ function handleIptvRequest(req, res) {
           "Connection": "keep-alive",
         });
 
-        const proc = spawn(ffmpeg, [
-          "-stream_loop", "-1",
-          "-re",
-          "-i", videoPath,
-          "-c:v", "copy",
-          "-c:a", "copy",
-          "-f", "mpegts",
-          "pipe:1",
-        ], { stdio: ["ignore", "pipe", "ignore"] });
+        let currentProc = null;
+        let loopActive = true;
 
-        proc.stdout.pipe(res, { end: false });
+        const startFfmpegLoop = () => {
+          if (!loopActive || res.destroyed) return;
 
-        req.on("close", () => proc.kill("SIGTERM"));
-        proc.on("error", () => res.destroy());
-        proc.stdout.on("error", () => proc.kill("SIGTERM"));
+          // Re-encode with libx264 so timestamps are monotonically increasing
+          // across loop iterations. -c:v copy causes PTS discontinuities when
+          // -stream_loop restarts, which makes players stop after the first pass.
+          currentProc = spawn(ffmpeg, [
+            "-re",
+            "-stream_loop", "-1",
+            "-i", videoPath,
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-preset", "ultrafast",
+            "-tune", "zerolatency",
+            "-f", "mpegts",
+            "pipe:1",
+          ], { stdio: ["ignore", "pipe", "pipe"] });
+
+          currentProc.stdout.pipe(res, { end: false });
+          currentProc.stderr.on("data", (d) => {
+            const line = d.toString().split("\n")[0].trim();
+            if (line) console.log("[iptv-loop]", line);
+          });
+
+          currentProc.on("close", () => {
+            currentProc = null;
+            if (loopActive && !res.destroyed) setImmediate(startFfmpegLoop);
+          });
+          currentProc.on("error", (err) => {
+            console.error("[iptv-loop] error:", err.message);
+            currentProc = null;
+            if (loopActive && !res.destroyed) setTimeout(startFfmpegLoop, 500);
+          });
+          currentProc.stdout.on("error", () => {
+            if (currentProc) currentProc.kill("SIGTERM");
+          });
+        };
+
+        req.on("close", () => {
+          loopActive = false;
+          if (currentProc) currentProc.kill("SIGTERM");
+        });
+
+        startFfmpegLoop();
       } else {
         // ffmpeg not available — serve the file once (client reconnects)
         const stat = fs.statSync(videoPath);
@@ -576,13 +775,10 @@ function handleIptvRequest(req, res) {
 }
 
 function iptvStatus() {
-  return { running: !!iptvServer, port: IPTV_PORT, ips: getLocalIPs() };
+  return { running: !!iptvServer, port: IPTV_PORT, ips: getLocalIPs(), ffmpegAvailable: !!findFfmpegBinary() };
 }
 
-ipcMain.handle("iptv-status", () => ({
-  ...iptvStatus(),
-  ffmpegAvailable: !!findFfmpegBinary(),
-}));
+ipcMain.handle("iptv-status", () => iptvStatus());
 
 ipcMain.handle("iptv-start", () => {
   if (iptvServer) return iptvStatus();
@@ -612,19 +808,51 @@ app.on("before-quit", () => {
 
 /* ---- Export ---- */
 
-ipcMain.handle("export-video", async (_event, payload, suggestedName) => {
-  const saveResult = await dialog.showSaveDialog(mainWindow, {
-    title: "Exportar vídeo",
-    defaultPath: suggestedName || "anuncio.mp4",
-    filters: [{ name: "Vídeo MP4", extensions: ["mp4"] }],
-  });
-  if (saveResult.canceled || !saveResult.filePath) return { canceled: true };
+ipcMain.handle("export-video", async (_event, payload, suggestedName, fps) => {
+  ensureDir(EXPORTS_DIR);
 
-  const { renderMedia, selectComposition } = await import("@remotion/renderer");
+  const baseName = (suggestedName || `screenlet-${Date.now()}.mp4`)
+    .replace(/[^a-zA-Z0-9.\-_]/g, "_");
+  let outputPath = path.join(EXPORTS_DIR, baseName);
+  if (fs.existsSync(outputPath)) {
+    const ext  = path.extname(baseName);
+    const base = path.basename(baseName, ext);
+    outputPath = path.join(EXPORTS_DIR, `${base}-${Date.now()}${ext}`);
+  }
 
+  const renderFps   = fps === 60 ? 60 : 30;
+  const concurrency = computeConcurrency();
+
+  let renderer;
+  try {
+    renderer = await import("@remotion/renderer");
+  } catch (err) {
+    const arch = process.arch;
+    const plat = process.platform;
+    return {
+      ok: false,
+      error: `Módulo Remotion não encontrado para ${plat}-${arch}. ` +
+             `Verifique se "@remotion/compositor-${plat}-${arch}" está incluído no build. ` +
+             `Detalhes: ${err.message}`,
+    };
+  }
+  const { renderMedia, selectComposition } = renderer;
+
+  // ── Bundle location ───────────────────────────────────────────────────────
   let bundleLocation;
 
   if (isDev) {
+    // Sync assets so staticFile('uploads/x') resolves inside the dev bundle server.
+    const devPublicUploads = path.join(__dirname, "..", "public", "uploads");
+    ensureDir(devPublicUploads);
+    if (fs.existsSync(UPLOADS_DIR)) {
+      for (const file of fs.readdirSync(UPLOADS_DIR)) {
+        const dst = path.join(devPublicUploads, file);
+        if (!fs.existsSync(dst)) {
+          try { fs.copyFileSync(path.join(UPLOADS_DIR, file), dst); } catch {}
+        }
+      }
+    }
     const { bundle } = await import("@remotion/bundler");
     bundleLocation = await bundle({
       entryPoint: path.join(__dirname, "..", "src", "remotion", "Root.tsx"),
@@ -634,63 +862,114 @@ ipcMain.handle("export-video", async (_event, payload, suggestedName) => {
       },
     });
   } else {
-    // Use the pre-built Remotion bundle (asar:false → files are under resources/app/)
-    bundleLocation = path.join(
-      process.resourcesPath,
-      "app",
-      "dist",
-      "remotion-bundle"
-    );
+    bundleLocation = path.join(process.resourcesPath, "app", "dist", "remotion-bundle");
 
-    // Sync user uploads into the bundle dir so staticFile('/uploads/x') resolves correctly
-    const userUploads = path.join(app.getPath("userData"), "uploads");
-    // Remotion bundle injects window.remotion_staticBase = '/public/' so
-    // staticFile('uploads/x') resolves to /public/uploads/x on the bundle server.
+    // Sync user assets into the bundle so staticFile() resolves correctly.
     const bundleUploads = path.join(bundleLocation, "public", "uploads");
-    if (fs.existsSync(userUploads)) {
+    if (fs.existsSync(UPLOADS_DIR)) {
       ensureDir(bundleUploads);
-      for (const file of fs.readdirSync(userUploads)) {
+      for (const file of fs.readdirSync(UPLOADS_DIR)) {
         const dst = path.join(bundleUploads, file);
         if (!fs.existsSync(dst)) {
-          fs.copyFileSync(path.join(userUploads, file), dst);
+          try { fs.copyFileSync(path.join(UPLOADS_DIR, file), dst); } catch {}
         }
       }
     }
-
     mainWindow.webContents.send("export-progress", { phase: "bundling", progress: 1 });
   }
 
-  // Detect payload type: template-based ({ template, values, width, height })
-  // or legacy AdConfig ({ scenes, width, height })
-  const isTemplatePayload = payload && payload.template && payload.template.scenes;
-
-  const compositionId = isTemplatePayload ? "TemplateAd" : "DynamicAd";
-  const inputProps = payload;
+  // ── Render ────────────────────────────────────────────────────────────────
+  const isTemplatePayload = payload?.template?.scenes;
+  const compositionId     = isTemplatePayload ? "TemplateAd" : "DynamicAd";
+  const inputProps        = payload;
 
   const durationInFrames = isTemplatePayload
-    ? payload.template.scenes.reduce((sum, s) => sum + s.durationInFrames, 0)
-    : payload.scenes.reduce((sum, s) => sum + s.durationInFrames, 0);
+    ? payload.template.scenes.reduce((s, sc) => s + sc.durationInFrames, 0)
+    : payload.scenes.reduce((s, sc) => s + sc.durationInFrames, 0);
 
-  const width = isTemplatePayload ? (payload.width ?? payload.template.width ?? 1920) : (payload.width ?? 1920);
+  const width  = isTemplatePayload ? (payload.width ?? payload.template.width  ?? 1920) : (payload.width  ?? 1920);
   const height = isTemplatePayload ? (payload.height ?? payload.template.height ?? 1080) : (payload.height ?? 1080);
+
+  const browserOptions = {
+    browserExecutable: cachedBrowserExecutable ?? null,
+    // noSandbox is required in packaged Electron apps on Linux/macOS.
+    chromiumOptions: { noSandbox: !isDev, disableWebSecurity: false },
+    timeoutInMilliseconds: 30_000,
+  };
 
   const composition = await selectComposition({
     serveUrl: bundleLocation,
     id: compositionId,
     inputProps,
+    ...browserOptions,
   });
 
   await renderMedia({
-    composition: { ...composition, durationInFrames, width, height },
+    composition: { ...composition, durationInFrames, width, height, fps: renderFps },
     serveUrl: bundleLocation,
     codec: "h264",
     hardwareAcceleration: "if-possible",
-    outputLocation: saveResult.filePath,
+    outputLocation: outputPath,
     inputProps,
+    concurrency,
+    timeoutInMilliseconds: 10 * 60_000,
+    ...browserOptions,
     onProgress: ({ progress }) => {
       mainWindow.webContents.send("export-progress", { phase: "rendering", progress });
     },
   });
 
-  return { canceled: false, filePath: saveResult.filePath };
+  return { ok: true, filename: path.basename(outputPath) };
+});
+
+/* ---- Storage location ---- */
+
+ipcMain.handle("storage-get-dir", () => SCREENLET_DIR);
+
+ipcMain.handle("storage-choose-dir", async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: "Escolher pasta de armazenamento",
+    defaultPath: SCREENLET_DIR,
+    properties: ["openDirectory", "createDirectory"],
+    buttonLabel: "Selecionar pasta",
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle("storage-migrate", (_event, newDir, copyFiles) => {
+  if (!newDir || newDir === SCREENLET_DIR) return { success: false, reason: "same" };
+  try {
+    fs.mkdirSync(newDir, { recursive: true });
+
+    if (copyFiles) {
+      const subDirs = ["projects", "assets", "templates", "library", "channels", "schedules"];
+      for (const sub of subDirs) {
+        const src = path.join(SCREENLET_DIR, sub);
+        const dst = path.join(newDir, sub);
+        if (fs.existsSync(src)) {
+          fs.mkdirSync(dst, { recursive: true });
+          for (const file of fs.readdirSync(src)) {
+            const srcFile = path.join(src, file);
+            if (fs.statSync(srcFile).isFile()) {
+              fs.copyFileSync(srcFile, path.join(dst, file));
+            }
+          }
+        }
+      }
+    }
+
+    const configFile = path.join(app.getPath("userData"), "storage-config.json");
+    fs.writeFileSync(configFile, JSON.stringify({ baseDir: newDir }, null, 2));
+
+    app.relaunch();
+    app.exit(0);
+    return { success: true };
+  } catch (err) {
+    return { success: false, reason: err.message };
+  }
+});
+
+ipcMain.handle("storage-open-dir", () => {
+  shell.openPath(SCREENLET_DIR);
 });

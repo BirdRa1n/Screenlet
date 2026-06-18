@@ -1,17 +1,34 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Pencil, Plus, Repeat2, Trash2, Tv2 } from "lucide-react";
-import { Button, Checkbox, Dialog, Field, IconButton, TextField } from "../design-system/components";
+import { Clapperboard, Pencil, Plus, Repeat2, Trash2, Tv2 } from "lucide-react";
+import { Button, Dialog, Field, IconButton, TextField } from "../design-system/components";
 import { useChannelStore } from "../store/useChannelStore";
 import { toast } from "../store/useToastStore";
+import { Studio } from "./Studio";
 import type { Channel } from "../types/channel";
 import "../styles/pages/Channels.css";
 
 export const Channels: React.FC = () => {
   const { channels, refresh } = useChannelStore();
   const [createOpen, setCreateOpen] = useState(false);
+  const [studioChannel, setStudioChannel] = useState<Channel | null>(null);
+  const { save } = useChannelStore();
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  if (studioChannel) {
+    return (
+      <Studio
+        channel={studioChannel}
+        onClose={() => setStudioChannel(null)}
+        onSave={async (updated) => {
+          await save(updated);
+          toast.success("Programação salva.");
+          setStudioChannel(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="vt-channels">
@@ -39,7 +56,7 @@ export const Channels: React.FC = () => {
           </div>
         ) : (
           channels.map((c) => (
-            <ChannelCard key={c.id} channel={c} onRefresh={refresh} />
+            <ChannelCard key={c.id} channel={c} onRefresh={refresh} onOpenStudio={setStudioChannel} />
           ))
         )}
       </div>
@@ -53,7 +70,11 @@ export const Channels: React.FC = () => {
   );
 };
 
-const ChannelCard: React.FC<{ channel: Channel; onRefresh: () => void }> = ({ channel, onRefresh }) => {
+const ChannelCard: React.FC<{
+  channel: Channel;
+  onRefresh: () => void;
+  onOpenStudio: (channel: Channel) => void;
+}> = ({ channel, onRefresh, onOpenStudio }) => {
   const { remove, toggle } = useChannelStore();
   const [editOpen, setEditOpen] = useState(false);
 
@@ -67,9 +88,7 @@ const ChannelCard: React.FC<{ channel: Channel; onRefresh: () => void }> = ({ ch
     toast.success(channel.enabled ? `"${channel.name}" desativado.` : `"${channel.name}" ativado.`);
   };
 
-  const loopFilename = channel.loopSourceId
-    ? channel.loopSourceId.split("/").pop()
-    : null;
+  const itemCount = channel.playlist?.length ?? 0;
 
   return (
     <>
@@ -100,12 +119,24 @@ const ChannelCard: React.FC<{ channel: Channel; onRefresh: () => void }> = ({ ch
             {channel.enabled ? "Ativo" : "Inativo"}
           </div>
 
-          {loopFilename && (
-            <div className="vt-channels__card-badge vt-channels__card-badge--loop" title={loopFilename}>
+          {itemCount > 0 && (
+            <div className="vt-channels__card-badge vt-channels__card-badge--loop">
               <Repeat2 size={10} />
-              Loop
+              {itemCount} vídeo{itemCount !== 1 ? "s" : ""}
+              {channel.loop ? " · loop" : ""}
             </div>
           )}
+        </div>
+
+        <div className="vt-channels__card-studio">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Clapperboard size={13} />}
+            onClick={() => onOpenStudio(channel)}
+          >
+            Studio
+          </Button>
         </div>
 
         <div className="vt-channels__card-actions">
@@ -139,22 +170,13 @@ const ChannelDialog: React.FC<{
 
   const [name, setName] = useState(channel?.name ?? "");
   const [description, setDescription] = useState(channel?.description ?? "");
-  const [loopEnabled, setLoopEnabled] = useState(!!(channel?.loopSourceId));
-  const [loopSourceId, setLoopSourceId] = useState(channel?.loopSourceId ?? "");
 
   useEffect(() => {
     if (open) {
       setName(channel?.name ?? "");
       setDescription(channel?.description ?? "");
-      setLoopEnabled(!!(channel?.loopSourceId));
-      setLoopSourceId(channel?.loopSourceId ?? "");
     }
   }, [open, channel]);
-
-  const handlePickVideo = async () => {
-    const result = await window.adFrame.selectVideo();
-    if (result) setLoopSourceId(result);
-  };
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -165,8 +187,8 @@ const ChannelDialog: React.FC<{
       description: description.trim(),
       logo: channel?.logo ?? "",
       enabled: channel?.enabled ?? true,
-      loopSourceId: loopEnabled && loopSourceId ? loopSourceId : null,
-      loopSourceType: loopEnabled && loopSourceId ? "video" : null,
+      playlist: channel?.playlist ?? [],
+      loop: channel?.loop ?? false,
       createdAt: channel?.createdAt ?? now,
       updatedAt: now,
     };
@@ -175,8 +197,6 @@ const ChannelDialog: React.FC<{
     onSaved();
     onClose();
   };
-
-  const loopFilename = loopSourceId ? loopSourceId.split("/").pop() : null;
 
   return (
     <Dialog
@@ -207,36 +227,6 @@ const ChannelDialog: React.FC<{
             placeholder="Descrição opcional"
           />
         </Field>
-
-        <div className="vt-channels__form-divider" />
-
-        <Checkbox
-          checked={loopEnabled}
-          onChange={(v) => {
-            setLoopEnabled(v);
-            if (!v) setLoopSourceId("");
-          }}
-          label="Reproduzir conteúdo em loop"
-        />
-
-        {loopEnabled && (
-          <div className="vt-channels__loop-section">
-            <div className="vt-channels__loop-picker">
-              <div className="vt-channels__loop-file">
-                {loopFilename
-                  ? <span className="vt-channels__loop-filename">{loopFilename}</span>
-                  : <span className="vt-channels__loop-placeholder">Nenhum vídeo selecionado</span>
-                }
-              </div>
-              <Button variant="secondary" size="sm" onClick={handlePickVideo}>
-                {loopFilename ? "Trocar vídeo" : "Selecionar vídeo"}
-              </Button>
-            </div>
-            <p className="vt-channels__loop-hint">
-              O vídeo selecionado será reproduzido continuamente neste canal, ignorando a grade de programação.
-            </p>
-          </div>
-        )}
       </div>
     </Dialog>
   );

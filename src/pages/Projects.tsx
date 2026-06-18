@@ -52,6 +52,7 @@ export const Projects: React.FC = () => {
 const ProjectCard: React.FC<{ project: ProjectMeta; onRefresh: () => void }> = ({ project, onRefresh }) => {
   const navigate = useNavigationStore((s) => s.navigate);
   const loadConfig = useAdStore((s) => s.loadConfig);
+  const setCurrentProjectName = useAdStore((s) => s.setCurrentProjectName);
   const { load, remove, rename } = useProjectsStore();
   const [renameOpen, setRenameOpen] = useState(false);
   const [newName, setNewName] = useState(project.name);
@@ -60,6 +61,7 @@ const ProjectCard: React.FC<{ project: ProjectMeta; onRefresh: () => void }> = (
     const config = await load(project.id);
     if (!config) return toast.error("Projeto não encontrado.");
     loadConfig(config);
+    setCurrentProjectName(project.name);
     navigate("editor");
     toast.success(`"${project.name}" aberto no editor.`);
   };
