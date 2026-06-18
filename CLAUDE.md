@@ -33,7 +33,8 @@ Screenlet is an Electron desktop app for digital signage — creating, rendering
 
 ### Process model
 - **`electron/main.cjs`** — Electron main process (CommonJS). Registers `app://` protocol (serves `dist/` and user uploads). All user data lives under `~/Documents/Screenlet/` (or a user-configured path). Runs Remotion `renderMedia()` for MP4 export with adaptive concurrency. Runs an HTTP IPTV server on port 7095.
-- **`electron/preload.cjs`** — Exposes `window.adFrame` via `contextBridge`. Key groups: file utils (`selectImage`, `copyFile`, `selectVideo`), projects CRUD, templates CRUD, library CRUD, channels CRUD, exports list/delete/reveal, IPTV start/stop, `exportVideo`, `onExportProgress`, storage management (`storageGetDir`, `storageChooseDir`, `storageMigrate`, `storageOpenDir`).
+- **`electron/preload.cjs`** — Exposes `window.adFrame` via `contextBridge`. Key groups: file utils (`selectImage`, `copyFile`, `selectVideo`), projects CRUD, templates CRUD, library CRUD, channels CRUD, exports list/delete/reveal, IPTV start/stop/setIp, `exportVideo`, `onExportProgress`, storage management (`storageGetDir`, `storageChooseDir`, `storageMigrate`, `storageOpenDir`), platform info (`platform: NodeJS.Platform`, `setTitleBarTheme(isDark)`).
+- **`src/main.tsx`** — Sets `document.documentElement.dataset.platform` from `window.adFrame.platform` at startup so CSS rules can branch per OS. Also sets `--win-controls-w: 152px` on Windows as a CSS fallback for the titlebar overlay width.
 - **`src/`** — React renderer process (ESM, Vite).
 
 ### Storage architecture
@@ -68,11 +69,11 @@ Single-page with Zustand-driven navigation. `Page` type in `src/store/useNavigat
 - **`useTemplateInstanceStore`** — Active template + filled values during TemplateWizard flow.
 - **`useWizardStore`** — Multi-step wizard state (store info, products, preset, export format).
 - **`useNavigationStore`** — Current page + `editingTemplateId` + sidebar collapsed state.
-- **`useThemeStore`** — `"dark" | "light" | "system"`. System mode listens to `prefers-color-scheme` in real time.
+- **`useThemeStore`** — `"dark" | "light" | "system"`. System mode listens to `prefers-color-scheme` in real time. `applyTheme()` also calls `window.adFrame.setTitleBarTheme(isDark)` to sync the Windows titlebar overlay color.
 - **`useLibraryStore`** — Product library CRUD, synced with IPC.
 - **`useProjectsStore`** — Projects CRUD, synced with IPC.
 - **`useChannelStore`** — Channels CRUD, synced with IPC.
-- **`useIptvStore`** — IPTV server status (running, port, IPs, ffmpegAvailable).
+- **`useIptvStore`** — IPTV server status (`running`, `port`, `ips[]`, `selectedIp`, `ffmpegAvailable`). `setIp(ip)` persists the preferred network interface to `userData/iptv-config.json`. `getLocalIPs()` in main sorts IPs: `192.168.x.x` → `10.x.x.x` → `172.16-31.x.x` → VPN/Tailscale last.
 - **`useToastStore`** — Toast notifications.
 
 ### Channel & Studio system
@@ -86,6 +87,8 @@ The Studio (`src/pages/Studio.tsx`) is a fixed full-screen overlay (`z-index: 20
 - Footer: loop toggle + Save/Cancel
 
 **macOS traffic light fix**: Studio's header uses `padding-left: 80px` + `-webkit-app-region: drag` with `-webkit-app-region: no-drag` on interactive elements.
+
+**Windows titlebar**: `createWindow()` uses platform-conditional options. On Windows: `titleBarStyle: "hidden"` + `titleBarOverlay: { height: 36, color, symbolColor }` + `autoHideMenuBar: true`. The overlay color is set at startup via `nativeTheme.shouldUseDarkColors` (tokens `#0a0b0e` dark / `#f7f8fa` light) and updated via `ipcMain.handle("set-titlebar-theme")` + `nativeTheme.on("updated")`. The sidebar's `.vt-sidebar__brand-trafficzone` div is hidden on non-macOS via `html:not([data-platform="darwin"])` CSS selector. The editor header avoids the overlay buttons via `padding-right` using `env(titlebar-area-width)` (Electron CSS env var) with `--win-controls-w: 152px` as fallback.
 
 `Channels.tsx` opens Studio by setting `studioChannel` state; while set, it renders `<Studio>` instead of the channel list.
 
@@ -167,6 +170,8 @@ Serves app bundle assets using `fs.readFileSync` (handles `.asar` if ever re-ena
 - `useRef<T>()` requires an initial value in this TS config — use `useRef<T>(undefined as unknown as T)` for timer refs.
 - `interpolate()` from Remotion uses `extrapolateLeft/Right: "clamp"` — not `clamp: true`.
 - Framer Motion `ease` values must be cast: `ease: "easeOut" as const`.
-- `Channel` type uses `playlist: PlaylistItem[]` — the old `loopSourceId / loopSourceType` fields no longer exist.
+- `Channel` type uses `playlist: PlaylistItem[]` and `loop: boolean` — the old `loopSourceId / loopSourceType` fields no longer exist. `generateM3u()` in `main.cjs` checks `ch.loop` for the VLC repeat directive.
+- `window.adFrame.platform` is a string (`NodeJS.Platform`), set synchronously from `process.platform` in the preload — safe to read before React mounts.
+- `titleBarStyle: "hiddenInset"` and `trafficLightPosition` are macOS-only — always guard with `process.platform === "darwin"` in `main.cjs`.
 - `ExportResult` type is `{ ok: true; filename: string } | { ok: false; error: string }` — not `{ canceled: boolean }`.
 - `Page` type does NOT include `"schedules"` or `"schedule-builder"` — those pages were removed.

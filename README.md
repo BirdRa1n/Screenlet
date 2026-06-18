@@ -45,6 +45,7 @@ Crie anúncios com produtos, preços e logo da sua marca, exporte em **MP4**, or
   - Biblioteca de vídeos renderizados (painel esquerdo)
   - Playlist com ordenação, transição por clipe (corte / fade) e loop
 - Servidor IPTV embutido na porta 7095 com playlist M3U e guia EPG
+- Seletor de interface de rede — escolha por qual adaptador transmitir (rede local, Tailscale/VPN, etc.); preferência persistida entre sessões
 
 ### Biblioteca de produtos
 - Cadastre produtos reutilizáveis com categorias
@@ -88,7 +89,7 @@ Crie anúncios com produtos, preços e logo da sua marca, exporte em **MP4**, or
 
 - Node.js 18+
 - npm 9+
-- macOS (Apple Silicon ou Intel)
+- macOS (Apple Silicon ou Intel) ou Windows 10/11 x64
 
 ---
 
