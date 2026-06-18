@@ -1,14 +1,15 @@
 import React from "react";
 import {
+  CalendarClock,
   ChevronLeft,
   ChevronRight,
-  Film,
   FolderOpen,
   Images,
   LayoutGrid,
   LayoutTemplate,
-  Settings,
-  Video,
+  Radio,
+  Tv,
+  Tv2,
 } from "lucide-react";
 import { useNavigationStore, type Page } from "../store/useNavigationStore";
 import "../styles/layout/Sidebar.css";
@@ -20,16 +21,24 @@ type NavItem = {
   disabled?: boolean;
 };
 
-const NAV_MAIN: NavItem[] = [
+const NAV_CONTENT: NavItem[] = [
   { icon: <LayoutGrid size={16} />, label: "Dashboard", page: "dashboard" },
   { icon: <FolderOpen size={16} />, label: "Projetos", page: "projects" },
   { icon: <LayoutTemplate size={16} />, label: "Templates", page: "templates" },
   { icon: <Images size={16} />, label: "Biblioteca", page: "library" },
-  { icon: <Video size={16} />, label: "Vídeos Gerados", disabled: true },
+];
+
+const NAV_PROGRAMMING: NavItem[] = [
+  { icon: <Tv2 size={16} />, label: "Canais", page: "channels" },
+  { icon: <CalendarClock size={16} />, label: "Programação", page: "schedules" },
+];
+
+const NAV_IPTV: NavItem[] = [
+  { icon: <Radio size={16} />, label: "Servidor IPTV", page: "iptv" },
 ];
 
 const NAV_BOTTOM: NavItem[] = [
-  { icon: <Settings size={16} />, label: "Configurações", page: "settings" },
+  { icon: <Tv size={16} />, label: "Configurações", page: "settings" },
 ];
 
 export const Sidebar: React.FC = () => {
@@ -38,21 +47,36 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigationStore((s) => s.navigate);
   const toggleSidebar = useNavigationStore((s) => s.toggleSidebar);
 
+  const isActive = (item: NavItem) => {
+    if (!item.page) return false;
+    if (item.page === page) return true;
+    // Keep "Programação" highlighted when editing a schedule
+    if (item.page === "schedules" && page === "schedule-builder") return true;
+    return false;
+  };
+
+  const makeGroup = (items: NavItem[]) =>
+    items.map((item) => (
+      <NavButton
+        key={item.label}
+        item={item}
+        active={isActive(item)}
+        onClick={() => item.page && navigate(item.page)}
+      />
+    ));
+
   return (
     <aside className={`vt-sidebar${collapsed ? " vt-sidebar--collapsed" : ""}`}>
-      {/* Brand */}
       <div className="vt-sidebar__brand">
-        {/* empty zone — macOS traffic lights float here */}
         <div className="vt-sidebar__brand-trafficzone" />
         <div className="vt-sidebar__brand-content">
           <span className="vt-sidebar__brand-icon">
-            <Film size={16} strokeWidth={2.25} />
+            <Radio size={16} strokeWidth={2.25} />
           </span>
-          <span className="vt-sidebar__brand-name">AdFrame</span>
+          <span className="vt-sidebar__brand-name">Screenlet</span>
         </div>
       </div>
 
-      {/* Collapse toggle — absolute inside sidebar, visible on hover */}
       <button
         className="vt-sidebar__toggle"
         onClick={toggleSidebar}
@@ -61,37 +85,30 @@ export const Sidebar: React.FC = () => {
         {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
       </button>
 
-
-
-      {/* Nav */}
       <nav className="vt-sidebar__nav">
         <div className="vt-sidebar__nav-group">
-          {NAV_MAIN.map((item) => (
-            <NavButton
-              key={item.label}
-              item={item}
-              active={!!item.page && item.page === page}
-              collapsed={collapsed}
-              onClick={() => item.page && navigate(item.page)}
-            />
-          ))}
+          <span className="vt-sidebar__nav-section">Content Studio</span>
+          {makeGroup(NAV_CONTENT)}
+        </div>
+
+        <div className="vt-sidebar__nav-divider" />
+
+        <div className="vt-sidebar__nav-group">
+          <span className="vt-sidebar__nav-section">Programming</span>
+          {makeGroup(NAV_PROGRAMMING)}
+        </div>
+
+        <div className="vt-sidebar__nav-divider" />
+
+        <div className="vt-sidebar__nav-group">
+          <span className="vt-sidebar__nav-section">IPTV Server</span>
+          {makeGroup(NAV_IPTV)}
         </div>
       </nav>
 
-      {/* Footer */}
       <div className="vt-sidebar__footer">
-        <div className="vt-sidebar_" />
-        {NAV_BOTTOM.map((item) => (
-          <NavButton
-            key={item.label}
-            item={item}
-            active={!!item.page && item.page === page}
-            collapsed={collapsed}
-            onClick={() => item.page && navigate(item.page)}
-          />
-        ))}
+        {makeGroup(NAV_BOTTOM)}
       </div>
-
     </aside>
   );
 };
@@ -99,7 +116,6 @@ export const Sidebar: React.FC = () => {
 const NavButton: React.FC<{
   item: NavItem;
   active: boolean;
-  collapsed: boolean;
   onClick: () => void;
 }> = ({ item, active, onClick }) => (
   <button

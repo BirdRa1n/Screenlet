@@ -3,6 +3,8 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const crypto = require("node:crypto");
+const http = require("node:http");
+const { spawn, execSync } = require("node:child_process");
 
 // Remotion needs HOME to create ~/.remotion cache.
 // os.homedir() reads HOME env var first — if it's empty it returns "".
@@ -281,6 +283,331 @@ ipcMain.handle("template-save", (_event, template) => {
 ipcMain.handle("template-delete", (_event, id) => {
   const file = path.join(TEMPLATES_DIR, `${id}.json`);
   if (fs.existsSync(file)) fs.unlinkSync(file);
+});
+
+/* ---- Channels ---- */
+
+const CHANNELS_DIR = path.join(app.getPath("userData"), "channels");
+
+ipcMain.handle("channel-list", () => {
+  ensureDir(CHANNELS_DIR);
+  return fs
+    .readdirSync(CHANNELS_DIR)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => {
+      try { return JSON.parse(fs.readFileSync(path.join(CHANNELS_DIR, f), "utf8")); }
+      catch { return null; }
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+});
+
+ipcMain.handle("channel-save", (_event, channel) => {
+  ensureDir(CHANNELS_DIR);
+  fs.writeFileSync(path.join(CHANNELS_DIR, `${channel.id}.json`), JSON.stringify(channel, null, 2));
+});
+
+ipcMain.handle("channel-delete", (_event, id) => {
+  const file = path.join(CHANNELS_DIR, `${id}.json`);
+  if (fs.existsSync(file)) fs.unlinkSync(file);
+});
+
+/* ---- Schedules ---- */
+
+const SCHEDULES_DIR = path.join(app.getPath("userData"), "schedules");
+
+ipcMain.handle("schedule-list", () => {
+  ensureDir(SCHEDULES_DIR);
+  return fs
+    .readdirSync(SCHEDULES_DIR)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => {
+      try { return JSON.parse(fs.readFileSync(path.join(SCHEDULES_DIR, f), "utf8")); }
+      catch { return null; }
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+});
+
+ipcMain.handle("schedule-save", (_event, schedule) => {
+  ensureDir(SCHEDULES_DIR);
+  fs.writeFileSync(path.join(SCHEDULES_DIR, `${schedule.id}.json`), JSON.stringify(schedule, null, 2));
+});
+
+ipcMain.handle("schedule-delete", (_event, id) => {
+  const file = path.join(SCHEDULES_DIR, `${id}.json`);
+  if (fs.existsSync(file)) fs.unlinkSync(file);
+});
+
+/* ---- IPTV Server ---- */
+
+let iptvServer = null;
+const IPTV_PORT = 7095;
+
+function getLocalIPs() {
+  const nets = os.networkInterfaces();
+  return Object.values(nets)
+    .flat()
+    .filter((n) => n.family === "IPv4" && !n.internal)
+    .map((n) => n.address);
+}
+
+// sourceId = "uploads/filename.mp4" — resolve to the correct directory for dev vs prod
+function resolveUploadPath(sourceId) {
+  return path.join(UPLOADS_DIR, path.basename(sourceId));
+}
+
+function findFfmpegBinary() {
+  // Common Homebrew paths on macOS
+  const candidates = [
+    "/opt/homebrew/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
+    "/usr/bin/ffmpeg",
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  // Fall back to PATH
+  try {
+    const cmd = process.platform === "win32" ? "where ffmpeg" : "which ffmpeg";
+    return execSync(cmd, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function readAllChannels() {
+  ensureDir(CHANNELS_DIR);
+  return fs
+    .readdirSync(CHANNELS_DIR)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => { try { return JSON.parse(fs.readFileSync(path.join(CHANNELS_DIR, f), "utf8")); } catch { return null; } })
+    .filter(Boolean);
+}
+
+function readAllSchedules() {
+  ensureDir(SCHEDULES_DIR);
+  return fs
+    .readdirSync(SCHEDULES_DIR)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => { try { return JSON.parse(fs.readFileSync(path.join(SCHEDULES_DIR, f), "utf8")); } catch { return null; } })
+    .filter(Boolean);
+}
+
+function generateM3u() {
+  const channels = readAllChannels().filter((c) => c.enabled);
+  const ips = getLocalIPs();
+  const host = ips[0] || "127.0.0.1";
+
+  let m3u = `#EXTM3U x-tvg-url="http://${host}:${IPTV_PORT}/epg.xml"\n`;
+  for (const ch of channels) {
+    m3u += `#EXTINF:-1 tvg-id="${ch.id}" tvg-name="${ch.name}" group-title="Screenlet",${ch.name}\n`;
+    // VLC loop directive for channels in loop mode
+    if (ch.loopSourceId) {
+      m3u += `#EXTVLCOPT:input-repeat=65535\n`;
+    }
+    m3u += `http://${host}:${IPTV_PORT}/channel/${ch.id}\n`;
+  }
+  return m3u;
+}
+
+function generateEpg() {
+  const channels = readAllChannels();
+  const schedules = readAllSchedules();
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  xml += '<!DOCTYPE tv SYSTEM "xmltv.dtd">\n';
+  xml += '<tv generator-info-name="Screenlet">\n';
+
+  for (const ch of channels) {
+    xml += `  <channel id="${ch.id}">\n    <display-name>${ch.name}</display-name>\n  </channel>\n`;
+  }
+
+  for (const sched of schedules) {
+    for (const item of (sched.items || [])) {
+      const [h = "0", m = "0"] = (item.startTime || "00:00").split(":");
+      const startTotalSec = parseInt(h) * 3600 + parseInt(m) * 60;
+      const endTotalSec = startTotalSec + (item.duration || 0);
+      const fmt = (sec) => {
+        const hh = String(Math.floor(sec / 3600) % 24).padStart(2, "0");
+        const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+        const ss = String(sec % 60).padStart(2, "0");
+        return `${today}${hh}${mm}${ss} +0000`;
+      };
+      xml += `  <programme start="${fmt(startTotalSec)}" stop="${fmt(endTotalSec)}" channel="${sched.channelId}">\n`;
+      xml += `    <title>${item.type}: ${item.sourceId}</title>\n`;
+      xml += `  </programme>\n`;
+    }
+  }
+
+  xml += "</tv>\n";
+  return xml;
+}
+
+function handleIptvRequest(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  const urlPath = req.url.split("?")[0];
+
+  if (urlPath === "/" || urlPath === "/playlist.m3u") {
+    const m3u = generateM3u();
+    res.writeHead(200, { "Content-Type": "application/x-mpegurl" });
+    res.end(m3u);
+    return;
+  }
+
+  if (urlPath === "/epg.xml") {
+    const xml = generateEpg();
+    res.writeHead(200, { "Content-Type": "text/xml; charset=utf-8" });
+    res.end(xml);
+    return;
+  }
+
+  const channelMatch = urlPath.match(/^\/channel\/([^/]+)$/);
+  if (channelMatch) {
+    const channelId = channelMatch[1];
+    const channel = readAllChannels().find((c) => c.id === channelId);
+
+    if (!channel) {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Channel not found");
+      return;
+    }
+
+    // --- Loop mode: stream a single video infinitely via ffmpeg ---
+    if (channel.loopSourceId) {
+      const videoPath = resolveUploadPath(channel.loopSourceId);
+      if (!fs.existsSync(videoPath)) {
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        res.end("Loop video file not found");
+        return;
+      }
+
+      const ffmpeg = findFfmpegBinary();
+      if (ffmpeg) {
+        res.writeHead(200, {
+          "Content-Type": "video/mp2t",
+          "Transfer-Encoding": "chunked",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        });
+
+        const proc = spawn(ffmpeg, [
+          "-stream_loop", "-1",
+          "-re",
+          "-i", videoPath,
+          "-c:v", "copy",
+          "-c:a", "copy",
+          "-f", "mpegts",
+          "pipe:1",
+        ], { stdio: ["ignore", "pipe", "ignore"] });
+
+        proc.stdout.pipe(res, { end: false });
+
+        req.on("close", () => proc.kill("SIGTERM"));
+        proc.on("error", () => res.destroy());
+        proc.stdout.on("error", () => proc.kill("SIGTERM"));
+      } else {
+        // ffmpeg not available — serve the file once (client reconnects)
+        const stat = fs.statSync(videoPath);
+        const ext = path.extname(videoPath).toLowerCase();
+        const MIME_VIDEO = { ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime", ".mkv": "video/x-matroska" };
+        res.writeHead(200, {
+          "Content-Type": MIME_VIDEO[ext] || "video/mp4",
+          "Content-Length": stat.size,
+          "Accept-Ranges": "bytes",
+          "X-Loop-Fallback": "ffmpeg-not-found",
+        });
+        fs.createReadStream(videoPath).pipe(res);
+      }
+      return;
+    }
+
+    // --- Schedule mode: serve first scheduled video ---
+    const schedules = readAllSchedules().filter((s) => s.channelId === channelId);
+    const videoItems = schedules
+      .flatMap((s) => (s.items || []))
+      .filter((item) => item.type === "video" && item.sourceId);
+
+    if (videoItems.length === 0) {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("No video content scheduled for this channel");
+      return;
+    }
+
+    const videoPath = resolveUploadPath(videoItems[0].sourceId);
+    if (!fs.existsSync(videoPath)) {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Video file not found");
+      return;
+    }
+
+    const stat = fs.statSync(videoPath);
+    const ext = path.extname(videoPath).toLowerCase();
+    const MIME_VIDEO = { ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime", ".mkv": "video/x-matroska" };
+    const mime = MIME_VIDEO[ext] || "video/mp4";
+
+    const range = req.headers.range;
+    if (range) {
+      const [startStr, endStr] = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(startStr, 10);
+      const end = endStr ? parseInt(endStr, 10) : stat.size - 1;
+      res.writeHead(206, {
+        "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+        "Accept-Ranges": "bytes",
+        "Content-Length": end - start + 1,
+        "Content-Type": mime,
+      });
+      fs.createReadStream(videoPath, { start, end }).pipe(res);
+    } else {
+      res.writeHead(200, {
+        "Content-Length": stat.size,
+        "Content-Type": mime,
+        "Accept-Ranges": "bytes",
+      });
+      fs.createReadStream(videoPath).pipe(res);
+    }
+    return;
+  }
+
+  res.writeHead(404);
+  res.end("Not found");
+}
+
+function iptvStatus() {
+  return { running: !!iptvServer, port: IPTV_PORT, ips: getLocalIPs() };
+}
+
+ipcMain.handle("iptv-status", () => ({
+  ...iptvStatus(),
+  ffmpegAvailable: !!findFfmpegBinary(),
+}));
+
+ipcMain.handle("iptv-start", () => {
+  if (iptvServer) return iptvStatus();
+  return new Promise((resolve, reject) => {
+    iptvServer = http.createServer(handleIptvRequest);
+    iptvServer.once("error", (err) => {
+      iptvServer = null;
+      reject(err);
+    });
+    iptvServer.listen(IPTV_PORT, "0.0.0.0", () => resolve(iptvStatus()));
+  });
+});
+
+ipcMain.handle("iptv-stop", () => {
+  if (!iptvServer) return iptvStatus();
+  return new Promise((resolve) => {
+    iptvServer.close(() => {
+      iptvServer = null;
+      resolve(iptvStatus());
+    });
+  });
+});
+
+app.on("before-quit", () => {
+  if (iptvServer) iptvServer.close();
 });
 
 /* ---- Export ---- */

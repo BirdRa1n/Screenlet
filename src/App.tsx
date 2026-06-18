@@ -19,6 +19,10 @@ import { Settings } from "./pages/Settings";
 import { Templates } from "./pages/Templates";
 import { TemplateBuilder } from "./pages/TemplateBuilder";
 import { TemplateWizard } from "./pages/TemplateWizard";
+import { Channels } from "./pages/Channels";
+import { Schedules } from "./pages/Schedules";
+import { ScheduleBuilder } from "./pages/ScheduleBuilder";
+import { IptvServer } from "./pages/IptvServer";
 import { FORMAT_DIMENSIONS, type ExportFormat, type AdConfig } from "./remotion/types";
 import type { ExportProgress } from "./global";
 import "./styles/app.css";
@@ -131,6 +135,26 @@ export default function App() {
                 onExport={handleTemplateExport}
                 exporting={exporting}
               />
+            </motion.div>
+          )}
+          {page === "channels" && (
+            <motion.div key="channels" className="vt-app__main" {...pageVariants}>
+              <Channels />
+            </motion.div>
+          )}
+          {page === "schedules" && (
+            <motion.div key="schedules" className="vt-app__main" {...pageVariants}>
+              <Schedules />
+            </motion.div>
+          )}
+          {page === "schedule-builder" && (
+            <motion.div key="schedule-builder" className="vt-app__main" {...pageVariants}>
+              <ScheduleBuilder />
+            </motion.div>
+          )}
+          {page === "iptv" && (
+            <motion.div key="iptv" className="vt-app__main" {...pageVariants}>
+              <IptvServer />
             </motion.div>
           )}
           {page === "settings" && (
