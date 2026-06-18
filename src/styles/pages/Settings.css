@@ -126,6 +126,100 @@
   justify-content: center;
 }
 
+/* ---- Storage ---- */
+
+.vt-settings__storage {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.vt-settings__storage-path {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.vt-settings__storage-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.vt-settings__storage-path-text {
+  font-size: var(--text-body);
+  font-family: var(--font-mono, monospace);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.vt-settings__storage-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+}
+
+/* ---- Migration dialog ---- */
+
+.vt-settings__migrate-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.vt-settings__migrate-paths {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.vt-settings__migrate-path-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vt-settings__migrate-label {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.vt-settings__migrate-value {
+  font-size: var(--text-body);
+  font-family: var(--font-mono, monospace);
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.vt-settings__migrate-path-row--new .vt-settings__migrate-value {
+  color: var(--primary-400);
+}
+
+.vt-settings__migrate-arrow {
+  font-size: var(--text-body);
+  color: var(--text-tertiary);
+  padding: var(--space-1) 0;
+}
+
+.vt-settings__migrate-hint {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  line-height: var(--leading-body);
+}
+
 /* ---- About ---- */
 
 .vt-settings__about {

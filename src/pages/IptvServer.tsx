@@ -2,26 +2,23 @@ import React, { useEffect, useState } from "react";
 import { AlertTriangle, CalendarClock, Check, Copy, List, Radio, Tv2 } from "lucide-react";
 import { Button } from "../design-system/components";
 import { useChannelStore } from "../store/useChannelStore";
-import { useScheduleStore } from "../store/useScheduleStore";
 import { useIptvStore } from "../store/useIptvStore";
 import { toast } from "../store/useToastStore";
 import "../styles/pages/IptvServer.css";
 
 export const IptvServer: React.FC = () => {
   const { channels, refresh: refreshChannels } = useChannelStore();
-  const { schedules, refresh: refreshSchedules } = useScheduleStore();
   const { status, refresh: refreshStatus, start, stop } = useIptvStore();
   const [toggling, setToggling] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     refreshChannels();
-    refreshSchedules();
     refreshStatus();
-  }, [refreshChannels, refreshSchedules, refreshStatus]);
+  }, [refreshChannels, refreshStatus]);
 
   const activeChannels = channels.filter((c) => c.enabled).length;
-  const loopChannels = channels.filter((c) => c.loopSourceId).length;
+  const playlistChannels = channels.filter((c) => c.playlist?.length > 0).length;
   const primaryIp = status.ips[0] ?? "127.0.0.1";
   const m3uUrl = `http://${primaryIp}:${status.port}/playlist.m3u`;
   const epgUrl = `http://${primaryIp}:${status.port}/epg.xml`;
@@ -87,11 +84,11 @@ export const IptvServer: React.FC = () => {
       </div>
 
       {/* ffmpeg warning */}
-      {!status.ffmpegAvailable && loopChannels > 0 && (
+      {!status.ffmpegAvailable && playlistChannels > 0 && (
         <div className="vt-iptv__warning">
           <AlertTriangle size={16} />
           <span>
-            {loopChannels} {loopChannels === 1 ? "canal usa" : "canais usam"} modo loop, mas o <strong>ffmpeg</strong> não foi encontrado no sistema.
+            {playlistChannels} {playlistChannels === 1 ? "canal usa" : "canais usam"} playlist, mas o <strong>ffmpeg</strong> não foi encontrado no sistema.
             O loop funciona melhor com ffmpeg instalado — sem ele, o stream é servido uma vez por conexão.
             Instale via <code>brew install ffmpeg</code>.
           </span>
@@ -111,9 +108,9 @@ export const IptvServer: React.FC = () => {
           <div className="vt-iptv__stat-value">{channels.length}</div>
         </div>
         <div className="vt-iptv__stat-card">
-          <div className="vt-iptv__stat-icon"><CalendarClock size={18} /></div>
-          <div className="vt-iptv__stat-label">Programações</div>
-          <div className="vt-iptv__stat-value">{schedules.length}</div>
+          <div className="vt-iptv__stat-icon"><Tv2 size={18} /></div>
+          <div className="vt-iptv__stat-label">Com playlist</div>
+          <div className="vt-iptv__stat-value">{playlistChannels}</div>
         </div>
       </div>
 

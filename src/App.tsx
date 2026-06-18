@@ -20,9 +20,9 @@ import { Templates } from "./pages/Templates";
 import { TemplateBuilder } from "./pages/TemplateBuilder";
 import { TemplateWizard } from "./pages/TemplateWizard";
 import { Channels } from "./pages/Channels";
-import { Schedules } from "./pages/Schedules";
-import { ScheduleBuilder } from "./pages/ScheduleBuilder";
+import { Renders } from "./pages/Renders";
 import { IptvServer } from "./pages/IptvServer";
+import { Button, Dialog, Field, TextField } from "./design-system/components";
 import { FORMAT_DIMENSIONS, type ExportFormat, type AdConfig } from "./remotion/types";
 import type { ExportProgress } from "./global";
 import "./styles/app.css";
@@ -32,6 +32,8 @@ const pageVariants = {
   animate: { opacity: 1, y: 0, transition: { duration: 0.22, ease: "easeOut" as const } },
   exit: { opacity: 0, y: -8, transition: { duration: 0.16, ease: "easeIn" as const } },
 };
+
+type FpsDialogState = { payload: unknown; suggestedName: string };
 
 export default function App() {
   const page = useNavigationStore((s) => s.page);
@@ -47,33 +49,51 @@ export default function App() {
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
 
+  // FPS selection dialog
+  const [fpsDialog, setFpsDialog] = useState<FpsDialogState | null>(null);
+  const [selectedFps, setSelectedFps] = useState<30 | 60>(30);
+  const [renderName, setRenderName] = useState("");
+
   useEffect(() => {
     return window.adFrame.onExportProgress((data) => setProgress(data));
   }, []);
 
-  const runExport = async (payload: unknown, suggestedName: string) => {
+  const runExport = async (payload: unknown, suggestedName: string, fps: 30 | 60) => {
     setExporting(true);
     setExportMessage(null);
     setProgress(null);
     try {
-      const result = await window.adFrame.exportVideo(payload, suggestedName);
-      if (result.canceled) {
-        toast.info("Exportação cancelada.");
-        setExportMessage("Exportação cancelada.");
+      const result = await window.adFrame.exportVideo(payload, suggestedName, fps);
+      if (!result.ok) {
+        toast.error(`Erro ao renderizar: ${result.error}`);
+        setExportMessage(`Erro: ${result.error}`);
       } else {
-        toast.success("Vídeo exportado com sucesso!");
-        setExportMessage(`Salvo em: ${result.filePath}`);
+        toast.success("Vídeo renderizado com sucesso!");
+        setExportMessage(`Salvo em Vídeos renderizados.`);
         if (page === "wizard") navigate("editor");
       }
     } catch (err) {
-      toast.error(`Erro ao exportar: ${(err as Error).message}`);
+      toast.error(`Erro ao renderizar: ${(err as Error).message}`);
       setExportMessage(`Erro: ${(err as Error).message}`);
     } finally {
       setExporting(false);
     }
   };
 
-  // Legacy export for old Wizard / editor
+  const openFpsDialog = (payload: unknown, suggestedName: string) => {
+    setSelectedFps(30);
+    setRenderName(suggestedName.replace(/\.mp4$/i, ""));
+    setFpsDialog({ payload, suggestedName });
+  };
+
+  const confirmRender = async () => {
+    if (!fpsDialog) return;
+    const filename = (renderName.trim() || "render") + ".mp4";
+    const d = fpsDialog;
+    setFpsDialog(null);
+    await runExport(d.payload, filename, selectedFps);
+  };
+
   const handleExport = async (formatOrConfig?: ExportFormat | AdConfig, overrideConfig?: AdConfig) => {
     let cfg = overrideConfig ?? config;
     let format: ExportFormat = "tv";
@@ -85,14 +105,13 @@ export default function App() {
     const { width, height } = FORMAT_DIMENSIONS[format];
     const hasTemplateScenes = cfg.scenes.some((s) => s.type === "template");
     const payload = hasTemplateScenes ? { ...cfg, width, height, templates: allTemplates } : { ...cfg, width, height };
-    await runExport(payload, `anuncio-adframe-${format}.mp4`);
+    openFpsDialog(payload, `anuncio-${format}.mp4`);
   };
 
-  // Template-based export: sends { template, values, width, height } to main
   const handleTemplateExport = async (format: ExportFormat) => {
     if (!instanceTemplate) return;
     const { width, height } = FORMAT_DIMENSIONS[format];
-    await runExport(
+    openFpsDialog(
       { template: instanceTemplate, values: instanceValues, width, height },
       `${instanceTemplate.name.toLowerCase().replace(/\s+/g, "-")}-${format}.mp4`
     );
@@ -119,6 +138,11 @@ export default function App() {
               <Library />
             </motion.div>
           )}
+          {page === "renders" && (
+            <motion.div key="renders" className="vt-app__main" {...pageVariants}>
+              <Renders />
+            </motion.div>
+          )}
           {page === "templates" && (
             <motion.div key="templates" className="vt-app__main" {...pageVariants}>
               <Templates />
@@ -140,16 +164,6 @@ export default function App() {
           {page === "channels" && (
             <motion.div key="channels" className="vt-app__main" {...pageVariants}>
               <Channels />
-            </motion.div>
-          )}
-          {page === "schedules" && (
-            <motion.div key="schedules" className="vt-app__main" {...pageVariants}>
-              <Schedules />
-            </motion.div>
-          )}
-          {page === "schedule-builder" && (
-            <motion.div key="schedule-builder" className="vt-app__main" {...pageVariants}>
-              <ScheduleBuilder />
             </motion.div>
           )}
           {page === "iptv" && (
@@ -187,6 +201,53 @@ export default function App() {
       </div>
 
       <ToastContainer />
+
+      {/* FPS selection dialog */}
+      <Dialog
+        open={!!fpsDialog}
+        onClose={() => !exporting && setFpsDialog(null)}
+        title="Qualidade de renderização"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setFpsDialog(null)} disabled={exporting}>
+              Cancelar
+            </Button>
+            <Button variant="primary" onClick={confirmRender} disabled={exporting}>
+              {exporting ? "Renderizando…" : "Renderizar"}
+            </Button>
+          </>
+        }
+      >
+        <div className="vt-app__fps-dialog">
+          <Field label="Nome do arquivo (.mp4)">
+            <TextField
+              value={renderName}
+              onChange={(e) => setRenderName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !exporting && confirmRender()}
+              placeholder="meu-video"
+            />
+          </Field>
+          <p className="vt-app__fps-dialog-desc">
+            Escolha a taxa de quadros do vídeo exportado. O arquivo será salvo automaticamente em <strong>Vídeos renderizados</strong>.
+          </p>
+          <div className="vt-app__fps-options">
+            <label className={`vt-app__fps-option${selectedFps === 30 ? " vt-app__fps-option--active" : ""}`}>
+              <input type="radio" name="fps" value="30" checked={selectedFps === 30} onChange={() => setSelectedFps(30)} />
+              <div>
+                <span className="vt-app__fps-label">30 fps</span>
+                <span className="vt-app__fps-desc">Recomendado — menor tamanho de arquivo</span>
+              </div>
+            </label>
+            <label className={`vt-app__fps-option${selectedFps === 60 ? " vt-app__fps-option--active" : ""}`}>
+              <input type="radio" name="fps" value="60" checked={selectedFps === 60} onChange={() => setSelectedFps(60)} />
+              <div>
+                <span className="vt-app__fps-label">60 fps</span>
+                <span className="vt-app__fps-desc">Maior fluidez — arquivo maior</span>
+              </div>
+            </label>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ArrowLeft, Download, Save, Smartphone, Tv2 } from "lucide-react";
 import { Button, Dialog, IconButton, ProgressBar, Field, TextField } from "../design-system/components";
 import { useNavigationStore } from "../store/useNavigationStore";
@@ -30,7 +30,7 @@ const ExportDialog: React.FC<{
     <Dialog
       open={open}
       onClose={onClose}
-      title="Exportar vídeo"
+      title="Renderizar vídeo"
       description="Escolha o formato de destino. O layout se adapta automaticamente."
       footer={
         <>
@@ -41,7 +41,7 @@ const ExportDialog: React.FC<{
             onClick={() => onExport(selected)}
             icon={<Download size={14} />}
           >
-            {exporting ? "Exportando..." : "Exportar MP4"}
+            {exporting ? "Renderizando…" : "Renderizar"}
           </Button>
         </>
       }
@@ -76,12 +76,19 @@ const ExportDialog: React.FC<{
 
 const SaveDialog: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
   const config = useAdStore((s) => s.config);
+  const currentProjectName = useAdStore((s) => s.currentProjectName);
+  const setCurrentProjectName = useAdStore((s) => s.setCurrentProjectName);
   const save = useProjectsStore((s) => s.save);
-  const [name, setName] = useState(config.storeName || "");
+  const [name, setName] = useState(currentProjectName ?? config.storeName ?? "");
+
+  useEffect(() => {
+    if (open) setName(currentProjectName ?? config.storeName ?? "");
+  }, [open]);
 
   const handleSave = async () => {
     if (!name.trim()) return;
     await save(config, name.trim());
+    setCurrentProjectName(name.trim());
     toast.success(`Projeto "${name.trim()}" salvo.`);
     onClose();
   };
@@ -153,7 +160,7 @@ export const EditorHeader: React.FC<{
             onClick={() => setExportOpen(true)}
             icon={<Download size={14} />}
           >
-            {exporting ? "Exportando..." : "Exportar MP4"}
+            {exporting ? "Renderizando…" : "Renderizar MP4"}
           </Button>
         </div>
       </header>

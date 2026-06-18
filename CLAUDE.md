@@ -17,38 +17,97 @@ npx tsc --noEmit
 # Production build (tsc + vite build + remotion pre-bundle)
 npm run build
 
-# Package macOS installer (DMG arm64 + x64)
+# Package macOS installers (both arm64 and x64 DMGs)
 npm run dist:mac
+
+# Package macOS — Apple Silicon only
+npm run dist:mac:arm64
+
+# Package macOS — Intel only
+npm run dist:mac:intel
 ```
 
 ## Architecture
 
-AdFrame is an Electron desktop app for creating video ads (TV, Instagram, Stories, TikTok) for supermarkets and retail. It combines a Vite+React UI with Remotion for video rendering and export.
+Screenlet is an Electron desktop app for digital signage — creating, rendering and broadcasting MP4 video ads (TV, Instagram, Stories, TikTok) via a built-in IPTV server. It combines a Vite+React UI with Remotion for video rendering and export.
 
 ### Process model
-- **`electron/main.cjs`** — Electron main process (CommonJS). Registers `app://` protocol (serves `dist/` and `userData/uploads/`), handles file dialogs, copies uploads. Runs Remotion `renderMedia()` for MP4 export. Library, project and template data persisted as JSON under `userData/`.
-- **`electron/preload.cjs`** — Exposes `window.adFrame` via `contextBridge`: `selectImage`, `selectVideo`, `copyFile`, `selectCsv`, `projectsList/Save/Load/Delete/Rename`, `templateList/Save/Delete`, `libraryList/Save/Delete`, `exportVideo`, `onExportProgress`.
+- **`electron/main.cjs`** — Electron main process (CommonJS). Registers `app://` protocol (serves `dist/` and user uploads). All user data lives under `~/Documents/Screenlet/` (or a user-configured path). Runs Remotion `renderMedia()` for MP4 export with adaptive concurrency. Runs an HTTP IPTV server on port 7095.
+- **`electron/preload.cjs`** — Exposes `window.adFrame` via `contextBridge`. Key groups: file utils (`selectImage`, `copyFile`, `selectVideo`), projects CRUD, templates CRUD, library CRUD, channels CRUD, exports list/delete/reveal, IPTV start/stop, `exportVideo`, `onExportProgress`, storage management (`storageGetDir`, `storageChooseDir`, `storageMigrate`, `storageOpenDir`).
 - **`src/`** — React renderer process (ESM, Vite).
 
+### Storage architecture
+All user data is stored under `~/Documents/Screenlet/` by default (survives reinstalls, syncs via iCloud/OneDrive):
+
+```
+~/Documents/Screenlet/
+  assets/     ← uploaded images and videos (UPLOADS_DIR)
+  projects/   ← project JSON files
+  templates/  ← user template JSON files
+  library/    ← product library JSON
+  channels/   ← channel JSON files
+  exports/    ← rendered MP4 videos (EXPORTS_DIR)
+```
+
+The location can be changed by the user in Settings → Armazenamento. The custom path is persisted in `userData/storage-config.json`. On change, the app relaunches so all module-level `*_DIR` constants pick up the new path.
+
+Vite dev server has a `serve-user-uploads` plugin (in `vite.config.ts`) that proxies `/uploads/*` requests to `UPLOADS_DIR` so the Remotion Player renders assets correctly in dev.
+
 ### Routing
-Single-page with Zustand-driven navigation. `Page = "dashboard" | "wizard" | "editor" | "projects" | "library" | "templates" | "template-builder" | "template-wizard" | "settings"` in `src/store/useNavigationStore.ts`. `navigateToBuilder(templateId?)` opens the template builder for a new or existing template.
+Single-page with Zustand-driven navigation. `Page` type in `src/store/useNavigationStore.ts`:
+```ts
+"dashboard" | "wizard" | "editor" | "projects" | "library" | "renders"
+| "templates" | "template-builder" | "template-wizard"
+| "channels" | "iptv" | "settings"
+```
+`navigateToBuilder(templateId?)` opens the template builder for a new or existing template.
 
 ### State (Zustand stores)
-- **`useAdStore`** — Full ad config + selected scene ID + `seekFrame` for player sync. Key actions: `addProductScene`, `addLogoScene`, `addTemplateScene(templateId?)`, `addVideoScene`, `updateScene`, `removeScene`, `reorderScenes`, `seekToScene`, `loadConfig`.
-- **`useTemplateStore`** — Template CRUD (list, save, delete, duplicate, import/export JSON). Merges built-in templates from `src/templates/` with user-created ones from `userData/templates/`.
-- **`useTemplateInstanceStore`** — Holds the active template + filled values while the user is in the TemplateWizard flow.
+- **`useAdStore`** — Full ad config + selected scene ID + `seekFrame` + `currentProjectName`. Key actions: `addProductScene`, `addLogoScene`, `addTemplateScene`, `addVideoScene`, `updateScene`, `reorderScenes`, `seekToScene`, `loadConfig`, `setCurrentProjectName`.
+- **`useTemplateStore`** — Template CRUD. Merges built-in templates from `src/templates/` with user templates from `SCREENLET_DIR/templates/`.
+- **`useTemplateInstanceStore`** — Active template + filled values during TemplateWizard flow.
 - **`useWizardStore`** — Multi-step wizard state (store info, products, preset, export format).
 - **`useNavigationStore`** — Current page + `editingTemplateId` + sidebar collapsed state.
 - **`useThemeStore`** — `"dark" | "light" | "system"`. System mode listens to `prefers-color-scheme` in real time.
 - **`useLibraryStore`** — Product library CRUD, synced with IPC.
 - **`useProjectsStore`** — Projects CRUD, synced with IPC.
+- **`useChannelStore`** — Channels CRUD, synced with IPC.
+- **`useIptvStore`** — IPTV server status (running, port, IPs, ffmpegAvailable).
 - **`useToastStore`** — Toast notifications.
+
+### Channel & Studio system
+Channels live in `SCREENLET_DIR/channels/`. Each channel has a `playlist: PlaylistItem[]` and `loop: boolean` (see `src/types/channel.ts`).
+
+`PlaylistItem = { id, filename, name, transition: "cut" | "fade" }`.
+
+The Studio (`src/pages/Studio.tsx`) is a fixed full-screen overlay (`z-index: 200`). It has:
+- Left panel: library of rendered videos from `EXPORTS_DIR`
+- Right panel: playlist editor with move up/down, transition selector, remove
+- Footer: loop toggle + Save/Cancel
+
+**macOS traffic light fix**: Studio's header uses `padding-left: 80px` + `-webkit-app-region: drag` with `-webkit-app-region: no-drag` on interactive elements.
+
+`Channels.tsx` opens Studio by setting `studioChannel` state; while set, it renders `<Studio>` instead of the channel list.
+
+### Renders page
+`src/pages/Renders.tsx` lists all MP4 files in `EXPORTS_DIR` via `window.adFrame.exportsList()`. Each card has reveal-in-Finder and delete actions.
+
+### Render / export flow
+1. User clicks "Renderizar" → `openFpsDialog(payload, suggestedName)` in `App.tsx`
+2. FPS dialog shows filename input (pre-filled from `suggestedName`) + FPS choice (30/60)
+3. `confirmRender()` builds filename as `customName + ".mp4"` and calls `runExport`
+4. `runExport` calls `window.adFrame.exportVideo(payload, filename, fps)`
+5. Main process `export-video` handler: auto-saves to `EXPORTS_DIR`, adaptive concurrency, Chrome from cache
+
+**Adaptive concurrency** (`computeConcurrency()` in `main.cjs`): reserves 2 GB for OS + app, allocates ~600 MB per Remotion worker, capped at half the CPU count and max 8.
+
+**Chrome caching**: `warmRemotionBrowser()` runs at app startup. It chdirs to `userData/remotion-root/` (which has a `package.json` anchor) so Remotion stores Chrome at `userData/remotion-root/node_modules/.remotion/` — survives app updates. The path is cached in `cachedBrowserExecutable` and passed to every `renderMedia` / `selectComposition` call.
 
 ### Design system
 - **`src/styles/tokens.css`** — Single source of truth for all CSS custom properties.
-- **`src/styles/`** — All CSS under `components/`, `layout/`, `pages/`. No CSS files alongside `.tsx`.
-- **`src/design-system/components/`** — `Button`, `IconButton` (variants: `"default" | "danger"` — NOT "ghost"), `Field`/`TextField`/`SelectField`/`ColorField`/`Checkbox`, `Card`, `Dialog`, `ProgressBar`, `Tabs`, `Toast`, `Tooltip`, `UploadZone`, `ContextMenu`. All exported from `index.ts`.
-- Never hardcode color values — use semantic tokens (`--input-bg`, `--text-primary`, etc.).
+- **`src/styles/`** — All CSS under `components/`, `layout/`, `pages/`. **No CSS files alongside `.tsx`.**
+- **`src/design-system/components/`** — `Button`, `IconButton` (variants: `"default" | "danger"` — **NOT "ghost"**), `Field`/`TextField`/`SelectField`/`ColorField`/`Checkbox`, `Card`, `Dialog`, `ProgressBar`, `Tabs`, `Toast`, `Tooltip`, `UploadZone`, `ContextMenu`. All exported from `index.ts`.
+- Never hardcode color values — always use semantic tokens (`--input-bg`, `--text-primary`, etc.).
 
 ### Layout (Editor)
 Three-panel layout when `page === "editor"`:
@@ -60,66 +119,54 @@ Three-panel layout when `page === "editor"`:
 ```ts
 type SceneConfig = LogoSceneConfig | ProductSceneConfig | TemplateSceneConfig | VideoSceneConfig
 ```
-- **`LogoSceneConfig`** — tagline, colors, duration
-- **`ProductSceneConfig`** — image, name, price (offer/single), badge, colors, logo overlay
-- **`TemplateSceneConfig`** — `templateId`, `values: Record<string,string>`, duration. At export time, `AdConfig.templates[]` must be populated so `DynamicAd` can look up the full Template object (Zustand store is not available in the Remotion render process).
-- **`VideoSceneConfig`** — `src`, `volume`, duration
-
 Factory defaults: `defaultLogoScene()`, `defaultProductScene()`, `defaultTemplateScene(templateId?)`, `defaultVideoScene()`.
 
+At export time, when any scene is `type: "template"`, `AdConfig.templates[]` must be included in the payload so `DynamicAd` can look up the full Template object (Zustand store is not available in the Remotion render process).
+
 ### Template system (`src/remotion/template-types.ts`)
-Templates are multi-scene compositions with typed variables (text, number, image, color). Each template has `scenes[]` of layers.
-
-Layer types: `text`, `image`, `logo`, `shape`, `badge`, `price`, `video`. Image and logo layers support `flipX?: boolean` and `flipY?: boolean` (applied as `scaleX(-1)` / `scaleY(-1)`).
-
-- **`src/remotion/TemplateRenderer.tsx`** — Renders a `Template` with filled `values` using Remotion sequences.
-- **`src/remotion/LayerRenderer.tsx`** — Per-layer rendering inside the Remotion composition.
-- **`src/components/builder/CanvasEditor.tsx`** — Drag/resize canvas for the Template Builder (1920×1080 scaled to container).
-- **`src/components/builder/Timeline.tsx`** — Frame timeline for layer start/end editing.
-- **`src/pages/TemplateBuilder.tsx`** — Full template builder page. Text/badge inputs use a debounce pattern (300ms + flush on blur) to avoid focus loss on every keystroke.
-- **`src/pages/Templates.tsx`** — Template gallery with preview cards, context menu, duplicate/delete/export.
-- **`src/pages/TemplateWizard.tsx`** — 3-step flow: fill variables → preview → export format.
+Layer types: `text`, `image`, `logo`, `shape`, `badge`, `price`, `video`. Image and logo layers support `flipX?: boolean` and `flipY?: boolean`.
 
 Built-in templates live in `src/templates/` (generico, carnes, natal, pascoa) and are merged with user templates at runtime.
 
 ### Remotion / video
-- **`src/remotion/DynamicAd.tsx`** — Root ad composition. Renders scenes by type: `logo → LogoScene`, `product → ProductScene`, `template → TemplateRenderer` (looks up template from `props.templates ?? storeTemplates`), `video → OffthreadVideo`.
+- **`src/remotion/DynamicAd.tsx`** — Root ad composition. Renders scenes by type.
 - **`src/remotion/Root.tsx`** — Registers all compositions (`DynamicAd`, `TemplateAd`) for the Remotion bundle.
 - Asset paths stored **without leading slash** (e.g. `"uploads/123-file.png"`). Components call `staticFile(path)` at render time.
-- `<Player>` components always need `acknowledgeRemotionLicense` prop to suppress license warnings.
-- `initialFrame` on `<Player>` must be clamped: `Math.min(value, Math.max(totalFrames - 1, 0))` to avoid white screen crash.
+- `<Player>` components always need `acknowledgeRemotionLicense` prop.
+- `initialFrame` on `<Player>` must be clamped: `Math.min(value, Math.max(totalFrames - 1, 0))` to avoid white-screen crash.
 
 ### Production build & packaging
 
 ```
-npm run build
-  └─ tsc -b
-  └─ vite build          → dist/
-  └─ bundle-remotion.mjs → dist/remotion-bundle/   (pre-built Remotion webpack bundle)
 npm run dist:mac
-  └─ electron-builder    → release/AdFrame-*.dmg
+  └─ install-cross-compositors.mjs   → installs arm64 + x64 compositor binaries
+  └─ tsc -b
+  └─ vite build                      → dist/
+  └─ bundle-remotion.mjs             → dist/remotion-bundle/
+  └─ electron-builder                → release/Screenlet-arm64.dmg + Screenlet-x64.dmg
 ```
 
 **Key production decisions:**
-- `"asar": false` in electron-builder — Remotion uses ESM with `import.meta.url` to locate compositor binaries; `.asar` archives break `chmod` and `spawn` for those binaries.
-- `dist/remotion-bundle/` is a pre-built Remotion webpack bundle. At export time, `renderMedia({ serveUrl: bundleLocation })` uses it directly — no runtime bundling.
+- `"asar": false` — Remotion compositor binaries (`ffmpeg`, `ffprobe`) must be executable on disk; `.asar` archives break `chmod` and `spawn` for those files.
+- `optionalDependencies` in `package.json` lists all compositor packages so electron-builder includes them explicitly.
+- `scripts/install-cross-compositors.mjs` uses `npm pack` (bypasses npm's os/cpu platform filter) to install `compositor-darwin-x64` on an ARM64 build machine. Idempotent — skips if already present.
 - Production bundle path: `path.join(process.resourcesPath, "app", "dist", "remotion-bundle")`.
-- Before rendering, uploads are synced from `userData/uploads/` to `{bundleDir}/public/uploads/` because Remotion injects `window.remotion_staticBase = '/public/'` in the webpack bundle, making `staticFile('uploads/x')` resolve to `/public/uploads/x`.
-- `entitlements.plist` includes `cs.disable-library-validation` — required for ffmpeg's dylibs (`libavdevice.dylib` etc.) which use relative rpaths blocked by macOS hardened runtime.
-- `hardwareAcceleration: "if-possible"` in `renderMedia` — uses NVENC/AMF/QSV when available, falls back to CPU.
-- `HOME` is set at process startup via `os.userInfo().homedir` (not `os.homedir()`) because `os.homedir()` reads the `HOME` env var first, which may be empty in packaged Electron on macOS.
-- **DevTools shortcut**: `Cmd+Shift+I` opens DevTools in any build (useful for debugging production releases).
+- Before rendering, uploads are synced from `UPLOADS_DIR` to `{bundleDir}/public/uploads/` because Remotion injects `window.remotion_staticBase = '/public/'`, making `staticFile('uploads/x')` resolve to `/public/uploads/x`.
+- `entitlements.plist` includes `cs.disable-library-validation` — required for ffmpeg's dylibs which use relative rpaths blocked by macOS hardened runtime.
+- `HOME` is set at startup via `os.userInfo().homedir` (not `os.homedir()`) because `os.homedir()` reads the `HOME` env var first, which may be empty in packaged Electron on macOS.
+- **DevTools shortcut**: `Cmd+Shift+I` opens DevTools in any build.
 
 ### `app://` protocol (production)
-Serves app bundle assets using `fs.readFileSync` (handles `.asar` transparently if ever re-enabled) and user uploads via `net.fetch`. Registered before `app.whenReady()` with `registerSchemesAsPrivileged`.
+Serves app bundle assets using `fs.readFileSync` (handles `.asar` if ever re-enabled) and user uploads via `net.fetch`. Registered before `app.whenReady()` with `registerSchemesAsPrivileged`.
 
 ### Key gotchas
 - `electron/main.cjs` is CJS; everything under `src/` is ESM.
 - `protocol.registerSchemesAsPrivileged` must be called **before** `app.whenReady()`.
-- `TemplateSceneConfig.templateId` alone is not enough for export — always include `AdConfig.templates` in the export payload when any scene is `type: "template"`.
-- `IconButton` variant only accepts `"default" | "danger"` — NOT `"ghost"`.
+- `TemplateSceneConfig.templateId` alone is not enough for export — always include `AdConfig.templates` when any scene is `type: "template"`.
+- `IconButton` variant only accepts `"default" | "danger"` — **NOT "ghost"**.
 - `useRef<T>()` requires an initial value in this TS config — use `useRef<T>(undefined as unknown as T)` for timer refs.
 - `interpolate()` from Remotion uses `extrapolateLeft/Right: "clamp"` — not `clamp: true`.
 - Framer Motion `ease` values must be cast: `ease: "easeOut" as const`.
-- `useSelectedScene()` uses two separate selectors (scenes list + selectedId) to avoid re-render loops.
-- `seekToScene(id)` sets `seekFrame`; `PreviewPanel` watches via `useEffect` and calls `playerRef.seekTo()`.
+- `Channel` type uses `playlist: PlaylistItem[]` — the old `loopSourceId / loopSourceType` fields no longer exist.
+- `ExportResult` type is `{ ok: true; filename: string } | { ok: false; error: string }` — not `{ canceled: boolean }`.
+- `Page` type does NOT include `"schedules"` or `"schedule-builder"` — those pages were removed.

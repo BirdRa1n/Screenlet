@@ -1,17 +1,17 @@
-# AdFrame
+# Screenlet
 
-Editor desktop para criação de vídeos publicitários para supermercados e varejo — TV, Instagram, Stories e TikTok.
+Plataforma desktop de **digital signage** para criação, gerenciamento e transmissão de vídeos publicitários — TV, Instagram, Stories e TikTok.
 
-Crie anúncios profissionais com produtos, preços e logo da sua marca e exporte diretamente em **MP4**, sem dependências externas.
+Crie anúncios com produtos, preços e logo da sua marca, exporte em **MP4**, organize em canais e transmita via **IPTV** para Smart TVs na rede local.
 
 ---
 
 ## Funcionalidades
 
-### Editor
+### Editor de anúncios
 - Painel de cenas com drag-and-drop para reordenar
 - Prévia em tempo real com `@remotion/player`
-- Ao selecionar uma cena, o preview avança automaticamente para aquele ponto do vídeo
+- Ao selecionar uma cena, o preview avança automaticamente para aquele ponto
 - Inspetor de propriedades com edição de cores, textos, preços, logo e variáveis de template
 
 ### Tipos de cena
@@ -19,7 +19,6 @@ Crie anúncios profissionais com produtos, preços e logo da sua marca e exporte
 - **Logo/Chamada** — exibição da marca com tagline animada
 - **Template** — composição criada no Template Builder, com variáveis preenchíveis no inspetor
 - **Vídeo** — arquivo de vídeo local com controle de volume
-- **Logo overlay** — aplique a logo em qualquer canto de cada cena produto
 
 ### Template Builder
 - Canvas visual de arrastar e redimensionar (1920×1080 escalado para o container)
@@ -30,35 +29,44 @@ Crie anúncios profissionais com produtos, preços e logo da sua marca e exporte
 - Galeria de templates com prévia, duplicar, exportar e importar JSON
 - Templates embutidos: Genérico, Açougue/Carnes, Natal, Páscoa
 
-### Wizard de Template
-- 3 passos: preencher variáveis → preview → escolher formato de exportação
-
-### Exportação multi-formato
-| Formato | Resolução | Proporção |
-|---|---|---|
-| TV / Monitor | 1920 × 1080 | 16:9 |
-| Instagram | 1080 × 1080 | 1:1 |
-| Stories | 1080 × 1920 | 9:16 |
-| TikTok | 1080 × 1920 | 9:16 |
-
+### Renderização
+- Diálogo de renderização com nome do arquivo e seleção de FPS (30 ou 60)
 - Aceleração por GPU quando disponível (NVENC/AMF/QSV), com fallback automático para CPU
+- Chrome Headless baixado uma vez e em cache permanente no diretório do usuário
+- Concorrência de renderização ajustada automaticamente de acordo com a RAM disponível
 
-### Biblioteca de Produtos
+### Vídeos renderizados
+- Aba **Vídeos** lista todos os MP4s exportados
+- Revelar no Finder ou excluir diretamente pela interface
+
+### Canais e Studio
+- Crie canais IPTV com nome, descrição e logo
+- **Studio** — modal full-screen para montar a playlist de cada canal:
+  - Biblioteca de vídeos renderizados (painel esquerdo)
+  - Playlist com ordenação, transição por clipe (corte / fade) e loop
+- Servidor IPTV embutido na porta 7095 com playlist M3U e guia EPG
+
+### Biblioteca de produtos
 - Cadastre produtos reutilizáveis com categorias
 - Busca e filtro por categoria
 - Importe múltiplos produtos no editor com multi-seleção ordenada
 
 ### Wizard de criação
-- 5 passos guiados: loja → produtos → template → preview → exportação
+- 5 passos guiados: loja → produtos → template → preview → renderização
 - Importação de produtos via CSV
-- 4 templates visuais com preview real (Genérico, Açougue, Natal, Páscoa)
 
 ### Projetos
-- Salve e carregue projetos com nome
+- Salve e carregue projetos com nome personalizado
 - Histórico com data de atualização
+
+### Armazenamento
+- Todos os dados (projetos, assets, templates, canais, exports) salvos em `~/Documents/Screenlet/`
+- Sobrevive a reinstalações e sincroniza via iCloud / OneDrive automaticamente
+- Seção **Armazenamento** nas configurações para alterar e migrar a pasta com ou sem cópia dos arquivos
 
 ### Configurações
 - Tema claro / escuro / sistema (segue o macOS em tempo real)
+- Escolha e migração da pasta de armazenamento
 
 ---
 
@@ -66,8 +74,8 @@ Crie anúncios profissionais com produtos, preços e logo da sua marca e exporte
 
 | Camada | Tecnologia |
 |---|---|
-| Desktop | Electron |
-| UI | React 19 + Vite |
+| Desktop | Electron 42 |
+| UI | React 19 + Vite 8 |
 | Animações | Framer Motion |
 | Vídeo | Remotion 4 |
 | Estado | Zustand 5 |
@@ -80,6 +88,7 @@ Crie anúncios profissionais com produtos, preços e logo da sua marca e exporte
 
 - Node.js 18+
 - npm 9+
+- macOS (Apple Silicon ou Intel)
 
 ---
 
@@ -111,24 +120,17 @@ npm run dev
 # Compila TypeScript + Vite + pré-bundle Remotion (dist/remotion-bundle/)
 npm run build
 
-# Empacota o instalador (macOS — DMG arm64 + x64)
+# Empacota instaladores macOS (Apple Silicon + Intel)
 npm run dist:mac
+
+# Só Apple Silicon
+npm run dist:mac:arm64
+
+# Só Intel
+npm run dist:mac:intel
 ```
 
-O build empacota o Remotion em `dist/remotion-bundle/` durante o processo de build. Em produção, a exportação usa esse bundle pré-compilado sem precisar transpilar no runtime.
-
----
-
-## Como usar
-
-1. **Crie um projeto** pelo wizard ou abra um existente em Projetos
-2. **Adicione cenas** com os botões Produto / Logo/Texto / Biblioteca / Template / Vídeo
-3. **Selecione uma cena** — o preview avança automaticamente e o inspetor exibe os campos
-4. **Ajuste** cores, textos, preços e imagens no painel direito
-5. **Escolha o formato** de exportação no cabeçalho
-6. **Exporte** em MP4 com um clique
-
-Para criar um template personalizado, acesse **Templates** na barra lateral e clique em **Novo Template**.
+O script `install-cross-compositors.mjs` é executado automaticamente antes de cada `dist:mac*` para garantir que os binários do Remotion para ambas as arquiteturas estejam presentes — mesmo ao buildar em um Mac ARM64.
 
 ---
 
@@ -143,24 +145,27 @@ src/
   layout/              # Sidebar, Header, SceneListPanel, PreviewPanel, InspectorPanel
   pages/               # Dashboard, Wizard, Projects, Library, Settings
                        # Templates, TemplateBuilder, TemplateWizard
+                       # Channels, Studio, Renders, IptvServer
   remotion/            # DynamicAd, ProductScene, LogoScene, TemplateRenderer,
                        # LayerRenderer, animations, types, template-types
   store/               # useAdStore, useWizardStore, useLibraryStore, useProjectsStore,
-                       # useTemplateStore, useTemplateInstanceStore, useNavigationStore
+                       # useTemplateStore, useTemplateInstanceStore, useNavigationStore,
+                       # useChannelStore, useIptvStore, useThemeStore, useToastStore
   styles/
     components/        # CSS dos componentes do design system
     layout/            # CSS dos painéis e layout
-    pages/             # CSS das páginas
+    pages/             # CSS das páginas (incluindo Studio.css e Renders.css)
     tokens.css         # Variáveis de design (cores, espaçamento, tipografia)
   templates/           # Templates embutidos (generico, carnes, natal, pascoa)
+  types/               # channel.ts (Channel, PlaylistItem, TransitionType)
 electron/
-  main.cjs             # Processo principal: protocolo app://, diálogos, exportação MP4
-  preload.cjs          # Bridge window.adFrame (selectImage, selectVideo, exportVideo, …)
+  main.cjs             # Processo principal: protocolo app://, armazenamento em ~/Documents/Screenlet/,
+                       # exportação MP4 com concorrência adaptativa, servidor IPTV
+  preload.cjs          # Bridge window.adFrame (selectImage, exportVideo, channelList, etc.)
 scripts/
-  bundle-remotion.mjs  # Pré-compila as composições Remotion em dist/remotion-bundle/
+  bundle-remotion.mjs            # Pré-compila as composições Remotion em dist/remotion-bundle/
+  install-cross-compositors.mjs  # Baixa compositors ARM64 e x64 para builds cross-platform
 entitlements.plist     # Entitlements macOS para hardened runtime (dylibs do ffmpeg)
-public/
-  assets/              # Imagens de exemplo e assets estáticos
 ```
 
 ---

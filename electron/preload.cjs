@@ -29,22 +29,28 @@ contextBridge.exposeInMainWorld("adFrame", {
   channelSave: (channel) => ipcRenderer.invoke("channel-save", channel),
   channelDelete: (id) => ipcRenderer.invoke("channel-delete", id),
 
-  // Schedules
-  scheduleList: () => ipcRenderer.invoke("schedule-list"),
-  scheduleSave: (schedule) => ipcRenderer.invoke("schedule-save", schedule),
-  scheduleDelete: (id) => ipcRenderer.invoke("schedule-delete", id),
+  // Rendered exports
+  exportsList: () => ipcRenderer.invoke("exports-list"),
+  exportsDelete: (filename) => ipcRenderer.invoke("exports-delete", filename),
+  exportsReveal: (filename) => ipcRenderer.invoke("exports-reveal", filename),
 
   // IPTV Server
   iptvStatus: () => ipcRenderer.invoke("iptv-status"),
   iptvStart: () => ipcRenderer.invoke("iptv-start"),
   iptvStop: () => ipcRenderer.invoke("iptv-stop"),
 
-  // Export
-  exportVideo: (config, suggestedName) =>
-    ipcRenderer.invoke("export-video", config, suggestedName),
+  // Export / render
+  exportVideo: (config, suggestedName, fps) =>
+    ipcRenderer.invoke("export-video", config, suggestedName, fps),
   onExportProgress: (callback) => {
     const listener = (_event, data) => callback(data);
     ipcRenderer.on("export-progress", listener);
     return () => ipcRenderer.removeListener("export-progress", listener);
   },
+
+  // Storage location
+  storageGetDir: () => ipcRenderer.invoke("storage-get-dir"),
+  storageChooseDir: () => ipcRenderer.invoke("storage-choose-dir"),
+  storageMigrate: (newDir, copyFiles) => ipcRenderer.invoke("storage-migrate", newDir, copyFiles),
+  storageOpenDir: () => ipcRenderer.invoke("storage-open-dir"),
 });

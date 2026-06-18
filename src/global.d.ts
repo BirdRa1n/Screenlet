@@ -4,8 +4,15 @@ export type ExportProgress = {
 };
 
 export type ExportResult =
-  | { canceled: true }
-  | { canceled: false; filePath: string };
+  | { ok: true; filename: string }
+  | { ok: false; error: string };
+
+export type ExportedVideo = {
+  filename: string;
+  name: string;
+  size: number;
+  createdAt: string;
+};
 
 export type ProjectMeta = {
   id: string;
@@ -25,7 +32,6 @@ declare global {
 
       // Projects
       projectsList: () => Promise<ProjectMeta[]>;
-
       projectsSave: (config: unknown, name: string) => Promise<string>;
       projectsLoad: (id: string) => Promise<unknown>;
       projectsDelete: (id: string) => Promise<void>;
@@ -46,19 +52,25 @@ declare global {
       channelSave: (channel: import("./types/channel").Channel) => Promise<void>;
       channelDelete: (id: string) => Promise<void>;
 
-      // Schedules
-      scheduleList: () => Promise<import("./types/schedule").Schedule[]>;
-      scheduleSave: (schedule: import("./types/schedule").Schedule) => Promise<void>;
-      scheduleDelete: (id: string) => Promise<void>;
+      // Rendered exports
+      exportsList: () => Promise<ExportedVideo[]>;
+      exportsDelete: (filename: string) => Promise<void>;
+      exportsReveal: (filename: string) => Promise<void>;
+
+      // Export / render
+      exportVideo: (config: unknown, suggestedName: string, fps: 30 | 60) => Promise<ExportResult>;
+      onExportProgress: (callback: (data: ExportProgress) => void) => () => void;
 
       // IPTV Server
       iptvStatus: () => Promise<import("./store/useIptvStore").IptvStatus>;
       iptvStart: () => Promise<import("./store/useIptvStore").IptvStatus>;
       iptvStop: () => Promise<import("./store/useIptvStore").IptvStatus>;
 
-      // Export
-      exportVideo: (config: unknown, suggestedName?: string) => Promise<ExportResult>;
-      onExportProgress: (callback: (data: ExportProgress) => void) => () => void;
+      // Storage location
+      storageGetDir: () => Promise<string>;
+      storageChooseDir: () => Promise<string | null>;
+      storageMigrate: (newDir: string, copyFiles: boolean) => Promise<{ success: boolean; reason?: string }>;
+      storageOpenDir: () => Promise<void>;
     };
   }
 }
