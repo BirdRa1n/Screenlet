@@ -32,6 +32,9 @@
     "mac": {
       "category": "public.app-category.video",
       "icon": "public/icon.icns",
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.plist",
+      "entitlementsInherit": "entitlements.plist",
       "target": [
         {
           "target": "dmg",
