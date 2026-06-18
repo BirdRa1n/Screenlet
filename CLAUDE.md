@@ -85,14 +85,21 @@ Catalogs all uploaded assets (images + videos) in `UPLOADS_DIR`. The catalog is 
 - **`useToastStore`** — Toast notifications.
 
 ### Channel & Studio system
-Channels live in `SCREENLET_DIR/channels/`. Each channel has a `playlist: PlaylistItem[]` and `loop: boolean` (see `src/types/channel.ts`).
+Channels live in `SCREENLET_DIR/channels/`. Each channel has `playlist: PlaylistItem[]`, `loop: boolean`, and `rules?: ProgrammingRule[]` (see `src/types/channel.ts`). `rules` is optional for backward compatibility with existing channel JSON files.
 
 `PlaylistItem = { id, filename, name, transition: "cut" | "fade" }`.
 
-The Studio (`src/pages/Studio.tsx`) is a fixed full-screen overlay (`z-index: 200`). It has:
-- Left panel: library of rendered videos from `EXPORTS_DIR`
-- Right panel: playlist editor with move up/down, transition selector, remove
-- Footer: loop toggle + Save/Cancel
+The Studio (`src/pages/Studio.tsx`) is a fixed full-screen overlay (`z-index: 200`). It has two tabs:
+- **Playlist** tab — library of rendered videos from `EXPORTS_DIR` (left) + playlist editor with move up/down, transition selector, remove (right)
+- **Horários** tab — `ProgrammingTimeline` component for managing `ProgrammingRule[]`
+- Footer: loop toggle + Save/Cancel (saves `{ ...channel, playlist, loop, rules }`)
+
+`ProgrammingRule = { id, assetFilename, assetName, schedule: ProgrammingSchedule, transition? }`.
+`ProgrammingSchedule` is a discriminated union: `{ type: "always" }` | `{ type: "time-range"; startTime; endTime }` | `{ type: "day-of-week"; days: ScheduleDay[] }`.
+
+**Programming Engine** (`src/lib/programmingEngine.ts`): pure function `getCurrentAsset(channel, now?)` evaluates rules against the current time and returns the filename to broadcast. Falls back to `channel.playlist[0].filename` if no rule matches. Handles overnight time ranges (e.g. 22:00–06:00). Used in `IptvServer.tsx` to display live programming status.
+
+**`ProgrammingTimeline`** (`src/components/programming/ProgrammingTimeline.tsx`): list of `ProgrammingRuleBlock` components + "Adicionar regra" button + `ProgrammingRuleForm` dialog for create/edit.
 
 **macOS traffic light fix**: Studio's header uses `padding-left: 80px` + `-webkit-app-region: drag` with `-webkit-app-region: no-drag` on interactive elements.
 
@@ -118,7 +125,8 @@ The Studio (`src/pages/Studio.tsx`) is a fixed full-screen overlay (`z-index: 20
 - **`src/styles/tokens.css`** — Single source of truth for all CSS custom properties.
 - **`src/styles/`** — All CSS under `components/`, `layout/`, `pages/`. **No CSS files alongside `.tsx`.**
 - **`src/design-system/components/`** — `Button`, `IconButton` (variants: `"default" | "danger"` — **NOT "ghost"**), `Field`/`TextField`/`SelectField`/`ColorField`/`Checkbox`, `Card`, `Dialog`, `ProgressBar`, `Tabs`, `Toast`, `Tooltip`, `UploadZone`, `ContextMenu`. All exported from `index.ts`.
-- **`src/components/media/MediaPicker.tsx`** — shared media picker component. Not part of the design system; lives alongside other feature components.
+- **`src/components/media/MediaPicker.tsx`** — shared media picker. Exports `MediaPicker` (inline preview + click-to-open) and `MediaPickerDialog` (standalone modal). Used in `InspectorPanel` (product image), `SceneListPanel` (video picker), `TemplateWizard` (image variables), `TemplateBuilder` (image layer props).
+- **`src/components/programming/`** — `ProgrammingTimeline`, `ProgrammingRuleBlock`, `ProgrammingRuleForm`. Used by Studio's "Horários" tab.
 - Never hardcode color values — always use semantic tokens (`--input-bg`, `--text-primary`, etc.).
 
 ### Layout (Editor)
@@ -189,3 +197,9 @@ Serves app bundle assets using `fs.readFileSync` (handles `.asar` if ever re-ena
 - `Page` type does NOT include `"schedules"` or `"schedule-builder"` — those pages were removed.
 - `media-delete` IPC removes the asset from the catalog only, not from disk — physical files must remain to avoid breaking existing project references (`image: "uploads/xxx"`).
 - `media-catalog` auto-syncs: it calls `syncMediaCatalog()` which scans `UPLOADS_DIR` on every call. Any file placed in uploads outside the IPC (e.g. via `copyFile` / `selectImage`) will appear in Media Hub automatically on next load.
+- `Channel.rules` is `optional` — existing channel JSONs without `rules` load fine; `getCurrentAsset` falls back to `channel.playlist[0]`.
+- `getCurrentAsset` is a pure function (no IPC, no side effects) — safe to call in the renderer at render time, e.g. inside a `useEffect` with a 1-minute interval tick.
+- `SceneListPanel` uses `VideoPickerButton` (wraps `MediaPickerDialog`) instead of a direct `window.adFrame.selectVideo()` call — video scenes are now picked from the media catalog.
+- `TemplateWizard` and `TemplateBuilder` image fields use `MediaPickerDialog` instead of `window.adFrame.selectImage()`.
+- `Dashboard` stat grid is 4 columns (projects, exports, templates, media catalog count). The 4th `StatCard` uses `iconClass="info"` which needs `.vt-dash__stat-icon--info` in `Dashboard.css`.
+- `IptvServer` shows a "Programação agora" panel using `getCurrentAsset` per channel, refreshed by a 1-minute `setInterval`.

@@ -20,6 +20,7 @@ import { useAdStore } from "../store/useAdStore";
 import { useTemplateStore } from "../store/useTemplateStore";
 import { Button, Dialog, IconButton, UploadZone } from "../design-system/components";
 import { useLibraryStore, type LibraryProduct } from "../store/useLibraryStore";
+import { MediaPickerDialog } from "../components/media/MediaPicker";
 import { toast } from "../store/useToastStore";
 import "../styles/layout/SceneListPanel.css";
 
@@ -225,13 +226,8 @@ export const SceneListPanel: React.FC = () => {
           >
             Template
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Film size={14} />}
-            onClick={async () => {
-              const path = await window.adFrame.selectVideo();
-              if (!path) return;
+          <VideoPickerButton
+            onPick={(path) => {
               addVideoScene();
               const newScene = useAdStore.getState().config.scenes.at(-1);
               if (newScene && newScene.type === "video") {
@@ -239,9 +235,7 @@ export const SceneListPanel: React.FC = () => {
               }
               toast.success("Cena de vídeo adicionada.");
             }}
-          >
-            Vídeo
-          </Button>
+          />
         </div>
       </section>
 
@@ -377,6 +371,24 @@ export const SceneListPanel: React.FC = () => {
         </div>
       </Dialog>
     </aside>
+  );
+};
+
+const VideoPickerButton: React.FC<{ onPick: (path: string) => void }> = ({ onPick }) => {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <Button variant="secondary" size="sm" icon={<Film size={14} />} onClick={() => setOpen(true)}>
+        Vídeo
+      </Button>
+      <MediaPickerDialog
+        open={open}
+        accept="video"
+        currentValue=""
+        onSelect={(path) => { onPick(path); setOpen(false); }}
+        onClose={() => setOpen(false)}
+      />
+    </>
   );
 };
 

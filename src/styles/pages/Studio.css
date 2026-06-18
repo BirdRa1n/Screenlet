@@ -337,3 +337,206 @@
   display: flex;
   gap: var(--space-2);
 }
+
+/* ---- Tab bar ---- */
+
+.vt-studio__tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--surface-raised);
+  border-radius: var(--radius-md);
+  padding: 2px;
+}
+
+.vt-studio__tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: var(--font-sans);
+}
+
+.vt-studio__tab:hover {
+  color: var(--text-primary);
+}
+
+.vt-studio__tab--active {
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+/* ---- Schedule body ---- */
+
+.vt-studio__schedule-body {
+  flex: 1;
+  padding: var(--space-6);
+  overflow-y: auto;
+}
+
+/* ---- Programming rule block ---- */
+
+.vt-prog-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--duration-fast);
+}
+
+.vt-prog-rule:hover {
+  border-color: var(--border-strong);
+}
+
+.vt-prog-rule__index {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.vt-prog-rule__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.vt-prog-rule__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vt-prog-rule__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vt-prog-rule__schedule {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.vt-prog-rule__actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* ---- Programming timeline ---- */
+
+.vt-prog-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.vt-prog-timeline__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.vt-prog-timeline__sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+  max-width: 480px;
+}
+
+.vt-prog-timeline__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-10);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.vt-prog-timeline__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ---- Rule form dialog ---- */
+
+.vt-prog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.vt-prog-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.vt-prog-form__days {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.vt-prog-form__day {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: var(--font-sans);
+}
+
+.vt-prog-form__day:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.vt-prog-form__day--active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+}

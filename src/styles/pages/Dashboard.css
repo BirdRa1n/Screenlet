@@ -46,7 +46,7 @@
 
 .vt-dash__stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--space-4);
 }
 
@@ -90,6 +90,11 @@
 .vt-dash__stat-icon--warning {
   background: color-mix(in srgb, var(--warning-500) 14%, transparent);
   color: var(--warning-300);
+}
+
+.vt-dash__stat-icon--info {
+  background: color-mix(in srgb, #38bdf8 14%, transparent);
+  color: #38bdf8;
 }
 
 .vt-dash__stat-value {

@@ -59,7 +59,7 @@ export const MediaPicker: React.FC<Props> = ({
   );
 };
 
-const MediaPickerDialog: React.FC<{
+export const MediaPickerDialog: React.FC<{
   open: boolean;
   accept: MediaAssetType | "any";
   currentValue: string;

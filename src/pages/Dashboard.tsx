@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Player } from "@remotion/player";
-import { FolderOpen, LayoutTemplate, MoreHorizontal, Pencil, Plus, Trash2, Video } from "lucide-react";
+import { FolderOpen, HardDrive, LayoutTemplate, MoreHorizontal, Pencil, Plus, Trash2, Video } from "lucide-react";
 import { Button, Dialog, IconButton, TextField, Field } from "../design-system/components";
 import { useNavigationStore } from "../store/useNavigationStore";
 import { useAdStore } from "../store/useAdStore";
 import { useProjectsStore } from "../store/useProjectsStore";
 import { useTemplateStore } from "../store/useTemplateStore";
 import { useTemplateInstanceStore } from "../store/useTemplateInstanceStore";
+import { useMediaStore } from "../store/useMediaStore";
 import { toast } from "../store/useToastStore";
 import { TemplateRenderer } from "../remotion/TemplateRenderer";
 import { templateTotalFrames, defaultValues } from "../remotion/template-utils";
@@ -23,8 +24,9 @@ export const Dashboard: React.FC = () => {
   const { projects, refresh } = useProjectsStore();
   const { templates, refresh: refreshTemplates } = useTemplateStore();
   const setTemplateInstance = useTemplateInstanceStore((s) => s.setTemplate);
+  const { assets, refresh: refreshMedia } = useMediaStore();
 
-  useEffect(() => { refresh(); refreshTemplates(); }, [refresh, refreshTemplates]);
+  useEffect(() => { refresh(); refreshTemplates(); refreshMedia(); }, [refresh, refreshTemplates, refreshMedia]);
 
   // Show at most 4 builtin templates on dashboard
   const featuredTemplates = templates.filter((t) => t.builtin).slice(0, 4);
@@ -51,6 +53,7 @@ export const Dashboard: React.FC = () => {
         <StatCard icon={<FolderOpen size={17} />} iconClass="primary" value={String(projects.length)} label="Projetos salvos" />
         <StatCard icon={<Video size={17} />} iconClass="success" value="0" label="Vídeos exportados" />
         <StatCard icon={<LayoutTemplate size={17} />} iconClass="warning" value={String(templates.length)} label="Templates disponíveis" />
+        <StatCard icon={<HardDrive size={17} />} iconClass="info" value={String(assets.length)} label="Mídias no catálogo" />
       </motion.div>
 
       {/* Templates */}
@@ -181,7 +184,7 @@ const ProjectCard: React.FC<{ project: ProjectMeta; onRefresh: () => void }> = (
 
 /* ---- Static sub-components ---- */
 
-const StatCard: React.FC<{ icon: React.ReactNode; iconClass: "primary" | "success" | "warning"; value: string; label: string }> = ({ icon, iconClass, value, label }) => (
+const StatCard: React.FC<{ icon: React.ReactNode; iconClass: "primary" | "success" | "warning" | "info"; value: string; label: string }> = ({ icon, iconClass, value, label }) => (
   <div className="vt-dash__stat-card">
     <div className={`vt-dash__stat-icon vt-dash__stat-icon--${iconClass}`}>{icon}</div>
     <div className="vt-dash__stat-value">{value}</div>

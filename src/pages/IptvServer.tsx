@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { AlertTriangle, CalendarClock, Check, Copy, List, Radio, Tv2 } from "lucide-react";
+import { AlertTriangle, CalendarClock, Check, Copy, Film, List, Radio, Tv2 } from "lucide-react";
 import { Button, Field, SelectField } from "../design-system/components";
 import { useChannelStore } from "../store/useChannelStore";
 import { useIptvStore } from "../store/useIptvStore";
+import { getCurrentAsset } from "../lib/programmingEngine";
 import { toast } from "../store/useToastStore";
+import type { Channel } from "../types/channel";
 import "../styles/pages/IptvServer.css";
 
 export const IptvServer: React.FC = () => {
@@ -11,14 +13,21 @@ export const IptvServer: React.FC = () => {
   const { status, refresh: refreshStatus, start, stop, setIp } = useIptvStore();
   const [toggling, setToggling] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [now, setNow] = useState(new Date());
 
   useEffect(() => {
     refreshChannels();
     refreshStatus();
   }, [refreshChannels, refreshStatus]);
 
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const activeChannels = channels.filter((c) => c.enabled).length;
   const playlistChannels = channels.filter((c) => c.playlist?.length > 0).length;
+  const channelsWithRules = channels.filter((c) => (c.rules?.length ?? 0) > 0).length;
   const primaryIp = status.selectedIp;
   const m3uUrl = `http://${primaryIp}:${status.port}/playlist.m3u`;
   const epgUrl = `http://${primaryIp}:${status.port}/epg.xml`;
@@ -131,11 +140,21 @@ export const IptvServer: React.FC = () => {
           <div className="vt-iptv__stat-value">{channels.length}</div>
         </div>
         <div className="vt-iptv__stat-card">
-          <div className="vt-iptv__stat-icon"><Tv2 size={18} /></div>
+          <div className="vt-iptv__stat-icon"><List size={18} /></div>
           <div className="vt-iptv__stat-label">Com playlist</div>
           <div className="vt-iptv__stat-value">{playlistChannels}</div>
         </div>
+        <div className="vt-iptv__stat-card">
+          <div className="vt-iptv__stat-icon"><CalendarClock size={18} /></div>
+          <div className="vt-iptv__stat-label">Com programação</div>
+          <div className="vt-iptv__stat-value">{channelsWithRules}</div>
+        </div>
       </div>
+
+      {/* Programming status */}
+      {channels.length > 0 && (
+        <ProgrammingStatus channels={channels} now={now} />
+      )}
 
       {/* Endpoints */}
       <div className="vt-iptv__endpoints">
@@ -198,6 +217,45 @@ export const IptvServer: React.FC = () => {
           </div>
         </>
       )}
+    </div>
+  );
+};
+
+/* ---- Programming Status ---- */
+
+const ProgrammingStatus: React.FC<{ channels: Channel[]; now: Date }> = ({ channels, now }) => {
+  const timeStr = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <div className="vt-iptv__prog">
+      <div className="vt-iptv__prog-header">
+        <CalendarClock size={16} />
+        <span className="vt-iptv__prog-title">Programação agora</span>
+        <span className="vt-iptv__prog-time">{timeStr}</span>
+      </div>
+      <div className="vt-iptv__prog-list">
+        {channels.map((ch) => {
+          const asset = getCurrentAsset(ch, now);
+          const fromRule = asset != null && (ch.rules ?? []).some((r) => r.assetFilename === asset);
+          const assetName = fromRule
+            ? ch.rules!.find((r) => r.assetFilename === asset)?.assetName ?? asset
+            : ch.playlist.find((p) => p.filename === asset)?.name ?? asset ?? "—";
+
+          return (
+            <div key={ch.id} className="vt-iptv__prog-row">
+              <div className={`vt-iptv__prog-dot ${ch.enabled ? "vt-iptv__prog-dot--on" : ""}`} />
+              <span className="vt-iptv__prog-channel">{ch.name}</span>
+              <div className="vt-iptv__prog-asset">
+                <Film size={11} />
+                <span>{assetName ?? "Sem playlist"}</span>
+              </div>
+              {fromRule && (
+                <span className="vt-iptv__prog-rule-badge">Regra</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

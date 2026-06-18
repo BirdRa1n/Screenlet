@@ -1,3 +1,5 @@
+import type { ProgrammingRule } from "./programming";
+
 export type TransitionType = "cut" | "fade";
 
 export type PlaylistItem = {
@@ -15,6 +17,7 @@ export type Channel = {
   enabled: boolean;
   playlist: PlaylistItem[];
   loop: boolean;
+  rules?: ProgrammingRule[];  // optional time-based scheduling rules
   createdAt: string;
   updatedAt: string;
 };

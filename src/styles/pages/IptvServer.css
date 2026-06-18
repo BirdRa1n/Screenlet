@@ -289,6 +289,104 @@
   white-space: nowrap;
 }
 
+/* ---- Programming status ---- */
+
+.vt-iptv__prog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.vt-iptv__prog-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.vt-iptv__prog-title {
+  flex: 1;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.vt-iptv__prog-time {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  font-family: monospace;
+}
+
+.vt-iptv__prog-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.vt-iptv__prog-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-body);
+}
+
+.vt-iptv__prog-row:last-child {
+  border-bottom: none;
+}
+
+.vt-iptv__prog-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  flex-shrink: 0;
+}
+
+.vt-iptv__prog-dot--on {
+  background: var(--success-400);
+}
+
+.vt-iptv__prog-channel {
+  min-width: 140px;
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vt-iptv__prog-asset {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-tertiary);
+  min-width: 0;
+}
+
+.vt-iptv__prog-asset span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vt-iptv__prog-rule-badge {
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--primary-500) 15%, transparent);
+  color: var(--primary-400);
+  border: 1px solid color-mix(in srgb, var(--primary-500) 30%, transparent);
+  white-space: nowrap;
+}
+
 .vt-iptv__coming-soon {
   background: var(--surface);
   border: 1px dashed var(--border-strong);

@@ -13,7 +13,6 @@ import {
   Copy,
   Eye,
   Layers,
-  Upload,
   AlignCenter,
   AlignHorizontalJustifyCenter,
   AlignVerticalJustifyCenter,
@@ -23,6 +22,7 @@ import {
   AlignEndHorizontal,
 } from "lucide-react";
 import { Button, IconButton } from "../design-system/components";
+import { MediaPickerDialog } from "../components/media/MediaPicker";
 import { CanvasEditor } from "../components/builder/CanvasEditor";
 import { Timeline } from "../components/builder/Timeline";
 import { TemplateRenderer } from "../remotion/TemplateRenderer";
@@ -873,20 +873,16 @@ const BadgeLayerProps: React.FC<{ layer: BadgeLayer; onChange: (p: Partial<Templ
 };
 
 const ImageLayerProps: React.FC<{ layer: ImageLayer; onChange: (p: Partial<TemplateLayer>) => void }> = ({ layer, onChange }) => {
+  const [pickerOpen, setPickerOpen] = React.useState(false);
   const displaySrc = layer.src && !layer.src.startsWith("{{")
     ? (layer.src.startsWith("http") ? layer.src : staticFile(layer.src))
     : null;
-
-  const handleUpload = async () => {
-    const path = await window.adFrame.selectImage();
-    if (path) onChange({ src: path } as Partial<ImageLayer>);
-  };
 
   return (
     <div>
       <div className="vt-tb__section-title">Imagem</div>
 
-      {/* Thumbnail + upload */}
+      {/* Thumbnail + pick */}
       <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
         <div style={{
           width: 72, height: 72, borderRadius: 6, border: "1px solid var(--border)",
@@ -902,14 +898,14 @@ const ImageLayerProps: React.FC<{ layer: ImageLayer; onChange: (p: Partial<Templ
         </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
           <button
-            onClick={handleUpload}
+            onClick={() => setPickerOpen(true)}
             style={{
               display: "flex", alignItems: "center", gap: 6, padding: "7px 10px",
               borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)",
               color: "var(--text-primary)", fontSize: 12, cursor: "pointer", fontWeight: 500,
             }}
           >
-            <Upload size={13} />
+            <Image size={13} />
             {layer.src ? "Trocar imagem" : "Selecionar imagem"}
           </button>
           {layer.src && (
@@ -919,6 +915,14 @@ const ImageLayerProps: React.FC<{ layer: ImageLayer; onChange: (p: Partial<Templ
           )}
         </div>
       </div>
+
+      <MediaPickerDialog
+        open={pickerOpen}
+        accept="image"
+        currentValue={layer.src}
+        onSelect={(path) => { onChange({ src: path } as Partial<ImageLayer>); setPickerOpen(false); }}
+        onClose={() => setPickerOpen(false)}
+      />
 
       {/* Variable hint */}
       <div className="vt-tb__field-row">

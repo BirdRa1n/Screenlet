@@ -10,10 +10,10 @@ import {
   Monitor,
   Square,
   Smartphone,
-  Upload,
   ImageIcon,
 } from "lucide-react";
 import { Button, IconButton } from "../design-system/components";
+import { MediaPickerDialog } from "../components/media/MediaPicker";
 import { TemplateRenderer } from "../remotion/TemplateRenderer";
 import { templateTotalFrames } from "../remotion/template-utils";
 import { useTemplateInstanceStore } from "../store/useTemplateInstanceStore";
@@ -283,11 +283,7 @@ const ImageVarField: React.FC<{
   value: string;
   onChange: (v: string) => void;
 }> = ({ variable, value, onChange }) => {
-  const handleUpload = async () => {
-    const path = await window.adFrame.selectImage();
-    if (path) onChange(path);
-  };
-
+  const [pickerOpen, setPickerOpen] = React.useState(false);
   const displaySrc = value ? (value.startsWith("http") ? value : staticFile(value)) : null;
 
   return (
@@ -297,22 +293,33 @@ const ImageVarField: React.FC<{
         {variable.required && <span className="vt-twiz__var-required">*</span>}
       </label>
       <div className="vt-twiz__var-upload">
-        {displaySrc ? (
-          <img src={displaySrc} className="vt-twiz__var-thumb" alt={variable.label} onError={(e) => (e.currentTarget.style.display = "none")} />
-        ) : (
-          <div className="vt-twiz__var-thumb-placeholder">
-            <ImageIcon size={16} />
-          </div>
-        )}
-        <Button variant="secondary" size="sm" icon={<Upload size={13} />} onClick={handleUpload}>
-          {value ? "Trocar" : "Selecionar"}
-        </Button>
+        <button
+          type="button"
+          className="vt-twiz__var-thumb-btn"
+          onClick={() => setPickerOpen(true)}
+        >
+          {displaySrc ? (
+            <img src={displaySrc} className="vt-twiz__var-thumb" alt={variable.label} onError={(e) => (e.currentTarget.style.display = "none")} />
+          ) : (
+            <div className="vt-twiz__var-thumb-placeholder">
+              <ImageIcon size={16} />
+            </div>
+          )}
+          <div className="vt-twiz__var-thumb-overlay">Alterar</div>
+        </button>
         {value && (
           <span style={{ fontSize: 11, color: "var(--text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
             {value.split("/").pop()}
           </span>
         )}
       </div>
+      <MediaPickerDialog
+        open={pickerOpen}
+        accept="image"
+        currentValue={value}
+        onSelect={(path) => { onChange(path); setPickerOpen(false); }}
+        onClose={() => setPickerOpen(false)}
+      />
     </div>
   );
 };
