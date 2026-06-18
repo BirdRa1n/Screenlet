@@ -11,6 +11,18 @@
   -webkit-app-region: drag;
 }
 
+/* On Windows the native ─ □ ✕ overlay is painted over the right side of the header.
+   Two layers of protection:
+   1. env(titlebar-area-width) — set by Electron's titleBarOverlay; 100vw-that = controls width.
+   2. --win-controls-w (152px) — set from JS in main.tsx as a first-render fallback.
+   max() picks the larger of the two so neither is ignored. */
+html[data-platform="win32"] .vt-header {
+  padding-right: max(
+    var(--space-6),
+    calc(max(var(--win-controls-w, 0px), 100vw - env(titlebar-area-width, 100vw)) + var(--space-3))
+  );
+}
+
 /* All interactive elements must opt out of drag */
 .vt-header button,
 .vt-header a,
