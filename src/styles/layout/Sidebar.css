@@ -156,6 +156,29 @@
   gap: 2px;
 }
 
+.vt-sidebar__nav-section {
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: var(--space-3) 10px var(--space-1);
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity var(--duration-base) var(--ease-standard),
+    height var(--duration-base) var(--ease-standard),
+    padding var(--duration-base) var(--ease-standard);
+}
+
+.vt-sidebar--collapsed .vt-sidebar__nav-section {
+  opacity: 0;
+  height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  pointer-events: none;
+}
+
 .vt-sidebar__nav-divider {
   height: 1px;
   background: var(--border);

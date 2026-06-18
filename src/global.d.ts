@@ -41,6 +41,21 @@ declare global {
       librarySave: (product: import("./store/useLibraryStore").LibraryProduct) => Promise<void>;
       libraryDelete: (id: string) => Promise<void>;
 
+      // Channels
+      channelList: () => Promise<import("./types/channel").Channel[]>;
+      channelSave: (channel: import("./types/channel").Channel) => Promise<void>;
+      channelDelete: (id: string) => Promise<void>;
+
+      // Schedules
+      scheduleList: () => Promise<import("./types/schedule").Schedule[]>;
+      scheduleSave: (schedule: import("./types/schedule").Schedule) => Promise<void>;
+      scheduleDelete: (id: string) => Promise<void>;
+
+      // IPTV Server
+      iptvStatus: () => Promise<import("./store/useIptvStore").IptvStatus>;
+      iptvStart: () => Promise<import("./store/useIptvStore").IptvStatus>;
+      iptvStop: () => Promise<import("./store/useIptvStore").IptvStatus>;
+
       // Export
       exportVideo: (config: unknown, suggestedName?: string) => Promise<ExportResult>;
       onExportProgress: (callback: (data: ExportProgress) => void) => () => void;

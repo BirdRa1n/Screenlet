@@ -24,6 +24,21 @@ contextBridge.exposeInMainWorld("adFrame", {
   librarySave: (product) => ipcRenderer.invoke("library-save", product),
   libraryDelete: (id) => ipcRenderer.invoke("library-delete", id),
 
+  // Channels
+  channelList: () => ipcRenderer.invoke("channel-list"),
+  channelSave: (channel) => ipcRenderer.invoke("channel-save", channel),
+  channelDelete: (id) => ipcRenderer.invoke("channel-delete", id),
+
+  // Schedules
+  scheduleList: () => ipcRenderer.invoke("schedule-list"),
+  scheduleSave: (schedule) => ipcRenderer.invoke("schedule-save", schedule),
+  scheduleDelete: (id) => ipcRenderer.invoke("schedule-delete", id),
+
+  // IPTV Server
+  iptvStatus: () => ipcRenderer.invoke("iptv-status"),
+  iptvStart: () => ipcRenderer.invoke("iptv-start"),
+  iptvStop: () => ipcRenderer.invoke("iptv-stop"),
+
   // Export
   exportVideo: (config, suggestedName) =>
     ipcRenderer.invoke("export-video", config, suggestedName),
