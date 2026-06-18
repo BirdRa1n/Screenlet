@@ -57,11 +57,18 @@ Vite dev server has a `serve-user-uploads` plugin (in `vite.config.ts`) that pro
 ### Routing
 Single-page with Zustand-driven navigation. `Page` type in `src/store/useNavigationStore.ts`:
 ```ts
-"dashboard" | "wizard" | "editor" | "projects" | "library" | "renders"
+"dashboard" | "wizard" | "editor" | "projects" | "library" | "media-hub" | "renders"
 | "templates" | "template-builder" | "template-wizard"
 | "channels" | "iptv" | "settings"
 ```
 `navigateToBuilder(templateId?)` opens the template builder for a new or existing template.
+
+### Media Hub (`src/pages/MediaHub.tsx`)
+Catalogs all uploaded assets (images + videos) in `UPLOADS_DIR`. The catalog is persisted at `UPLOADS_DIR/media-catalog.json`. Key behaviors:
+- **Auto-discovery**: `media-catalog` IPC scans `UPLOADS_DIR` on every call and adds un-cataloged files automatically — existing uploads from before Media Hub exist appear without any migration.
+- **SHA-256 dedup**: `media-import` computes a SHA-256 hash before copying; if the same file was already imported it returns the existing asset without duplicating.
+- **Non-destructive delete**: removing an asset from the catalog only removes the catalog entry; the physical file is preserved so existing `image: "uploads/xxx"` references in projects still work.
+- **`MediaPicker` component** (`src/components/media/MediaPicker.tsx`): shared picker used in `InspectorPanel` (ProductInspector image field). Opens a dialog showing the catalog grid + "Import file" button. Replaces `UploadZone` for choosing product images.
 
 ### State (Zustand stores)
 - **`useAdStore`** — Full ad config + selected scene ID + `seekFrame` + `currentProjectName`. Key actions: `addProductScene`, `addLogoScene`, `addTemplateScene`, `addVideoScene`, `updateScene`, `reorderScenes`, `seekToScene`, `loadConfig`, `setCurrentProjectName`.
@@ -71,6 +78,7 @@ Single-page with Zustand-driven navigation. `Page` type in `src/store/useNavigat
 - **`useNavigationStore`** — Current page + `editingTemplateId` + sidebar collapsed state.
 - **`useThemeStore`** — `"dark" | "light" | "system"`. System mode listens to `prefers-color-scheme` in real time. `applyTheme()` also calls `window.adFrame.setTitleBarTheme(isDark)` to sync the Windows titlebar overlay color.
 - **`useLibraryStore`** — Product library CRUD, synced with IPC.
+- **`useMediaStore`** — Media catalog CRUD. `refresh()` calls `media-catalog` IPC which scans `UPLOADS_DIR` for new files and returns `MediaAsset[]`. `importAsset(type)` opens a file dialog with SHA-256 dedup and adds to catalog. `removeAsset(id)` removes from catalog only (does NOT delete the physical file to preserve compatibility).
 - **`useProjectsStore`** — Projects CRUD, synced with IPC.
 - **`useChannelStore`** — Channels CRUD, synced with IPC.
 - **`useIptvStore`** — IPTV server status (`running`, `port`, `ips[]`, `selectedIp`, `ffmpegAvailable`). `setIp(ip)` persists the preferred network interface to `userData/iptv-config.json`. `getLocalIPs()` in main sorts IPs: `192.168.x.x` → `10.x.x.x` → `172.16-31.x.x` → VPN/Tailscale last.
@@ -110,6 +118,7 @@ The Studio (`src/pages/Studio.tsx`) is a fixed full-screen overlay (`z-index: 20
 - **`src/styles/tokens.css`** — Single source of truth for all CSS custom properties.
 - **`src/styles/`** — All CSS under `components/`, `layout/`, `pages/`. **No CSS files alongside `.tsx`.**
 - **`src/design-system/components/`** — `Button`, `IconButton` (variants: `"default" | "danger"` — **NOT "ghost"**), `Field`/`TextField`/`SelectField`/`ColorField`/`Checkbox`, `Card`, `Dialog`, `ProgressBar`, `Tabs`, `Toast`, `Tooltip`, `UploadZone`, `ContextMenu`. All exported from `index.ts`.
+- **`src/components/media/MediaPicker.tsx`** — shared media picker component. Not part of the design system; lives alongside other feature components.
 - Never hardcode color values — always use semantic tokens (`--input-bg`, `--text-primary`, etc.).
 
 ### Layout (Editor)
@@ -178,3 +187,5 @@ Serves app bundle assets using `fs.readFileSync` (handles `.asar` if ever re-ena
 - `titleBarStyle: "hiddenInset"` and `trafficLightPosition` are macOS-only — always guard with `process.platform === "darwin"` in `main.cjs`.
 - `ExportResult` type is `{ ok: true; filename: string } | { ok: false; error: string }` — not `{ canceled: boolean }`.
 - `Page` type does NOT include `"schedules"` or `"schedule-builder"` — those pages were removed.
+- `media-delete` IPC removes the asset from the catalog only, not from disk — physical files must remain to avoid breaking existing project references (`image: "uploads/xxx"`).
+- `media-catalog` auto-syncs: it calls `syncMediaCatalog()` which scans `UPLOADS_DIR` on every call. Any file placed in uploads outside the IPC (e.g. via `copyFile` / `selectImage`) will appear in Media Hub automatically on next load.

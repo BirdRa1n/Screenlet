@@ -49,6 +49,11 @@ contextBridge.exposeInMainWorld("adFrame", {
     return () => ipcRenderer.removeListener("export-progress", listener);
   },
 
+  // Media catalog
+  mediaCatalog: () => ipcRenderer.invoke("media-catalog"),
+  mediaImport: (type) => ipcRenderer.invoke("media-import", type),
+  mediaDelete: (id) => ipcRenderer.invoke("media-delete", id),
+
   // Platform info
   platform: process.platform,
   setTitleBarTheme: (isDark) => ipcRenderer.invoke("set-titlebar-theme", isDark),

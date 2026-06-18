@@ -61,6 +61,11 @@ declare global {
       exportVideo: (config: unknown, suggestedName: string, fps: 30 | 60) => Promise<ExportResult>;
       onExportProgress: (callback: (data: ExportProgress) => void) => () => void;
 
+      // Media catalog
+      mediaCatalog: () => Promise<import("./types/media").MediaAsset[]>;
+      mediaImport: (type?: "image" | "video") => Promise<import("./types/media").MediaAsset | null>;
+      mediaDelete: (id: string) => Promise<void>;
+
       // IPTV Server
       iptvStatus: () => Promise<import("./store/useIptvStore").IptvStatus>;
       iptvStart: () => Promise<import("./store/useIptvStore").IptvStatus>;

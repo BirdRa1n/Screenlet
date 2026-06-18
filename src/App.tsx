@@ -14,6 +14,7 @@ import { InspectorPanel } from "./layout/InspectorPanel";
 import { Dashboard } from "./pages/Dashboard";
 import { Projects } from "./pages/Projects";
 import { Library } from "./pages/Library";
+import { MediaHub } from "./pages/MediaHub";
 import { Wizard } from "./pages/Wizard";
 import { Settings } from "./pages/Settings";
 import { Templates } from "./pages/Templates";
@@ -136,6 +137,11 @@ export default function App() {
           {page === "library" && (
             <motion.div key="library" className="vt-app__main" {...pageVariants}>
               <Library />
+            </motion.div>
+          )}
+          {page === "media-hub" && (
+            <motion.div key="media-hub" className="vt-app__main" {...pageVariants}>
+              <MediaHub />
             </motion.div>
           )}
           {page === "renders" && (

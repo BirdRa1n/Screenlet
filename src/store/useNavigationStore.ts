@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 export type Page =
   | "dashboard" | "wizard" | "editor"
-  | "projects" | "library" | "templates" | "template-builder" | "template-wizard"
+  | "projects" | "library" | "media-hub" | "templates" | "template-builder" | "template-wizard"
   | "renders"
   | "channels"
   | "iptv" | "settings";

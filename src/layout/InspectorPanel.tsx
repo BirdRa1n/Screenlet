@@ -8,7 +8,6 @@ import {
   SelectField,
   Tabs,
   TextField,
-  UploadZone,
 } from "../design-system/components";
 import {
   logoCornerLabels,
@@ -19,6 +18,7 @@ import {
   type VideoSceneConfig,
 } from "../remotion/types";
 import { useTemplateStore } from "../store/useTemplateStore";
+import { MediaPicker } from "../components/media/MediaPicker";
 import "../styles/layout/InspectorPanel.css";
 
 const PRODUCT_TABS = [
@@ -231,13 +231,11 @@ const ProductInspector: React.FC<{
         {active === "content" && (
           <>
             <Field label="Imagem do produto">
-              <UploadZone
+              <MediaPicker
                 value={scene.image}
-                onUpload={(path) => onChange({ ...scene, image: path })}
-                label="Clique ou arraste a imagem"
-                hint="PNG sem fundo recomendado"
+                onChange={(path) => onChange({ ...scene, image: path })}
+                accept="image"
                 height={130}
-                previewFit="contain"
               />
             </Field>
 

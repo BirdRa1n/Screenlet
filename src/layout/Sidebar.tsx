@@ -4,6 +4,7 @@ import {
   ChevronRight,
   Film,
   FolderOpen,
+  HardDrive,
   Images,
   LayoutGrid,
   LayoutTemplate,
@@ -25,7 +26,8 @@ const NAV_CONTENT: NavItem[] = [
   { icon: <LayoutGrid size={16} />, label: "Dashboard", page: "dashboard" },
   { icon: <FolderOpen size={16} />, label: "Projetos", page: "projects" },
   { icon: <LayoutTemplate size={16} />, label: "Templates", page: "templates" },
-  { icon: <Images size={16} />, label: "Biblioteca", page: "library" },
+  { icon: <HardDrive size={16} />, label: "Media Hub", page: "media-hub" },
+  { icon: <Images size={16} />, label: "Produtos", page: "library" },
   { icon: <Film size={16} />, label: "Vídeos", page: "renders" },
 ];
 

@@ -386,6 +386,133 @@ ipcMain.handle("channel-delete", (_event, id) => {
   if (fs.existsSync(file)) fs.unlinkSync(file);
 });
 
+/* ---- Media catalog ---- */
+
+const MEDIA_CATALOG_FILE = path.join(UPLOADS_DIR, "media-catalog.json");
+const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
+const VIDEO_MEDIA_EXTS = [".mp4", ".webm", ".mov", ".mkv"];
+const ALL_MEDIA_EXTS = [...IMAGE_EXTS, ...VIDEO_MEDIA_EXTS];
+
+function loadMediaCatalog() {
+  try {
+    if (fs.existsSync(MEDIA_CATALOG_FILE)) {
+      return JSON.parse(fs.readFileSync(MEDIA_CATALOG_FILE, "utf8"));
+    }
+  } catch {}
+  return { version: 1, assets: [] };
+}
+
+function saveMediaCatalog(catalog) {
+  ensureDir(UPLOADS_DIR);
+  fs.writeFileSync(MEDIA_CATALOG_FILE, JSON.stringify(catalog, null, 2));
+}
+
+function guessMediaType(filename) {
+  const ext = path.extname(filename).toLowerCase();
+  return VIDEO_MEDIA_EXTS.includes(ext) ? "video" : "image";
+}
+
+function computeSha256(filePath) {
+  try {
+    const hash = crypto.createHash("sha256");
+    hash.update(fs.readFileSync(filePath));
+    return hash.digest("hex");
+  } catch {
+    return undefined;
+  }
+}
+
+// Scan UPLOADS_DIR and add any un-cataloged files automatically
+function syncMediaCatalog() {
+  ensureDir(UPLOADS_DIR);
+  const catalog = loadMediaCatalog();
+  const knownFilenames = new Set(catalog.assets.map((a) => a.filename));
+
+  let changed = false;
+  try {
+    const files = fs.readdirSync(UPLOADS_DIR).filter((f) => {
+      const ext = path.extname(f).toLowerCase();
+      return ALL_MEDIA_EXTS.includes(ext) && !f.startsWith(".");
+    });
+
+    for (const filename of files) {
+      const uploadPath = `uploads/${filename}`;
+      if (knownFilenames.has(uploadPath)) continue;
+      const fullPath = path.join(UPLOADS_DIR, filename);
+      try {
+        const stat = fs.statSync(fullPath);
+        catalog.assets.push({
+          id: crypto.randomUUID(),
+          filename: uploadPath,
+          originalName: filename,
+          type: guessMediaType(filename),
+          size: stat.size,
+          importedAt: (stat.birthtime || stat.mtime).toISOString(),
+        });
+        changed = true;
+      } catch {}
+    }
+  } catch {}
+
+  if (changed) saveMediaCatalog(catalog);
+  return catalog.assets.sort((a, b) => new Date(b.importedAt) - new Date(a.importedAt));
+}
+
+ipcMain.handle("media-catalog", () => {
+  return syncMediaCatalog();
+});
+
+ipcMain.handle("media-import", async (_event, type = "image") => {
+  const isVideo = type === "video";
+  const filters = isVideo
+    ? [{ name: "Vídeos", extensions: ["mp4", "webm", "mov", "mkv"] }]
+    : [{ name: "Imagens", extensions: ["png", "jpg", "jpeg", "webp"] }];
+
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: isVideo ? "Importar vídeo" : "Importar imagem",
+    properties: ["openFile"],
+    filters,
+  });
+
+  if (result.canceled || result.filePaths.length === 0) return null;
+
+  const srcPath = result.filePaths[0];
+  const sha256 = computeSha256(srcPath);
+
+  const catalog = loadMediaCatalog();
+
+  // Dedup: return existing asset if same file was already imported
+  if (sha256) {
+    const existing = catalog.assets.find((a) => a.sha256 === sha256);
+    if (existing) return existing;
+  }
+
+  const uploadPath = copyIntoUploads(srcPath);
+  const fullPath = path.join(UPLOADS_DIR, path.basename(uploadPath));
+  let size = 0;
+  try { size = fs.statSync(fullPath).size; } catch {}
+
+  const asset = {
+    id: crypto.randomUUID(),
+    filename: uploadPath,
+    originalName: path.basename(srcPath),
+    type: isVideo ? "video" : "image",
+    size,
+    sha256,
+    importedAt: new Date().toISOString(),
+  };
+
+  catalog.assets.push(asset);
+  saveMediaCatalog(catalog);
+  return asset;
+});
+
+ipcMain.handle("media-delete", (_event, id) => {
+  const catalog = loadMediaCatalog();
+  catalog.assets = catalog.assets.filter((a) => a.id !== id);
+  saveMediaCatalog(catalog);
+});
+
 /* ---- Schedules ---- */
 
 const SCHEDULES_DIR = path.join(SCREENLET_DIR, "schedules");
