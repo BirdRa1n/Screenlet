@@ -45,8 +45,8 @@
   flex-direction: column;
   gap: 2px;
   padding: var(--space-3) var(--space-4);
-  background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   min-width: 90px;
 }
@@ -86,19 +86,19 @@
   font-weight: 500;
   color: var(--text-secondary);
   background: transparent;
-  border: 1.5px solid var(--border-subtle);
+  border: 1.5px solid var(--border);
   cursor: pointer;
   transition: all 0.12s;
 }
 
 .vt-mediahub__filter:hover {
   color: var(--text-primary);
-  border-color: var(--border-default);
+  border-color: var(--border-strong);
 }
 
 .vt-mediahub__filter--active {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
+  background: var(--primary-500);
+  border-color: var(--primary-500);
   color: #fff;
 }
 
@@ -122,7 +122,7 @@
   height: 34px;
   padding: 0 var(--space-3) 0 calc(var(--space-3) + 20px);
   background: var(--input-bg);
-  border: 1.5px solid var(--border-subtle);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 13px;
@@ -131,7 +131,7 @@
 }
 
 .vt-mediahub__search:focus {
-  border-color: var(--accent-primary);
+  border-color: var(--primary-500);
 }
 
 /* Empty state */
@@ -154,7 +154,7 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full);
-  background: var(--surface-1);
+  background: var(--surface-raised);
   color: var(--text-tertiary);
 }
 
@@ -185,15 +185,15 @@
 .vt-mediahub__card {
   display: flex;
   flex-direction: column;
-  background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
   transition: border-color 0.12s, box-shadow 0.12s;
 }
 
 .vt-mediahub__card:hover {
-  border-color: var(--border-default);
+  border-color: var(--border-strong);
   box-shadow: var(--shadow-sm);
 }
 
@@ -229,8 +229,8 @@
 }
 
 .vt-mediahub__card-badge--image {
-  background: color-mix(in srgb, var(--accent-primary) 20%, transparent);
-  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--primary-500) 20%, transparent);
+  color: var(--primary-400);
 }
 
 .vt-mediahub__card-badge--video {

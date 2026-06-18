@@ -536,7 +536,7 @@
 }
 
 .vt-prog-form__day--active {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
+  background: var(--primary-500);
+  border-color: var(--primary-500);
   color: #fff;
 }
