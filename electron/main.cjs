@@ -357,6 +357,7 @@ ipcMain.handle("export-video", async (_event, payload, suggestedName) => {
     composition: { ...composition, durationInFrames, width, height },
     serveUrl: bundleLocation,
     codec: "h264",
+    hardwareAcceleration: "if-possible",
     outputLocation: saveResult.filePath,
     inputProps,
     onProgress: ({ progress }) => {
