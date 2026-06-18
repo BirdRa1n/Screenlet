@@ -81,6 +81,11 @@
   height: 0;
 }
 
+/* Traffic zone is only needed on macOS where traffic lights overlap the sidebar */
+html:not([data-platform="darwin"]) .vt-sidebar__brand-trafficzone {
+  display: none;
+}
+
 .vt-sidebar--collapsed .vt-sidebar__brand-content {
   justify-content: center;
   padding: 0;

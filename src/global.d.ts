@@ -67,6 +67,9 @@ declare global {
       iptvStop: () => Promise<import("./store/useIptvStore").IptvStatus>;
       iptvSetIp: (ip: string) => Promise<import("./store/useIptvStore").IptvStatus>;
 
+      // Platform info
+      platform: NodeJS.Platform;
+
       // Storage location
       storageGetDir: () => Promise<string>;
       storageChooseDir: () => Promise<string | null>;

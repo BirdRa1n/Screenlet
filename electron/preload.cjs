@@ -49,6 +49,9 @@ contextBridge.exposeInMainWorld("adFrame", {
     return () => ipcRenderer.removeListener("export-progress", listener);
   },
 
+  // Platform info
+  platform: process.platform,
+
   // Storage location
   storageGetDir: () => ipcRenderer.invoke("storage-get-dir"),
   storageChooseDir: () => ipcRenderer.invoke("storage-choose-dir"),

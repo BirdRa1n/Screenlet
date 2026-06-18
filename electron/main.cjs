@@ -105,11 +105,16 @@ function copyIntoUploads(srcPath) {
 let mainWindow;
 
 function createWindow() {
+  const isMac = process.platform === "darwin";
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 960,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 14, y: 10 },
+    // macOS: custom inset title bar with traffic lights over the sidebar header.
+    // Windows/Linux: hidden title bar with a native overlay that keeps ─ □ ✕ controls.
+    ...(isMac
+      ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 14, y: 10 } }
+      : { titleBarStyle: "hidden", titleBarOverlay: { height: 36 }, autoHideMenuBar: true }),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
