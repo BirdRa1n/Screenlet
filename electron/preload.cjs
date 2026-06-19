@@ -68,7 +68,9 @@ contextBridge.exposeInMainWorld("adFrame", {
   deviceList: () => ipcRenderer.invoke("device-list"),
   deviceSave: (device) => ipcRenderer.invoke("device-save", device),
   deviceDelete: (id) => ipcRenderer.invoke("device-delete", id),
-  kodiPing: (device) => ipcRenderer.invoke("kodi-ping", device),
-  kodiListChannels: (device) => ipcRenderer.invoke("kodi-list-channels", device),
-  kodiRestartAndOpen: (device) => ipcRenderer.invoke("kodi-restart-and-open", device),
+  // Ping and restart use deviceId only — passwords stay in main process.
+  kodiPing: (deviceId) => ipcRenderer.invoke("kodi-ping", deviceId),
+  kodiRestartAndOpen: (deviceId) => ipcRenderer.invoke("kodi-restart-and-open", deviceId),
+  // Channel list accepts temp creds from form (device not yet saved).
+  kodiListChannels: (creds) => ipcRenderer.invoke("kodi-list-channels", creds),
 });

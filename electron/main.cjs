@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, protocol, net, globalShortcut, shell, nativeTheme } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, protocol, net, globalShortcut, shell, nativeTheme, safeStorage } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -365,48 +365,97 @@ ipcMain.handle("template-delete", (_event, id) => {
 const CHANNELS_DIR = path.join(SCREENLET_DIR, "channels");
 const DEVICES_FILE = path.join(SCREENLET_DIR, "devices.json");
 
-function readDevices() {
+// ── Credential encryption (safeStorage → OS Keychain / DPAPI / Secret Service) ──
+//
+// Passwords are NEVER stored in plaintext. Each password is encrypted with
+// safeStorage.encryptString() before hitting disk and decrypted only inside
+// the main process, immediately before use. The renderer never sees passwords.
+//
+// On macOS  → AES-256-GCM key stored in Keychain under "Electron Safe Storage"
+// On Windows → DPAPI (per-user encryption tied to the Windows login session)
+// On Linux  → libsecret (GNOME Keyring / KWallet) with plaintext fallback only
+//              when no secret service is available (logged as a warning).
+
+function encryptPwd(plaintext) {
+  if (!plaintext) return null;
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error("safeStorage indisponível: não é possível armazenar senhas de forma segura neste sistema.");
+  }
+  return safeStorage.encryptString(plaintext).toString("base64");
+}
+
+function decryptPwd(b64) {
+  if (!b64) return "";
+  try {
+    return safeStorage.decryptString(Buffer.from(b64, "base64"));
+  } catch {
+    // Encrypted blob is unreadable (key rotation, different user session, etc.)
+    return "";
+  }
+}
+
+// Raw records on disk use _enc suffix for encrypted blobs, never plain passwords.
+function readRawDevices() {
   try {
     if (fs.existsSync(DEVICES_FILE)) return JSON.parse(fs.readFileSync(DEVICES_FILE, "utf8"));
   } catch {}
   return [];
 }
 
-function writeDevices(devices) {
+// Returns devices with decrypted passwords — main process only, never IPC.
+function readDevicesWithPasswords() {
+  return readRawDevices().map((d) => ({
+    ...d,
+    sshPassword: decryptPwd(d.sshPassword_enc),
+    kodiHttpPassword: decryptPwd(d.kodiHttpPassword_enc),
+  }));
+}
+
+// Returns devices safe to send to renderer: no passwords, only boolean flags.
+function readDevicesForRenderer() {
+  return readRawDevices().map(({ sshPassword_enc, kodiHttpPassword_enc, ...rest }) => ({
+    ...rest,
+    hasSshPassword: !!sshPassword_enc,
+    hasKodiPassword: !!kodiHttpPassword_enc,
+  }));
+}
+
+// Writes devices to disk, encrypting any plain-text passwords received.
+// Accepts the full device object (sshPassword / kodiHttpPassword) and
+// converts them to encrypted _enc blobs before persisting.
+function persistDevices(devices) {
   ensureDir(SCREENLET_DIR);
-  fs.writeFileSync(DEVICES_FILE, JSON.stringify(devices, null, 2));
+  const toStore = devices.map(({ sshPassword, kodiHttpPassword, hasSshPassword, hasKodiPassword, ...rest }) => {
+    const raw = readRawDevices().find((d) => d.id === rest.id) || {};
+    return {
+      ...rest,
+      // Encrypt if a new value was provided; otherwise keep existing encrypted blob.
+      sshPassword_enc: sshPassword ? encryptPwd(sshPassword) : (raw.sshPassword_enc || null),
+      kodiHttpPassword_enc: kodiHttpPassword ? encryptPwd(kodiHttpPassword) : (raw.kodiHttpPassword_enc || null),
+    };
+  });
+  fs.writeFileSync(DEVICES_FILE, JSON.stringify(toStore, null, 2));
 }
 
 function sshExec(device, command) {
   return new Promise((resolve, reject) => {
     const conn = new SshClient();
     let output = "";
-    const timeout = setTimeout(() => {
-      conn.end();
-      reject(new Error("SSH connection timeout (10s)"));
-    }, 10_000);
-
+    const timer = setTimeout(() => { conn.end(); reject(new Error("SSH timeout (10s)")); }, 10_000);
     conn.on("ready", () => {
       conn.exec(command, (err, stream) => {
-        if (err) { clearTimeout(timeout); conn.end(); reject(err); return; }
+        if (err) { clearTimeout(timer); conn.end(); reject(err); return; }
         stream.on("close", (code) => {
-          clearTimeout(timeout);
-          conn.end();
+          clearTimeout(timer); conn.end();
           if (code === 0) resolve(output);
-          else reject(new Error(`Comando retornou código ${code}: ${output.trim()}`));
+          else reject(new Error(`Código ${code}: ${output.trim()}`));
         });
         stream.on("data", (d) => { output += d.toString(); });
         stream.stderr.on("data", (d) => { output += d.toString(); });
       });
     });
-    conn.on("error", (err) => { clearTimeout(timeout); reject(err); });
-    conn.connect({
-      host: device.ip,
-      port: device.sshPort || 22,
-      username: device.sshUser,
-      password: device.sshPassword,
-      readyTimeout: 10_000,
-    });
+    conn.on("error", (err) => { clearTimeout(timer); reject(err); });
+    conn.connect({ host: device.ip, port: device.sshPort || 22, username: device.sshUser, password: device.sshPassword, readyTimeout: 10_000 });
   });
 }
 
@@ -414,46 +463,32 @@ function kodiRequest(device, method, params) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ jsonrpc: "2.0", method, params: params || {}, id: 1 });
     const auth = Buffer.from(`${device.kodiHttpUser}:${device.kodiHttpPassword}`).toString("base64");
-    const options = {
-      hostname: device.ip,
-      port: device.kodiHttpPort || 8080,
-      path: "/jsonrpc",
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Basic ${auth}`,
-        "Content-Length": Buffer.byteLength(body),
-      },
-      timeout: 6_000,
-    };
-    const req = http.request(options, (res) => {
-      let data = "";
-      res.on("data", (d) => { data += d; });
-      res.on("end", () => {
-        try { resolve(JSON.parse(data)); }
-        catch (e) { reject(new Error(`Resposta inválida do Kodi: ${data.slice(0, 100)}`)); }
-      });
-    });
+    const req = http.request(
+      { hostname: device.ip, port: device.kodiHttpPort || 8080, path: "/jsonrpc", method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Basic ${auth}`, "Content-Length": Buffer.byteLength(body) },
+        timeout: 6_000 },
+      (res) => {
+        let data = "";
+        res.on("data", (d) => { data += d; });
+        res.on("end", () => { try { resolve(JSON.parse(data)); } catch { reject(new Error(`Resposta inválida: ${data.slice(0, 80)}`)); } });
+      }
+    );
     req.on("timeout", () => { req.destroy(); reject(new Error("Timeout — verifique IP e porta do Kodi")); });
     req.on("error", reject);
-    req.write(body);
-    req.end();
+    req.write(body); req.end();
   });
 }
 
 async function kodiRestartAndOpen(device) {
   await sshExec(device, "systemctl restart kodi");
-  console.log(`[kodi] Kodi reiniciado em ${device.name} (${device.ip})`);
+  console.log(`[kodi] reiniciado em ${device.name} (${device.ip})`);
   if (device.kodiChannelId != null) {
-    const delaySecs = device.restartDelaySecs ?? 20;
     setTimeout(async () => {
       try {
         await kodiRequest(device, "Player.Open", { item: { channelid: device.kodiChannelId } });
-        console.log(`[kodi] Canal ${device.kodiChannelId} aberto em ${device.name}`);
-      } catch (err) {
-        console.error(`[kodi] Falha ao abrir canal em ${device.name}:`, err.message);
-      }
-    }, delaySecs * 1000);
+        console.log(`[kodi] canal ${device.kodiChannelId} aberto em ${device.name}`);
+      } catch (err) { console.error(`[kodi] falha ao abrir canal em ${device.name}:`, err.message); }
+    }, (device.restartDelaySecs ?? 20) * 1000);
   }
 }
 
@@ -474,7 +509,7 @@ ipcMain.handle("channel-save", (_event, channel) => {
   ensureDir(CHANNELS_DIR);
   fs.writeFileSync(path.join(CHANNELS_DIR, `${channel.id}.json`), JSON.stringify(channel, null, 2));
   // Fire-and-forget: restart Kodi on all devices assigned to this channel
-  const affected = readDevices().filter((d) => d.defaultChannelId === channel.id);
+  const affected = readDevicesWithPasswords().filter((d) => d.defaultChannelId === channel.id);
   for (const device of affected) {
     kodiRestartAndOpen(device).catch((err) =>
       console.error(`[kodi] Falha ao reiniciar ${device.name}:`, err.message)
@@ -489,41 +524,51 @@ ipcMain.handle("channel-delete", (_event, id) => {
 
 /* ---- Kodi Devices ---- */
 
-ipcMain.handle("device-list", () => readDevices());
+// Returns devices without passwords — renderer never receives credentials.
+ipcMain.handle("device-list", () => readDevicesForRenderer());
 
+// Accepts device with optional sshPassword / kodiHttpPassword (plain, from UI).
+// Encrypts before persisting. Empty string = keep existing encrypted blob.
 ipcMain.handle("device-save", (_event, device) => {
-  const devices = readDevices();
-  const idx = devices.findIndex((d) => d.id === device.id);
-  if (idx >= 0) devices[idx] = device;
-  else devices.push(device);
-  writeDevices(devices);
+  const existing = readRawDevices();
+  const idx = existing.findIndex((d) => d.id === device.id);
+  if (idx >= 0) existing[idx] = device;
+  else existing.push(device);
+  persistDevices(existing);
 });
 
 ipcMain.handle("device-delete", (_event, id) => {
-  writeDevices(readDevices().filter((d) => d.id !== id));
+  persistDevices(readRawDevices().filter((d) => d.id !== id));
 });
 
-ipcMain.handle("kodi-ping", async (_event, device) => {
+// Ping uses stored (decrypted) credentials — renderer passes only deviceId.
+ipcMain.handle("kodi-ping", async (_event, deviceId) => {
+  const device = readDevicesWithPasswords().find((d) => d.id === deviceId);
+  if (!device) return { ok: false, error: "Dispositivo não encontrado." };
   try {
     const res = await kodiRequest(device, "JSONRPC.Version", {});
     const v = res?.result?.version;
-    const version = v ? `${v.major}.${v.minor}.${v.patch}` : "desconhecida";
-    return { ok: true, version };
+    return { ok: true, version: v ? `${v.major}.${v.minor}.${v.patch}` : "desconhecida" };
   } catch (err) {
     return { ok: false, error: err.message };
   }
 });
 
-ipcMain.handle("kodi-list-channels", async (_event, device) => {
+// Channel list during form setup: renderer passes temporary credentials (not yet saved).
+// Acceptable — user just typed them, same threat level as any form submission.
+ipcMain.handle("kodi-list-channels", async (_event, creds) => {
   try {
-    const res = await kodiRequest(device, "PVR.GetChannels", { channelgroupid: "alltv" });
+    const res = await kodiRequest(creds, "PVR.GetChannels", { channelgroupid: "alltv" });
     return (res?.result?.channels || []).map((c) => ({ channelid: c.channelid, label: c.label }));
   } catch {
     return [];
   }
 });
 
-ipcMain.handle("kodi-restart-and-open", async (_event, device) => {
+// Restart uses stored (decrypted) credentials — renderer passes only deviceId.
+ipcMain.handle("kodi-restart-and-open", async (_event, deviceId) => {
+  const device = readDevicesWithPasswords().find((d) => d.id === deviceId);
+  if (!device) return { ok: false, error: "Dispositivo não encontrado." };
   try {
     await kodiRestartAndOpen(device);
     return { ok: true };

@@ -1,13 +1,22 @@
+// KodiDevice as seen by the renderer.
+// Passwords are NEVER returned from device-list — only boolean flags indicating
+// whether a credential is stored. Plain passwords are only present when the user
+// is actively entering them in the form (before saving); they are encrypted by
+// the main process (safeStorage) and never sent back to the renderer.
 export type KodiDevice = {
   id: string;
   name: string;
   ip: string;
   sshPort: number;
   sshUser: string;
-  sshPassword: string;
+  // Present only when being submitted for save. Never returned by device-list.
+  sshPassword?: string;
+  hasSshPassword: boolean;
   kodiHttpPort: number;
   kodiHttpUser: string;
-  kodiHttpPassword: string;
+  // Present only when being submitted for save. Never returned by device-list.
+  kodiHttpPassword?: string;
+  hasKodiPassword: boolean;
   defaultChannelId: string | null;
   kodiChannelId: number | null;
   restartDelaySecs: number;
@@ -22,4 +31,12 @@ export type KodiPingResult =
 export type KodiChannel = {
   channelid: number;
   label: string;
+};
+
+// Credentials passed from the form to test a not-yet-saved device.
+export type KodiTestCreds = {
+  ip: string;
+  kodiHttpPort: number;
+  kodiHttpUser: string;
+  kodiHttpPassword: string;
 };

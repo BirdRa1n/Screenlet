@@ -72,13 +72,15 @@ declare global {
       iptvStop: () => Promise<import("./store/useIptvStore").IptvStatus>;
       iptvSetIp: (ip: string) => Promise<import("./store/useIptvStore").IptvStatus>;
 
-      // Kodi Devices
+      // Kodi Devices — passwords never returned to renderer; only boolean flags.
       deviceList: () => Promise<import("./types/device").KodiDevice[]>;
       deviceSave: (device: import("./types/device").KodiDevice) => Promise<void>;
       deviceDelete: (id: string) => Promise<void>;
-      kodiPing: (device: Pick<import("./types/device").KodiDevice, "ip" | "kodiHttpPort" | "kodiHttpUser" | "kodiHttpPassword">) => Promise<import("./types/device").KodiPingResult>;
-      kodiListChannels: (device: Pick<import("./types/device").KodiDevice, "ip" | "kodiHttpPort" | "kodiHttpUser" | "kodiHttpPassword">) => Promise<import("./types/device").KodiChannel[]>;
-      kodiRestartAndOpen: (device: import("./types/device").KodiDevice) => Promise<{ ok: boolean; error?: string }>;
+      // Ping/restart receive only deviceId; main decrypts credentials internally.
+      kodiPing: (deviceId: string) => Promise<import("./types/device").KodiPingResult>;
+      kodiRestartAndOpen: (deviceId: string) => Promise<{ ok: boolean; error?: string }>;
+      // Channel list accepts temporary plaintext creds from form (device not yet saved).
+      kodiListChannels: (creds: import("./types/device").KodiTestCreds) => Promise<import("./types/device").KodiChannel[]>;
 
       // Platform info
       platform: NodeJS.Platform;

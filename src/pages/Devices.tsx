@@ -96,14 +96,14 @@ const DeviceCard: React.FC<{
 
   const handlePing = async () => {
     setPing("loading");
-    const result = await window.adFrame.kodiPing(device);
+    const result = await window.adFrame.kodiPing(device.id);
     setPing(result.ok ? "online" : "offline");
     if (!result.ok) toast.error(`${device.name}: ${result.error}`);
   };
 
   const handleRestart = async () => {
     setRestarting(true);
-    const result = await window.adFrame.kodiRestartAndOpen(device);
+    const result = await window.adFrame.kodiRestartAndOpen(device.id);
     setRestarting(false);
     if (result.ok) {
       toast.success(
@@ -222,10 +222,10 @@ function deviceToForm(d: KodiDevice): FormState {
     ip: d.ip,
     sshPort: String(d.sshPort),
     sshUser: d.sshUser,
-    sshPassword: d.sshPassword,
+    sshPassword: "",          // never pre-filled — credentials stay in OS keychain
     kodiHttpPort: String(d.kodiHttpPort),
     kodiHttpUser: d.kodiHttpUser,
-    kodiHttpPassword: d.kodiHttpPassword,
+    kodiHttpPassword: "",     // never pre-filled — credentials stay in OS keychain
     defaultChannelId: d.defaultChannelId ?? "",
     kodiChannelId: d.kodiChannelId != null ? String(d.kodiChannelId) : "",
     restartDelaySecs: String(d.restartDelaySecs),
@@ -282,10 +282,13 @@ const DeviceDialog: React.FC<{
       ip: form.ip.trim(),
       sshPort: Number(form.sshPort) || 22,
       sshUser: form.sshUser.trim(),
-      sshPassword: form.sshPassword,
+      // Only include password if user typed something — empty = keep existing blob.
+      ...(form.sshPassword ? { sshPassword: form.sshPassword } : {}),
+      hasSshPassword: device?.hasSshPassword ?? false,
       kodiHttpPort: Number(form.kodiHttpPort) || 8080,
       kodiHttpUser: form.kodiHttpUser.trim(),
-      kodiHttpPassword: form.kodiHttpPassword,
+      ...(form.kodiHttpPassword ? { kodiHttpPassword: form.kodiHttpPassword } : {}),
+      hasKodiPassword: device?.hasKodiPassword ?? false,
       defaultChannelId: form.defaultChannelId || null,
       kodiChannelId: form.kodiChannelId !== "" ? Number(form.kodiChannelId) : null,
       restartDelaySecs: Number(form.restartDelaySecs) || 20,
@@ -338,8 +341,17 @@ const DeviceDialog: React.FC<{
             <Field label="Usuário SSH">
               <TextField value={form.sshUser} onChange={set("sshUser")} placeholder="root" />
             </Field>
-            <Field label="Senha SSH">
-              <TextField type="password" value={form.sshPassword} onChange={set("sshPassword")} placeholder="••••••" autoComplete="new-password" />
+            <Field
+              label="Senha SSH"
+              hint={device?.hasSshPassword ? "Senha configurada — deixe em branco para manter." : undefined}
+            >
+              <TextField
+                type="password"
+                value={form.sshPassword}
+                onChange={set("sshPassword")}
+                placeholder={device?.hasSshPassword ? "••••••  (salva no Keychain)" : "••••••"}
+                autoComplete="new-password"
+              />
             </Field>
           </div>
         </div>
@@ -355,8 +367,17 @@ const DeviceDialog: React.FC<{
             <Field label="Usuário Kodi">
               <TextField value={form.kodiHttpUser} onChange={set("kodiHttpUser")} placeholder="kodi" />
             </Field>
-            <Field label="Senha Kodi HTTP">
-              <TextField type="password" value={form.kodiHttpPassword} onChange={set("kodiHttpPassword")} placeholder="••••••" autoComplete="new-password" />
+            <Field
+              label="Senha Kodi HTTP"
+              hint={device?.hasKodiPassword ? "Senha configurada — deixe em branco para manter." : undefined}
+            >
+              <TextField
+                type="password"
+                value={form.kodiHttpPassword}
+                onChange={set("kodiHttpPassword")}
+                placeholder={device?.hasKodiPassword ? "••••••  (salva no Keychain)" : "••••••"}
+                autoComplete="new-password"
+              />
             </Field>
           </div>
         </div>
