@@ -617,6 +617,129 @@ ipcMain.handle("kodi-fetch-config", async (_event, sshCreds) => {
   }
 });
 
+/* ---- Screenlet Player Devices ---- */
+//
+// Counterpart to the Kodi bridge above, but for the native screenlet-player
+// client (github.com/BirdRa1n/screenlet-player). Unlike Kodi devices, these
+// are never configured by an admin typing IP/SSH credentials — the player
+// announces itself by POSTing heartbeats to the IPTV server below, and an
+// admin "claims" it from the Dispositivos panel once it shows up. See that
+// repo's docs/PAIRING.md for the full design this mirrors.
+
+const PLAYER_DEVICES_FILE = path.join(SCREENLET_DIR, "player-devices.json");
+
+function readPlayerDevices() {
+  try {
+    if (fs.existsSync(PLAYER_DEVICES_FILE)) return JSON.parse(fs.readFileSync(PLAYER_DEVICES_FILE, "utf8"));
+  } catch {}
+  return [];
+}
+
+function writePlayerDevices(devices) {
+  ensureDir(SCREENLET_DIR);
+  fs.writeFileSync(PLAYER_DEVICES_FILE, JSON.stringify(devices, null, 2));
+}
+
+// Reads and JSON-parses a request body. handleIptvRequest's routes are
+// otherwise synchronous (writeHead/end), so POST routes resolve this
+// promise themselves before responding.
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", (chunk) => { data += chunk; });
+    req.on("end", () => {
+      try { resolve(data ? JSON.parse(data) : {}); }
+      catch (err) { reject(err); }
+    });
+    req.on("error", reject);
+  });
+}
+
+// A heartbeat is the only way Studio learns a screenlet-player device
+// exists — there is no separate "announce" call. Upserts by deviceId
+// whether or not the device has been claimed yet.
+function upsertPlayerHeartbeat(body) {
+  const { deviceId, hostname, pairingCode, playerVersion, playing, source } = body || {};
+  if (!deviceId) return;
+  const devices = readPlayerDevices();
+  const now = new Date().toISOString();
+  const idx = devices.findIndex((d) => d.deviceId === deviceId);
+  if (idx >= 0) {
+    devices[idx] = {
+      ...devices[idx],
+      hostname: hostname || devices[idx].hostname,
+      pairingCode: pairingCode || devices[idx].pairingCode,
+      playerVersion: playerVersion || devices[idx].playerVersion,
+      playing: !!playing,
+      source: source || null,
+      lastSeenAt: now,
+    };
+  } else {
+    devices.push({
+      id: crypto.randomUUID(),
+      deviceId,
+      name: hostname || deviceId.slice(0, 8),
+      hostname: hostname || "",
+      pairingCode: pairingCode || "",
+      playerVersion: playerVersion || "",
+      channelId: null,
+      paired: false,
+      playing: !!playing,
+      source: source || null,
+      lastSeenAt: now,
+      pairedAt: null,
+      createdAt: now,
+    });
+  }
+  writePlayerDevices(devices);
+}
+
+// What a paired device polls for. Mirrors the URL Kodi devices already use
+// for playback — /channel/{id} below — so both bridges serve the exact
+// same stream.
+function getPlayerSyncResponse(deviceId) {
+  if (!deviceId) return { paired: false };
+  const device = readPlayerDevices().find((d) => d.deviceId === deviceId);
+  if (!device || !device.paired || !device.channelId) return { paired: false };
+  const channel = readAllChannels().find((c) => c.id === device.channelId);
+  if (!channel) return { paired: false };
+  const host = getSelectedIp();
+  return {
+    paired: true,
+    channelId: channel.id,
+    playlistUrl: `http://${host}:${IPTV_PORT}/channel/${channel.id}`,
+    updatedAt: channel.updatedAt,
+  };
+}
+
+ipcMain.handle("player-device-list", () => readPlayerDevices());
+
+ipcMain.handle("player-device-claim", (_event, { id, channelId, name }) => {
+  const devices = readPlayerDevices();
+  const idx = devices.findIndex((d) => d.id === id);
+  if (idx < 0) return;
+  devices[idx] = {
+    ...devices[idx],
+    channelId,
+    name: name?.trim() || devices[idx].name,
+    paired: true,
+    pairedAt: new Date().toISOString(),
+  };
+  writePlayerDevices(devices);
+});
+
+ipcMain.handle("player-device-unpair", (_event, id) => {
+  const devices = readPlayerDevices();
+  const idx = devices.findIndex((d) => d.id === id);
+  if (idx < 0) return;
+  devices[idx] = { ...devices[idx], paired: false, channelId: null, pairedAt: null };
+  writePlayerDevices(devices);
+});
+
+ipcMain.handle("player-device-delete", (_event, id) => {
+  writePlayerDevices(readPlayerDevices().filter((d) => d.id !== id));
+});
+
 /* ---- Media catalog ---- */
 
 const MEDIA_CATALOG_FILE = path.join(UPLOADS_DIR, "media-catalog.json");
@@ -952,6 +1075,23 @@ function handleIptvRequest(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
 
   const urlPath = req.url.split("?")[0];
+
+  // --- screenlet-player: pairing + sync (see docs in that repo's docs/PAIRING.md) ---
+
+  if (urlPath === "/api/player/heartbeat" && req.method === "POST") {
+    readJsonBody(req)
+      .then((body) => { upsertPlayerHeartbeat(body); res.writeHead(204); res.end(); })
+      .catch(() => { res.writeHead(400, { "Content-Type": "text/plain" }); res.end("invalid json"); });
+    return;
+  }
+
+  if (urlPath === "/api/player/sync" && req.method === "GET") {
+    const deviceId = new URL(req.url, "http://localhost").searchParams.get("deviceId");
+    const result = getPlayerSyncResponse(deviceId);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result));
+    return;
+  }
 
   if (urlPath === "/" || urlPath === "/playlist.m3u") {
     const m3u = generateM3u();

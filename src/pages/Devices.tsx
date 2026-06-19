@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
+  Cast,
   Check,
   ChevronDown,
   ChevronUp,
+  Link2,
   MonitorPlay,
   Pencil,
   Plus,
@@ -10,15 +12,18 @@ import {
   Terminal,
   Trash2,
   Tv2,
+  Unlink2,
   Wifi,
   WifiOff,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button, Dialog, Field, IconButton, SelectField, TextField } from "../design-system/components";
 import { useDeviceStore } from "../store/useDeviceStore";
+import { usePlayerDeviceStore } from "../store/usePlayerDeviceStore";
 import { useChannelStore } from "../store/useChannelStore";
 import { toast } from "../store/useToastStore";
 import type { KodiChannel, KodiDevice } from "../types/device";
+import type { PlayerDevice } from "../types/playerDevice";
 import "../styles/pages/Devices.css";
 
 // ─── Tutorial ──────────────────────────────────────────────────────────────────
@@ -523,29 +528,193 @@ const DeviceDialog: React.FC<{
   );
 };
 
+// ─── Screenlet Player devices ──────────────────────────────────────────────────
+//
+// Counterpart to the Kodi cards above, for the native screenlet-player
+// client. These are never manually configured — the player announces
+// itself via heartbeat and shows up here to be claimed. See
+// github.com/BirdRa1n/screenlet-player's docs/PAIRING.md.
+
+const PLAYER_ONLINE_THRESHOLD_MS = 60_000;
+
+function isPlayerOnline(lastSeenAt: string | null): boolean {
+  if (!lastSeenAt) return false;
+  return Date.now() - new Date(lastSeenAt).getTime() < PLAYER_ONLINE_THRESHOLD_MS;
+}
+
+const PlayerDeviceCard: React.FC<{
+  device: PlayerDevice;
+  channelName: string | null;
+}> = ({ device, channelName }) => {
+  const { unpair, remove } = usePlayerDeviceStore();
+  const online = isPlayerOnline(device.lastSeenAt);
+
+  const handleUnpair = async () => {
+    await unpair(device.id);
+    toast.info(`"${device.name}" despareado.`);
+  };
+
+  const handleDelete = async () => {
+    await remove(device.id);
+    toast.info(`"${device.name}" removido.`);
+  };
+
+  return (
+    <motion.div className="vt-devices__card" whileHover={{ y: -2 }} transition={{ duration: 0.15 }}>
+      <div className="vt-devices__card-header">
+        <div className="vt-devices__card-icon">
+          <Cast size={18} />
+        </div>
+        <div className="vt-devices__card-info">
+          <div className="vt-devices__card-name">{device.name}</div>
+          <div className="vt-devices__card-ip">{device.hostname || "—"} · v{device.playerVersion || "?"}</div>
+        </div>
+        <div className={`vt-devices__ping-badge vt-devices__ping-badge--${online ? "online" : "offline"}`}>
+          {online ? <Wifi size={11} /> : <WifiOff size={11} />}
+          {online ? "Online" : "Offline"}
+        </div>
+      </div>
+
+      <div className="vt-devices__card-tags">
+        <span className="vt-devices__card-tag">
+          <Tv2 size={10} />
+          {channelName ? `Canal: ${channelName}` : "Sem canal"}
+        </span>
+        {device.playing && (
+          <span className="vt-devices__card-tag vt-devices__card-tag--kodi">Reproduzindo</span>
+        )}
+      </div>
+
+      <div className="vt-devices__card-actions">
+        <Button variant="secondary" size="sm" icon={<Unlink2 size={12} />} onClick={handleUnpair}>
+          Despareie
+        </Button>
+        <div className="vt-devices__card-icon-actions">
+          <IconButton label="Excluir" variant="danger" onClick={handleDelete}>
+            <Trash2 size={13} />
+          </IconButton>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const PendingPlayerRow: React.FC<{
+  device: PlayerDevice;
+  onClaim: () => void;
+}> = ({ device, onClaim }) => {
+  const { remove } = usePlayerDeviceStore();
+
+  return (
+    <div className="vt-devices__pending-row">
+      <div className="vt-devices__pending-icon"><Cast size={16} /></div>
+      <div className="vt-devices__pending-info">
+        <span className="vt-devices__pending-name">{device.hostname || device.deviceId.slice(0, 8)}</span>
+        <span className="vt-devices__pending-meta">
+          código {device.pairingCode || "—"} · v{device.playerVersion || "?"}
+        </span>
+      </div>
+      <Button variant="primary" size="sm" icon={<Link2 size={12} />} onClick={onClaim}>
+        Pareie
+      </Button>
+      <IconButton label="Ignorar" variant="danger" onClick={() => remove(device.id)}>
+        <Trash2 size={13} />
+      </IconButton>
+    </div>
+  );
+};
+
+const ClaimDialog: React.FC<{
+  device: PlayerDevice | null;
+  onClose: () => void;
+  onClaimed: () => void;
+}> = ({ device, onClose, onClaimed }) => {
+  const { claim } = usePlayerDeviceStore();
+  const { channels } = useChannelStore();
+  const [name, setName] = useState("");
+  const [channelId, setChannelId] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (device) {
+      setName(device.name);
+      setChannelId("");
+    }
+  }, [device]);
+
+  const handleClaim = async () => {
+    if (!device || !channelId) return;
+    setSaving(true);
+    await claim(device.id, channelId, name.trim() || undefined);
+    toast.success(`"${name.trim() || device.hostname}" pareado.`);
+    setSaving(false);
+    onClaimed();
+    onClose();
+  };
+
+  return (
+    <Dialog
+      open={!!device}
+      onClose={onClose}
+      title="Parear Screenlet Player"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button variant="primary" onClick={handleClaim} disabled={saving || !channelId}>
+            {saving ? "Pareando…" : "Parear"}
+          </Button>
+        </>
+      }
+    >
+      <div className="vt-devices__claim-form">
+        <Field label="Nome de exibição">
+          <TextField value={name} onChange={(e) => setName(e.target.value)} placeholder={device?.hostname} />
+        </Field>
+        <Field label="Canal Screenlet">
+          <SelectField value={channelId} onChange={(e) => setChannelId(e.target.value)}>
+            <option value="">— Selecione um canal —</option>
+            {channels.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </SelectField>
+        </Field>
+      </div>
+    </Dialog>
+  );
+};
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export const Devices: React.FC = () => {
   const { devices, refresh } = useDeviceStore();
+  const { devices: playerDevices, refresh: refreshPlayerDevices } = usePlayerDeviceStore();
   const { channels, refresh: refreshChannels } = useChannelStore();
   const [addOpen, setAddOpen] = useState(false);
   const [editDevice, setEditDevice] = useState<KodiDevice | null>(null);
+  const [claimTarget, setClaimTarget] = useState<PlayerDevice | null>(null);
 
   const loadAll = useCallback(async () => {
-    await Promise.all([refresh(), refreshChannels()]);
-  }, [refresh, refreshChannels]);
+    await Promise.all([refresh(), refreshChannels(), refreshPlayerDevices()]);
+  }, [refresh, refreshChannels, refreshPlayerDevices]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
+  // Fast poll so a device that was just powered on shows up quickly.
+  useEffect(() => {
+    const id = setInterval(refreshPlayerDevices, 5_000);
+    return () => clearInterval(id);
+  }, [refreshPlayerDevices]);
+
   const channelName = (id: string | null) =>
     id ? (channels.find((c) => c.id === id)?.name ?? null) : null;
+
+  const pendingPlayers = playerDevices.filter((d) => !d.paired);
+  const pairedPlayers = playerDevices.filter((d) => d.paired);
 
   return (
     <div className="vt-devices">
       <div className="vt-devices__header">
         <div>
           <h1 className="vt-devices__title">Dispositivos</h1>
-          <p className="vt-devices__sub">Gerencie TVs e players Kodi da rede.</p>
+          <p className="vt-devices__sub">Gerencie TVs Kodi e Screenlet Player da rede.</p>
         </div>
         <Button variant="primary" icon={<Plus size={14} />} onClick={() => setAddOpen(true)}>
           Novo dispositivo
@@ -579,6 +748,42 @@ export const Devices: React.FC = () => {
         </div>
       )}
 
+      <div className="vt-devices__section-divider">
+        <div>
+          <h2 className="vt-devices__section-title">
+            <Cast size={16} /> Screenlet Player
+          </h2>
+          <p className="vt-devices__section-sub">
+            Cliente nativo (sem Kodi, sem SSH) — dispositivos aparecem aqui sozinhos ao ligar.
+          </p>
+        </div>
+      </div>
+
+      {pendingPlayers.length > 0 && (
+        <div className="vt-devices__pending-list">
+          {pendingPlayers.map((d) => (
+            <PendingPlayerRow key={d.id} device={d} onClaim={() => setClaimTarget(d)} />
+          ))}
+        </div>
+      )}
+
+      {pairedPlayers.length === 0 && pendingPlayers.length === 0 ? (
+        <div className="vt-devices__empty">
+          <div className="vt-devices__empty-icon"><Cast size={24} /></div>
+          <p className="vt-devices__empty-title">Nenhum Screenlet Player detectado</p>
+          <p className="vt-devices__empty-text">
+            Instale e inicie o screenlet-player com <code>-studio-url</code> apontando para este
+            computador — ele aparecerá aqui automaticamente.
+          </p>
+        </div>
+      ) : pairedPlayers.length > 0 ? (
+        <div className="vt-devices__grid">
+          {pairedPlayers.map((d) => (
+            <PlayerDeviceCard key={d.id} device={d} channelName={channelName(d.channelId)} />
+          ))}
+        </div>
+      ) : null}
+
       <DeviceDialog
         open={addOpen}
         onClose={() => setAddOpen(false)}
@@ -589,6 +794,11 @@ export const Devices: React.FC = () => {
         device={editDevice ?? undefined}
         onClose={() => setEditDevice(null)}
         onSaved={refresh}
+      />
+      <ClaimDialog
+        device={claimTarget}
+        onClose={() => setClaimTarget(null)}
+        onClaimed={refreshPlayerDevices}
       />
     </div>
   );

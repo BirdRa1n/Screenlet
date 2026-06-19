@@ -84,6 +84,12 @@ declare global {
       // Read Kodi HTTP config from guisettings.xml via SSH — fills form fields automatically.
       kodiFetchConfig: (sshCreds: import("./types/device").SshTestCreds) => Promise<import("./types/device").KodiFetchConfigResult>;
 
+      // Screenlet Player devices
+      playerDeviceList: () => Promise<import("./types/playerDevice").PlayerDevice[]>;
+      playerDeviceClaim: (payload: { id: string; channelId: string; name?: string }) => Promise<void>;
+      playerDeviceUnpair: (id: string) => Promise<void>;
+      playerDeviceDelete: (id: string) => Promise<void>;
+
       // Platform info
       platform: NodeJS.Platform;
       setTitleBarTheme: (isDark: boolean) => Promise<void>;
