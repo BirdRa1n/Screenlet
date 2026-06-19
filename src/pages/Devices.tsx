@@ -23,56 +23,72 @@ import "../styles/pages/Devices.css";
 
 // ─── Tutorial ──────────────────────────────────────────────────────────────────
 
-const TUTORIAL_STEPS = [
+const TUTORIAL_GROUPS = [
   {
-    step: "1",
-    title: "Habilitar servidor HTTP do Kodi",
-    code: null,
-    text: 'Acesse Configurações → Serviços → Controle e ative "Permitir controle remoto pelo HTTP". Anote a porta (padrão 8080), usuário e senha.',
+    group: "Instalar o cliente IPTV",
+    steps: [
+      {
+        title: "Instalar o add-on PVR IPTV Simple Client",
+        text: 'No Kodi: Configurações → Add-ons → Instalar de repositório → Add-ons de clientes PVR → "PVR IPTV Simple Client" → Instalar. Depois habilite o add-on.',
+      },
+      {
+        title: "Apontar para a playlist do Screenlet",
+        text: 'Abra a configuração do add-on (aba "Geral") → em "Localização M3U" escolha Remoto (URL) e cole o endereço da página "Servidor IPTV" (ex: http://192.168.x.x:7095/playlist.m3u).',
+      },
+      {
+        title: "Apontar para o guia de programação (opcional)",
+        text: 'Na aba "EPG" → em "Localização XMLTV" escolha Remoto (URL) e cole a URL do epg.xml, também disponível na página "Servidor IPTV".',
+      },
+      {
+        title: "Salvar e reiniciar o Kodi",
+        text: 'Confirme a configuração do add-on e reinicie o Kodi. Os canais do Screenlet aparecerão em "TV ao vivo" no menu principal.',
+      },
+    ],
   },
   {
-    step: "2",
-    title: "Verificar credenciais da API",
-    code: `grep -i webserver /storage/.kodi/userdata/guisettings.xml`,
-    text: "Execute no terminal do dispositivo. A saída mostrará porta, usuário e senha configurados.",
-  },
-  {
-    step: "3",
-    title: "Testar acesso à API",
-    code: `curl -u kodi:SENHA \\\n  -H "Content-Type: application/json" \\\n  -d '{"jsonrpc":"2.0","method":"JSONRPC.Version","id":1}' \\\n  http://IP:8080/jsonrpc`,
-    text: 'Substitua SENHA e IP. Se retornar a versão do JSON-RPC, a API está funcionando.',
-  },
-  {
-    step: "4",
-    title: "Descobrir o ID do canal IPTV",
-    code: `curl -u kodi:SENHA \\\n  -H "Content-Type: application/json" \\\n  -d '{"jsonrpc":"2.0","method":"PVR.GetChannels","params":{"channelgroupid":"alltv"},"id":1}' \\\n  http://IP:8080/jsonrpc`,
-    text: 'Anote o "channelid" do canal que deseja abrir automaticamente. No Screenlet, use o botão "Buscar canais" no formulário.',
+    group: "Habilitar controle remoto via HTTP",
+    steps: [
+      {
+        title: "Ativar o servidor de controle",
+        text: 'Configurações → Serviços → Controle → ative "Permitir controle remoto via HTTP".',
+      },
+      {
+        title: "Definir porta e credenciais",
+        text: "Defina a porta (padrão 8080), usuário e senha. Essas credenciais são o que o Screenlet usa para reiniciar o Kodi e trocar de canal remotamente.",
+      },
+    ],
   },
 ];
 
 const TutorialPanel: React.FC = () => {
   const [open, setOpen] = useState(false);
+  let n = 0;
 
   return (
     <div className="vt-devices__tutorial">
       <button className="vt-devices__tutorial-toggle" onClick={() => setOpen((v) => !v)}>
         <Terminal size={14} />
-        <span>Como configurar o Kodi para controle remoto</span>
+        <span>Como instalar o cliente IPTV e habilitar o controle HTTP</span>
         {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
 
       {open && (
         <div className="vt-devices__tutorial-body">
-          {TUTORIAL_STEPS.map((s) => (
-            <div key={s.step} className="vt-devices__tutorial-step">
-              <div className="vt-devices__tutorial-num">{s.step}</div>
-              <div className="vt-devices__tutorial-content">
-                <div className="vt-devices__tutorial-title">{s.title}</div>
-                <p className="vt-devices__tutorial-text">{s.text}</p>
-                {s.code && (
-                  <pre className="vt-devices__tutorial-code">{s.code}</pre>
-                )}
-              </div>
+          {TUTORIAL_GROUPS.map((g) => (
+            <div key={g.group} className="vt-devices__tutorial-group">
+              <div className="vt-devices__tutorial-group-title">{g.group}</div>
+              {g.steps.map((s) => {
+                n += 1;
+                return (
+                  <div key={s.title} className="vt-devices__tutorial-step">
+                    <div className="vt-devices__tutorial-num">{n}</div>
+                    <div className="vt-devices__tutorial-content">
+                      <div className="vt-devices__tutorial-title">{s.title}</div>
+                      <p className="vt-devices__tutorial-text">{s.text}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>

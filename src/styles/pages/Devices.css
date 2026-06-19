@@ -71,7 +71,21 @@
   padding: var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-6);
+}
+
+.vt-devices__tutorial-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.vt-devices__tutorial-group-title {
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  color: var(--primary-400);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .vt-devices__tutorial-step {
@@ -112,19 +126,6 @@
   font-size: var(--text-caption);
   color: var(--text-secondary);
   line-height: 1.55;
-  margin: 0;
-}
-
-.vt-devices__tutorial-code {
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  font-size: 12px;
-  font-family: monospace;
-  color: var(--text-primary);
-  white-space: pre-wrap;
-  word-break: break-all;
   margin: 0;
 }
 
