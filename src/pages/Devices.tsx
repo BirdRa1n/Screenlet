@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
+  Check,
   ChevronDown,
   ChevronUp,
   MonitorPlay,
@@ -186,7 +187,7 @@ const DeviceCard: React.FC<{
   );
 };
 
-// ─── Form dialog ──────────────────────────────────────────────────────────────
+// ─── Form wizard ──────────────────────────────────────────────────────────────
 
 type FormState = {
   name: string;
@@ -222,15 +223,23 @@ function deviceToForm(d: KodiDevice): FormState {
     ip: d.ip,
     sshPort: String(d.sshPort),
     sshUser: d.sshUser,
-    sshPassword: "",          // never pre-filled — credentials stay in OS keychain
+    sshPassword: "",
     kodiHttpPort: String(d.kodiHttpPort),
     kodiHttpUser: d.kodiHttpUser,
-    kodiHttpPassword: "",     // never pre-filled — credentials stay in OS keychain
+    kodiHttpPassword: "",
     defaultChannelId: d.defaultChannelId ?? "",
     kodiChannelId: d.kodiChannelId != null ? String(d.kodiChannelId) : "",
     restartDelaySecs: String(d.restartDelaySecs),
   };
 }
+
+const WIZARD_STEPS = [
+  { num: 1 as const, label: "Acesso", sub: "SSH" },
+  { num: 2 as const, label: "Kodi HTTP", sub: "API" },
+  { num: 3 as const, label: "Programação", sub: "Canal" },
+];
+
+type WizardStep = 1 | 2 | 3;
 
 const DeviceDialog: React.FC<{
   open: boolean;
@@ -240,7 +249,9 @@ const DeviceDialog: React.FC<{
 }> = ({ open, device, onClose, onSaved }) => {
   const { save } = useDeviceStore();
   const { channels } = useChannelStore();
+  const [step, setStep] = useState<WizardStep>(1);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [detected, setDetected] = useState(false);
   const [fetchingChannels, setFetchingChannels] = useState(false);
   const [fetchingConfig, setFetchingConfig] = useState(false);
   const [kodiChannels, setKodiChannels] = useState<KodiChannel[]>([]);
@@ -248,15 +259,24 @@ const DeviceDialog: React.FC<{
 
   useEffect(() => {
     if (open) {
-      setForm(device ? deviceToForm(device) : EMPTY_FORM);
+      setStep(1);
+      setDetected(false);
       setKodiChannels([]);
+      setForm(device ? deviceToForm(device) : EMPTY_FORM);
     }
   }, [open, device]);
 
-  const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+  const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
+    if (["ip", "sshPort", "sshUser", "sshPassword"].includes(key)) setDetected(false);
+  };
 
-  const sshCredsReady = !!(form.ip.trim() && form.sshUser.trim() && form.sshPassword.trim());
+  const sshCredsReady = !!(
+    form.ip.trim() && form.sshUser.trim() &&
+    (form.sshPassword.trim() || device?.hasSshPassword)
+  );
+
+  const step1Valid = !!(form.name.trim() && form.ip.trim());
 
   const handleFetchKodiConfig = async () => {
     setFetchingConfig(true);
@@ -277,7 +297,8 @@ const DeviceDialog: React.FC<{
       kodiHttpUser: result.user,
       kodiHttpPassword: result.password,
     }));
-    toast.success(`Configuração do Kodi detectada: porta ${result.port}, usuário "${result.user}".`);
+    setDetected(true);
+    setStep(2);
   };
 
   const handleFetchKodiChannels = async () => {
@@ -293,7 +314,6 @@ const DeviceDialog: React.FC<{
       toast.error("Nenhum canal encontrado. Verifique as credenciais do Kodi.");
     } else {
       setKodiChannels(result);
-      toast.success(`${result.length} canal(is) encontrado(s) no Kodi.`);
     }
   };
 
@@ -301,13 +321,12 @@ const DeviceDialog: React.FC<{
     if (!form.name.trim() || !form.ip.trim()) return;
     setSaving(true);
     const now = new Date().toISOString();
-    const updated: KodiDevice = {
+    await save({
       id: device?.id ?? crypto.randomUUID(),
       name: form.name.trim(),
       ip: form.ip.trim(),
       sshPort: Number(form.sshPort) || 22,
       sshUser: form.sshUser.trim(),
-      // Only include password if user typed something — empty = keep existing blob.
       ...(form.sshPassword ? { sshPassword: form.sshPassword } : {}),
       hasSshPassword: device?.hasSshPassword ?? false,
       kodiHttpPort: Number(form.kodiHttpPort) || 8080,
@@ -319,13 +338,15 @@ const DeviceDialog: React.FC<{
       restartDelaySecs: Number(form.restartDelaySecs) || 20,
       createdAt: device?.createdAt ?? now,
       updatedAt: now,
-    };
-    await save(updated);
+    });
     toast.success(device ? "Dispositivo atualizado." : "Dispositivo cadastrado.");
     setSaving(false);
     onSaved();
     onClose();
   };
+
+  const goNext = () => setStep((s) => Math.min(s + 1, 3) as WizardStep);
+  const goBack = () => setStep((s) => Math.max(s - 1, 1) as WizardStep);
 
   return (
     <Dialog
@@ -334,121 +355,131 @@ const DeviceDialog: React.FC<{
       size="lg"
       title={device ? "Editar dispositivo" : "Novo dispositivo"}
       footer={
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
-          <Button variant="primary" onClick={handleSave} disabled={saving || !form.name.trim() || !form.ip.trim()}>
-            {saving ? "Salvando…" : "Salvar"}
-          </Button>
-        </>
+        <div className="vt-devices__wizard-nav">
+          {step > 1
+            ? <Button variant="secondary" onClick={goBack} disabled={saving}>Voltar</Button>
+            : <Button variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
+          }
+          {step < 3
+            ? <Button variant="primary" onClick={goNext} disabled={step === 1 && !step1Valid}>Continuar</Button>
+            : <Button variant="primary" onClick={handleSave} disabled={saving || !step1Valid}>{saving ? "Salvando…" : "Salvar"}</Button>
+          }
+        </div>
       }
     >
-      <div className="vt-devices__form">
-        <div className="vt-devices__form-section">
-          <div className="vt-devices__form-section-title">Identificação</div>
-          <div className="vt-devices__form-row">
-            <Field label="Nome do dispositivo">
-              <TextField value={form.name} onChange={set("name")} placeholder="TV Recepção" />
-            </Field>
-          </div>
-        </div>
+      {/* Step indicator */}
+      <div className="vt-devices__wizard">
+        {WIZARD_STEPS.map((s, i) => {
+          const done = step > s.num;
+          const active = step === s.num;
+          return (
+            <React.Fragment key={s.num}>
+              <div className={`vt-devices__wizard-step${active ? " vt-devices__wizard-step--active" : ""}${done ? " vt-devices__wizard-step--done" : ""}`}>
+                <div className="vt-devices__wizard-circle">
+                  {done ? <Check size={12} strokeWidth={3} /> : s.num}
+                </div>
+                <div className="vt-devices__wizard-label">{s.label}</div>
+                <div className="vt-devices__wizard-sub">{s.sub}</div>
+              </div>
+              {i < WIZARD_STEPS.length - 1 && (
+                <div className={`vt-devices__wizard-conn${done ? " vt-devices__wizard-conn--done" : ""}`} />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
 
-        <div className="vt-devices__form-section">
-          <div className="vt-devices__form-section-title">Conexão SSH</div>
-          <div className="vt-devices__form-row vt-devices__form-row--3">
+      {/* Step 1: SSH + identification */}
+      {step === 1 && (
+        <div className="vt-devices__step-content">
+          <Field label="Nome do dispositivo">
+            <TextField value={form.name} onChange={set("name")} placeholder="TV Recepção" autoFocus />
+          </Field>
+          <div className="vt-devices__form-row">
             <Field label="Endereço IP">
               <TextField value={form.ip} onChange={set("ip")} placeholder="192.168.1.100" />
             </Field>
             <Field label="Porta SSH">
-              <TextField type="number" value={form.sshPort} onChange={set("sshPort")} placeholder="22" />
+              <TextField type="number" value={form.sshPort} onChange={set("sshPort")} className="vt-devices__port-field" />
             </Field>
           </div>
           <div className="vt-devices__form-row">
             <Field label="Usuário SSH">
               <TextField value={form.sshUser} onChange={set("sshUser")} placeholder="root" />
             </Field>
-            <Field
-              label="Senha SSH"
-              hint={device?.hasSshPassword ? "Senha configurada — deixe em branco para manter." : undefined}
-            >
+            <Field label="Senha SSH" hint={device?.hasSshPassword ? "Deixe em branco para manter." : undefined}>
               <TextField
                 type="password"
                 value={form.sshPassword}
                 onChange={set("sshPassword")}
-                placeholder={device?.hasSshPassword ? "••••••  (salva no Keychain)" : "••••••"}
+                placeholder={device?.hasSshPassword ? "•••• (salva no Keychain)" : "••••••"}
                 autoComplete="new-password"
               />
             </Field>
           </div>
-        </div>
-
-        <div className="vt-devices__detect-strip">
-          <div className="vt-devices__detect-strip-info">
-            <span className="vt-devices__detect-strip-label">Detectar configuração Kodi via SSH</span>
-            <span className="vt-devices__detect-strip-hint">
-              Lê as credenciais HTTP diretamente do guisettings.xml do dispositivo.
+          <div className="vt-devices__detect-action">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={fetchingConfig ? <RefreshCw size={12} className="vt-devices__spin" /> : <Terminal size={12} />}
+              onClick={handleFetchKodiConfig}
+              disabled={fetchingConfig || !sshCredsReady}
+            >
+              {fetchingConfig ? "Conectando…" : "Ler configuração Kodi via SSH"}
+            </Button>
+            <span className="vt-devices__detect-hint">
+              Preenche a etapa 2 automaticamente
             </span>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Terminal size={12} />}
-            onClick={handleFetchKodiConfig}
-            disabled={fetchingConfig || !sshCredsReady}
-          >
-            {fetchingConfig ? "Lendo…" : "Ler do dispositivo"}
-          </Button>
         </div>
+      )}
 
-        <div className="vt-devices__form-section">
-          <div className="vt-devices__form-section-title">Kodi HTTP API</div>
-          <div className="vt-devices__form-row vt-devices__form-row--3">
-            <Field label="Porta HTTP">
-              <TextField type="number" value={form.kodiHttpPort} onChange={set("kodiHttpPort")} placeholder="8080" />
-            </Field>
-          </div>
+      {/* Step 2: Kodi HTTP credentials */}
+      {step === 2 && (
+        <div className="vt-devices__step-content">
+          {detected && (
+            <div className="vt-devices__detected-banner">
+              <Check size={13} strokeWidth={2.5} />
+              Configuração detectada via SSH — campos preenchidos automaticamente.
+            </div>
+          )}
+          <Field label="Porta HTTP">
+            <TextField type="number" value={form.kodiHttpPort} onChange={set("kodiHttpPort")} placeholder="8080" className="vt-devices__port-field" />
+          </Field>
           <div className="vt-devices__form-row">
             <Field label="Usuário Kodi">
               <TextField value={form.kodiHttpUser} onChange={set("kodiHttpUser")} placeholder="kodi" />
             </Field>
-            <Field
-              label="Senha Kodi HTTP"
-              hint={device?.hasKodiPassword ? "Senha configurada — deixe em branco para manter." : undefined}
-            >
+            <Field label="Senha Kodi HTTP" hint={device?.hasKodiPassword ? "Deixe em branco para manter." : undefined}>
               <TextField
                 type="password"
                 value={form.kodiHttpPassword}
                 onChange={set("kodiHttpPassword")}
-                placeholder={device?.hasKodiPassword ? "••••••  (salva no Keychain)" : "••••••"}
+                placeholder={device?.hasKodiPassword ? "•••• (salva no Keychain)" : "••••••"}
                 autoComplete="new-password"
               />
             </Field>
           </div>
         </div>
+      )}
 
-        <div className="vt-devices__form-section">
-          <div className="vt-devices__form-section-title">Programação</div>
+      {/* Step 3: channel assignment */}
+      {step === 3 && (
+        <div className="vt-devices__step-content">
           <div className="vt-devices__form-row">
-            <Field label="Canal Screenlet padrão" hint="Kodi será reiniciado automaticamente ao atualizar este canal.">
+            <Field label="Canal Screenlet padrão" hint="Kodi reinicia ao atualizar este canal.">
               <SelectField value={form.defaultChannelId} onChange={set("defaultChannelId")}>
                 <option value="">— Nenhum —</option>
-                {channels.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
+                {channels.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </SelectField>
             </Field>
-            <Field label="Delay após reiniciar (s)" hint="Aguarda N segundos antes de abrir o canal.">
+            <Field label="Delay após reiniciar (s)" hint="Espera N s antes de abrir o canal.">
               <TextField type="number" value={form.restartDelaySecs} onChange={set("restartDelaySecs")} placeholder="20" />
             </Field>
           </div>
-
           <div className="vt-devices__kodi-channel-row">
             <Field label="ID do canal Kodi (PVR)">
-              <TextField
-                type="number"
-                value={form.kodiChannelId}
-                onChange={set("kodiChannelId")}
-                placeholder="Ex: 1"
-              />
+              <TextField type="number" value={form.kodiChannelId} onChange={set("kodiChannelId")} placeholder="Ex: 1" />
             </Field>
             <Button
               variant="secondary"
@@ -460,26 +491,18 @@ const DeviceDialog: React.FC<{
               {fetchingChannels ? "Buscando…" : "Buscar canais"}
             </Button>
           </div>
-
           {kodiChannels.length > 0 && (
-            <div className="vt-devices__form-kodi-channels">
-              <Field label="Selecionar canal do Kodi">
-                <SelectField
-                  value={form.kodiChannelId}
-                  onChange={set("kodiChannelId")}
-                >
-                  <option value="">— Selecione —</option>
-                  {kodiChannels.map((ch) => (
-                    <option key={ch.channelid} value={ch.channelid}>
-                      #{ch.channelid} — {ch.label}
-                    </option>
-                  ))}
-                </SelectField>
-              </Field>
-            </div>
+            <Field label="Selecionar canal do Kodi">
+              <SelectField value={form.kodiChannelId} onChange={set("kodiChannelId")}>
+                <option value="">— Selecione —</option>
+                {kodiChannels.map((ch) => (
+                  <option key={ch.channelid} value={ch.channelid}>#{ch.channelid} — {ch.label}</option>
+                ))}
+              </SelectField>
+            </Field>
           )}
         </div>
-      </div>
+      )}
     </Dialog>
   );
 };

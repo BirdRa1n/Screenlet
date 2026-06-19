@@ -314,29 +314,96 @@
   margin-left: auto;
 }
 
-/* ---- Form dialog ---- */
+/* ---- Wizard step indicator ---- */
 
-.vt-devices__form {
+.vt-devices__wizard {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
+  align-items: flex-start;
+  position: relative;
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--border);
 }
 
-.vt-devices__form-section {
+.vt-devices__wizard-step {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
-.vt-devices__form-section-title {
+.vt-devices__wizard-circle {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  color: var(--text-tertiary);
+  transition: all 0.18s;
+}
+
+.vt-devices__wizard-step--active .vt-devices__wizard-circle {
+  background: var(--primary-500);
+  border-color: var(--primary-500);
+  color: #fff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 20%, transparent);
+}
+
+.vt-devices__wizard-step--done .vt-devices__wizard-circle {
+  background: var(--primary-500);
+  border-color: var(--primary-500);
+  color: #fff;
+}
+
+.vt-devices__wizard-label {
   font-size: var(--text-caption);
   font-weight: var(--weight-semibold);
   color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
+
+.vt-devices__wizard-step--active .vt-devices__wizard-label,
+.vt-devices__wizard-step--done .vt-devices__wizard-label {
+  color: var(--text-primary);
+}
+
+.vt-devices__wizard-sub {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.vt-devices__wizard-conn {
+  flex: 1;
+  height: 1.5px;
+  background: var(--border-strong);
+  margin: 0 var(--space-2);
+  margin-top: 15px; /* aligns with circle center */
+  transition: background 0.18s;
+}
+
+.vt-devices__wizard-conn--done {
+  background: var(--primary-500);
+}
+
+/* ---- Step content ---- */
+
+.vt-devices__step-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 220px;
+}
+
+/* ---- Form rows inside step content ---- */
 
 .vt-devices__form-row {
   display: grid;
@@ -344,8 +411,8 @@
   gap: var(--space-3);
 }
 
-.vt-devices__form-row--3 {
-  grid-template-columns: 1fr auto;
+.vt-devices__port-field {
+  max-width: 100px;
 }
 
 .vt-devices__kodi-channel-row {
@@ -358,37 +425,39 @@
   flex: 1;
 }
 
-.vt-devices__form-kodi-channels {
-  margin-top: var(--space-1);
-}
+/* ---- SSH detect action ---- */
 
-/* ---- SSH auto-detect strip ---- */
-
-.vt-devices__detect-strip {
+.vt-devices__detect-action {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  background: color-mix(in srgb, var(--primary-500) 7%, transparent);
-  border: 1px solid color-mix(in srgb, var(--primary-500) 22%, transparent);
-  border-radius: var(--radius-md);
+  gap: var(--space-3);
+  padding-top: var(--space-2);
 }
 
-.vt-devices__detect-strip-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.vt-devices__detect-strip-label {
-  font-size: var(--text-body);
-  font-weight: var(--weight-medium);
-  color: var(--text-primary);
-}
-
-.vt-devices__detect-strip-hint {
+.vt-devices__detect-hint {
   font-size: var(--text-caption);
   color: var(--text-tertiary);
+}
+
+/* ---- Kodi auto-detect success banner ---- */
+
+.vt-devices__detected-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--success-500) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success-500) 30%, transparent);
+  border-radius: var(--radius-md);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+  color: var(--success-300);
+}
+
+/* ---- Wizard footer navigation ---- */
+
+.vt-devices__wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
 }
