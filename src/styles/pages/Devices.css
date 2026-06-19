@@ -361,3 +361,34 @@
 .vt-devices__form-kodi-channels {
   margin-top: var(--space-1);
 }
+
+/* ---- SSH auto-detect strip ---- */
+
+.vt-devices__detect-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--primary-500) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-500) 22%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.vt-devices__detect-strip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vt-devices__detect-strip-label {
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
+.vt-devices__detect-strip-hint {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+}

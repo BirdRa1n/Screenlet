@@ -73,4 +73,6 @@ contextBridge.exposeInMainWorld("adFrame", {
   kodiRestartAndOpen: (deviceId) => ipcRenderer.invoke("kodi-restart-and-open", deviceId),
   // Channel list accepts temp creds from form (device not yet saved).
   kodiListChannels: (creds) => ipcRenderer.invoke("kodi-list-channels", creds),
+  // Read Kodi HTTP config directly from guisettings.xml via SSH.
+  kodiFetchConfig: (sshCreds) => ipcRenderer.invoke("kodi-fetch-config", sshCreds),
 });

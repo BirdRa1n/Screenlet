@@ -40,3 +40,15 @@ export type KodiTestCreds = {
   kodiHttpUser: string;
   kodiHttpPassword: string;
 };
+
+// SSH credentials for fetching Kodi config before the device is saved.
+export type SshTestCreds = {
+  ip: string;
+  sshPort: number;
+  sshUser: string;
+  sshPassword: string;
+};
+
+export type KodiFetchConfigResult =
+  | { ok: true; port: number; user: string; password: string; authEnabled: boolean }
+  | { ok: false; error: string };

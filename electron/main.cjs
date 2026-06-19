@@ -437,7 +437,7 @@ function persistDevices(devices) {
   fs.writeFileSync(DEVICES_FILE, JSON.stringify(toStore, null, 2));
 }
 
-function sshExec(device, command) {
+function sshExec(device, command, { tolerant = false } = {}) {
   return new Promise((resolve, reject) => {
     const conn = new SshClient();
     let output = "";
@@ -447,7 +447,7 @@ function sshExec(device, command) {
         if (err) { clearTimeout(timer); conn.end(); reject(err); return; }
         stream.on("close", (code) => {
           clearTimeout(timer); conn.end();
-          if (code === 0) resolve(output);
+          if (tolerant || code === 0) resolve(output);
           else reject(new Error(`Código ${code}: ${output.trim()}`));
         });
         stream.on("data", (d) => { output += d.toString(); });
@@ -457,6 +457,20 @@ function sshExec(device, command) {
     conn.on("error", (err) => { clearTimeout(timer); reject(err); });
     conn.connect({ host: device.ip, port: device.sshPort || 22, username: device.sshUser, password: device.sshPassword, readyTimeout: 10_000 });
   });
+}
+
+// Parses the output of `grep -i webserver guisettings.xml`
+function parseKodiWebserverSettings(grepOutput) {
+  const extract = (id) => {
+    const m = grepOutput.match(new RegExp(`id="${id}"[^>]*>([^<]*)<`));
+    return m ? m[1].trim() : null;
+  };
+  const port     = parseInt(extract("services.webserverport") || "8080", 10);
+  const user     = extract("services.webserverusername") || "kodi";
+  const password = extract("services.webserverpassword") || "";
+  const enabled  = extract("services.webserver");
+  const auth     = extract("services.webserverauthentication");
+  return { port, user, password, enabled: enabled !== "false", authEnabled: auth !== "false" };
 }
 
 function kodiRequest(device, method, params) {
@@ -572,6 +586,32 @@ ipcMain.handle("kodi-restart-and-open", async (_event, deviceId) => {
   try {
     await kodiRestartAndOpen(device);
     return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// Fetch Kodi HTTP config from device via SSH — reads guisettings.xml directly.
+// Accepts temporary SSH creds from form (device not yet saved); same threat model
+// as any SSH operation initiated by the user with credentials they just typed.
+ipcMain.handle("kodi-fetch-config", async (_event, sshCreds) => {
+  // Try LibreELEC path first, fall back to standard Kodi path.
+  // `tolerant: true` so grep exit code 1 (no matches) doesn't throw.
+  const cmd = [
+    'f=/storage/.kodi/userdata/guisettings.xml',
+    '[ -f "$f" ] || f=$HOME/.kodi/userdata/guisettings.xml',
+    'grep -i webserver "$f" 2>/dev/null',
+  ].join('; ');
+  try {
+    const output = await sshExec(sshCreds, cmd, { tolerant: true });
+    if (!output.includes('webserver')) {
+      return { ok: false, error: 'Arquivo guisettings.xml não encontrado ou sem configurações de webserver.' };
+    }
+    const config = parseKodiWebserverSettings(output);
+    if (!config.enabled) {
+      return { ok: false, error: 'Servidor HTTP do Kodi está desativado. Ative em Configurações → Serviços → Controle.' };
+    }
+    return { ok: true, ...config };
   } catch (err) {
     return { ok: false, error: err.message };
   }

@@ -242,6 +242,7 @@ const DeviceDialog: React.FC<{
   const { channels } = useChannelStore();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [fetchingChannels, setFetchingChannels] = useState(false);
+  const [fetchingConfig, setFetchingConfig] = useState(false);
   const [kodiChannels, setKodiChannels] = useState<KodiChannel[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -254,6 +255,30 @@ const DeviceDialog: React.FC<{
 
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
+
+  const sshCredsReady = !!(form.ip.trim() && form.sshUser.trim() && form.sshPassword.trim());
+
+  const handleFetchKodiConfig = async () => {
+    setFetchingConfig(true);
+    const result = await window.adFrame.kodiFetchConfig({
+      ip: form.ip.trim(),
+      sshPort: Number(form.sshPort) || 22,
+      sshUser: form.sshUser.trim(),
+      sshPassword: form.sshPassword,
+    });
+    setFetchingConfig(false);
+    if (!result.ok) {
+      toast.error(`Falha ao ler configuração: ${result.error}`);
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      kodiHttpPort: String(result.port),
+      kodiHttpUser: result.user,
+      kodiHttpPassword: result.password,
+    }));
+    toast.success(`Configuração do Kodi detectada: porta ${result.port}, usuário "${result.user}".`);
+  };
 
   const handleFetchKodiChannels = async () => {
     setFetchingChannels(true);
@@ -354,6 +379,24 @@ const DeviceDialog: React.FC<{
               />
             </Field>
           </div>
+        </div>
+
+        <div className="vt-devices__detect-strip">
+          <div className="vt-devices__detect-strip-info">
+            <span className="vt-devices__detect-strip-label">Detectar configuração Kodi via SSH</span>
+            <span className="vt-devices__detect-strip-hint">
+              Lê as credenciais HTTP diretamente do guisettings.xml do dispositivo.
+            </span>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Terminal size={12} />}
+            onClick={handleFetchKodiConfig}
+            disabled={fetchingConfig || !sshCredsReady}
+          >
+            {fetchingConfig ? "Lendo…" : "Ler do dispositivo"}
+          </Button>
         </div>
 
         <div className="vt-devices__form-section">

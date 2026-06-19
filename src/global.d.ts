@@ -81,6 +81,8 @@ declare global {
       kodiRestartAndOpen: (deviceId: string) => Promise<{ ok: boolean; error?: string }>;
       // Channel list accepts temporary plaintext creds from form (device not yet saved).
       kodiListChannels: (creds: import("./types/device").KodiTestCreds) => Promise<import("./types/device").KodiChannel[]>;
+      // Read Kodi HTTP config from guisettings.xml via SSH — fills form fields automatically.
+      kodiFetchConfig: (sshCreds: import("./types/device").SshTestCreds) => Promise<import("./types/device").KodiFetchConfigResult>;
 
       // Platform info
       platform: NodeJS.Platform;
