@@ -63,4 +63,12 @@ contextBridge.exposeInMainWorld("adFrame", {
   storageChooseDir: () => ipcRenderer.invoke("storage-choose-dir"),
   storageMigrate: (newDir, copyFiles) => ipcRenderer.invoke("storage-migrate", newDir, copyFiles),
   storageOpenDir: () => ipcRenderer.invoke("storage-open-dir"),
+
+  // Kodi Devices
+  deviceList: () => ipcRenderer.invoke("device-list"),
+  deviceSave: (device) => ipcRenderer.invoke("device-save", device),
+  deviceDelete: (id) => ipcRenderer.invoke("device-delete", id),
+  kodiPing: (device) => ipcRenderer.invoke("kodi-ping", device),
+  kodiListChannels: (device) => ipcRenderer.invoke("kodi-list-channels", device),
+  kodiRestartAndOpen: (device) => ipcRenderer.invoke("kodi-restart-and-open", device),
 });

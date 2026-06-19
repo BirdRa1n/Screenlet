@@ -5,6 +5,7 @@ const os = require("node:os");
 const crypto = require("node:crypto");
 const http = require("node:http");
 const { spawn, execSync } = require("node:child_process");
+const { Client: SshClient } = require("ssh2");
 
 // Remotion needs HOME to create ~/.remotion cache.
 // os.userInfo().homedir reads /etc/passwd directly, bypassing the HOME env var.
@@ -362,6 +363,99 @@ ipcMain.handle("template-delete", (_event, id) => {
 /* ---- Channels ---- */
 
 const CHANNELS_DIR = path.join(SCREENLET_DIR, "channels");
+const DEVICES_FILE = path.join(SCREENLET_DIR, "devices.json");
+
+function readDevices() {
+  try {
+    if (fs.existsSync(DEVICES_FILE)) return JSON.parse(fs.readFileSync(DEVICES_FILE, "utf8"));
+  } catch {}
+  return [];
+}
+
+function writeDevices(devices) {
+  ensureDir(SCREENLET_DIR);
+  fs.writeFileSync(DEVICES_FILE, JSON.stringify(devices, null, 2));
+}
+
+function sshExec(device, command) {
+  return new Promise((resolve, reject) => {
+    const conn = new SshClient();
+    let output = "";
+    const timeout = setTimeout(() => {
+      conn.end();
+      reject(new Error("SSH connection timeout (10s)"));
+    }, 10_000);
+
+    conn.on("ready", () => {
+      conn.exec(command, (err, stream) => {
+        if (err) { clearTimeout(timeout); conn.end(); reject(err); return; }
+        stream.on("close", (code) => {
+          clearTimeout(timeout);
+          conn.end();
+          if (code === 0) resolve(output);
+          else reject(new Error(`Comando retornou código ${code}: ${output.trim()}`));
+        });
+        stream.on("data", (d) => { output += d.toString(); });
+        stream.stderr.on("data", (d) => { output += d.toString(); });
+      });
+    });
+    conn.on("error", (err) => { clearTimeout(timeout); reject(err); });
+    conn.connect({
+      host: device.ip,
+      port: device.sshPort || 22,
+      username: device.sshUser,
+      password: device.sshPassword,
+      readyTimeout: 10_000,
+    });
+  });
+}
+
+function kodiRequest(device, method, params) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ jsonrpc: "2.0", method, params: params || {}, id: 1 });
+    const auth = Buffer.from(`${device.kodiHttpUser}:${device.kodiHttpPassword}`).toString("base64");
+    const options = {
+      hostname: device.ip,
+      port: device.kodiHttpPort || 8080,
+      path: "/jsonrpc",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Basic ${auth}`,
+        "Content-Length": Buffer.byteLength(body),
+      },
+      timeout: 6_000,
+    };
+    const req = http.request(options, (res) => {
+      let data = "";
+      res.on("data", (d) => { data += d; });
+      res.on("end", () => {
+        try { resolve(JSON.parse(data)); }
+        catch (e) { reject(new Error(`Resposta inválida do Kodi: ${data.slice(0, 100)}`)); }
+      });
+    });
+    req.on("timeout", () => { req.destroy(); reject(new Error("Timeout — verifique IP e porta do Kodi")); });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+async function kodiRestartAndOpen(device) {
+  await sshExec(device, "systemctl restart kodi");
+  console.log(`[kodi] Kodi reiniciado em ${device.name} (${device.ip})`);
+  if (device.kodiChannelId != null) {
+    const delaySecs = device.restartDelaySecs ?? 20;
+    setTimeout(async () => {
+      try {
+        await kodiRequest(device, "Player.Open", { item: { channelid: device.kodiChannelId } });
+        console.log(`[kodi] Canal ${device.kodiChannelId} aberto em ${device.name}`);
+      } catch (err) {
+        console.error(`[kodi] Falha ao abrir canal em ${device.name}:`, err.message);
+      }
+    }, delaySecs * 1000);
+  }
+}
 
 ipcMain.handle("channel-list", () => {
   ensureDir(CHANNELS_DIR);
@@ -379,11 +473,63 @@ ipcMain.handle("channel-list", () => {
 ipcMain.handle("channel-save", (_event, channel) => {
   ensureDir(CHANNELS_DIR);
   fs.writeFileSync(path.join(CHANNELS_DIR, `${channel.id}.json`), JSON.stringify(channel, null, 2));
+  // Fire-and-forget: restart Kodi on all devices assigned to this channel
+  const affected = readDevices().filter((d) => d.defaultChannelId === channel.id);
+  for (const device of affected) {
+    kodiRestartAndOpen(device).catch((err) =>
+      console.error(`[kodi] Falha ao reiniciar ${device.name}:`, err.message)
+    );
+  }
 });
 
 ipcMain.handle("channel-delete", (_event, id) => {
   const file = path.join(CHANNELS_DIR, `${id}.json`);
   if (fs.existsSync(file)) fs.unlinkSync(file);
+});
+
+/* ---- Kodi Devices ---- */
+
+ipcMain.handle("device-list", () => readDevices());
+
+ipcMain.handle("device-save", (_event, device) => {
+  const devices = readDevices();
+  const idx = devices.findIndex((d) => d.id === device.id);
+  if (idx >= 0) devices[idx] = device;
+  else devices.push(device);
+  writeDevices(devices);
+});
+
+ipcMain.handle("device-delete", (_event, id) => {
+  writeDevices(readDevices().filter((d) => d.id !== id));
+});
+
+ipcMain.handle("kodi-ping", async (_event, device) => {
+  try {
+    const res = await kodiRequest(device, "JSONRPC.Version", {});
+    const v = res?.result?.version;
+    const version = v ? `${v.major}.${v.minor}.${v.patch}` : "desconhecida";
+    return { ok: true, version };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("kodi-list-channels", async (_event, device) => {
+  try {
+    const res = await kodiRequest(device, "PVR.GetChannels", { channelgroupid: "alltv" });
+    return (res?.result?.channels || []).map((c) => ({ channelid: c.channelid, label: c.label }));
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle("kodi-restart-and-open", async (_event, device) => {
+  try {
+    await kodiRestartAndOpen(device);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });
 
 /* ---- Media catalog ---- */

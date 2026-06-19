@@ -8,6 +8,7 @@ import {
   Images,
   LayoutGrid,
   LayoutTemplate,
+  MonitorPlay,
   Radio,
   Settings,
   Tv2,
@@ -33,6 +34,7 @@ const NAV_CONTENT: NavItem[] = [
 
 const NAV_PROGRAMMING: NavItem[] = [
   { icon: <Tv2 size={16} />, label: "Canais", page: "channels" },
+  { icon: <MonitorPlay size={16} />, label: "Dispositivos", page: "devices" },
 ];
 
 const NAV_IPTV: NavItem[] = [

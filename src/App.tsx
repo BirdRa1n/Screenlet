@@ -21,6 +21,7 @@ import { Templates } from "./pages/Templates";
 import { TemplateBuilder } from "./pages/TemplateBuilder";
 import { TemplateWizard } from "./pages/TemplateWizard";
 import { Channels } from "./pages/Channels";
+import { Devices } from "./pages/Devices";
 import { Renders } from "./pages/Renders";
 import { IptvServer } from "./pages/IptvServer";
 import { Button, Dialog, Field, TextField } from "./design-system/components";
@@ -170,6 +171,11 @@ export default function App() {
           {page === "channels" && (
             <motion.div key="channels" className="vt-app__main" {...pageVariants}>
               <Channels />
+            </motion.div>
+          )}
+          {page === "devices" && (
+            <motion.div key="devices" className="vt-app__main" {...pageVariants}>
+              <Devices />
             </motion.div>
           )}
           {page === "iptv" && (

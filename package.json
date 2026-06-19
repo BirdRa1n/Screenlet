@@ -107,14 +107,15 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "remotion": "^4.0.478",
+    "ssh2": "^1.17.0",
     "zustand": "^5.0.14"
   },
   "optionalDependencies": {
     "@remotion/compositor-darwin-arm64": "4.0.478",
     "@remotion/compositor-darwin-x64": "4.0.478",
-    "@remotion/compositor-win32-x64-msvc": "4.0.478",
+    "@remotion/compositor-linux-arm64-gnu": "4.0.478",
     "@remotion/compositor-linux-x64-gnu": "4.0.478",
-    "@remotion/compositor-linux-arm64-gnu": "4.0.478"
+    "@remotion/compositor-win32-x64-msvc": "4.0.478"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -72,6 +72,14 @@ declare global {
       iptvStop: () => Promise<import("./store/useIptvStore").IptvStatus>;
       iptvSetIp: (ip: string) => Promise<import("./store/useIptvStore").IptvStatus>;
 
+      // Kodi Devices
+      deviceList: () => Promise<import("./types/device").KodiDevice[]>;
+      deviceSave: (device: import("./types/device").KodiDevice) => Promise<void>;
+      deviceDelete: (id: string) => Promise<void>;
+      kodiPing: (device: Pick<import("./types/device").KodiDevice, "ip" | "kodiHttpPort" | "kodiHttpUser" | "kodiHttpPassword">) => Promise<import("./types/device").KodiPingResult>;
+      kodiListChannels: (device: Pick<import("./types/device").KodiDevice, "ip" | "kodiHttpPort" | "kodiHttpUser" | "kodiHttpPassword">) => Promise<import("./types/device").KodiChannel[]>;
+      kodiRestartAndOpen: (device: import("./types/device").KodiDevice) => Promise<{ ok: boolean; error?: string }>;
+
       // Platform info
       platform: NodeJS.Platform;
       setTitleBarTheme: (isDark: boolean) => Promise<void>;

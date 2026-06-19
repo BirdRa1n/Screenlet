@@ -4,7 +4,7 @@ export type Page =
   | "dashboard" | "wizard" | "editor"
   | "projects" | "library" | "media-hub" | "templates" | "template-builder" | "template-wizard"
   | "renders"
-  | "channels"
+  | "channels" | "devices"
   | "iptv" | "settings";
 
 type NavigationStore = {
