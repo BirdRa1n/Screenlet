@@ -645,11 +645,18 @@ const ClaimDialog: React.FC<{
   const handleClaim = async () => {
     if (!device || !channelId) return;
     setSaving(true);
-    await claim(device.id, channelId, name.trim() || undefined);
-    toast.success(`"${name.trim() || device.hostname}" pareado.`);
-    setSaving(false);
-    onClaimed();
-    onClose();
+    try {
+      await claim(device.id, channelId, name.trim() || undefined);
+      toast.success(`"${name.trim() || device.hostname}" pareado.`);
+      onClaimed();
+      onClose();
+    } catch (err) {
+      // Device unreachable, or claimed by a different Screenlet Studio
+      // instance in the meantime — dialog stays open so the admin can retry.
+      toast.error(err instanceof Error ? err.message : "Falha ao parear dispositivo.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -685,7 +692,7 @@ const ClaimDialog: React.FC<{
 
 export const Devices: React.FC = () => {
   const { devices, refresh } = useDeviceStore();
-  const { devices: playerDevices, refresh: refreshPlayerDevices } = usePlayerDeviceStore();
+  const { devices: playerDevices, refresh: refreshPlayerDevices, scan: scanPlayers, scanning } = usePlayerDeviceStore();
   const { channels, refresh: refreshChannels } = useChannelStore();
   const [addOpen, setAddOpen] = useState(false);
   const [editDevice, setEditDevice] = useState<KodiDevice | null>(null);
@@ -754,9 +761,19 @@ export const Devices: React.FC = () => {
             <Cast size={16} /> Screenlet Player
           </h2>
           <p className="vt-devices__section-sub">
-            Cliente nativo (sem Kodi, sem SSH) — dispositivos aparecem aqui sozinhos ao ligar.
+            Cliente nativo (sem Kodi, sem SSH) — dispositivos aparecem sozinhos ao ligar, ou
+            procure por dispositivos que ainda não sabem o endereço deste computador.
           </p>
         </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<RefreshCw size={12} className={scanning ? "vt-devices__spin" : undefined} />}
+          onClick={() => scanPlayers()}
+          disabled={scanning}
+        >
+          {scanning ? "Procurando…" : "Procurar na rede"}
+        </Button>
       </div>
 
       {pendingPlayers.length > 0 && (
@@ -773,7 +790,8 @@ export const Devices: React.FC = () => {
           <p className="vt-devices__empty-title">Nenhum Screenlet Player detectado</p>
           <p className="vt-devices__empty-text">
             Instale e inicie o screenlet-player com <code>-studio-url</code> apontando para este
-            computador — ele aparecerá aqui automaticamente.
+            computador — ele aparecerá aqui automaticamente. Já está rodando mas sem
+            <code>-studio-url</code>? Use "Procurar na rede" acima.
           </p>
         </div>
       ) : pairedPlayers.length > 0 ? (

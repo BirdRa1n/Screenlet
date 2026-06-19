@@ -76,8 +76,10 @@ contextBridge.exposeInMainWorld("adFrame", {
   // Read Kodi HTTP config directly from guisettings.xml via SSH.
   kodiFetchConfig: (sshCreds) => ipcRenderer.invoke("kodi-fetch-config", sshCreds),
 
-  // Screenlet Player devices (native client, paired via heartbeat — no SSH)
+  // Screenlet Player devices (native client, paired via heartbeat or
+  // network scan — no SSH)
   playerDeviceList: () => ipcRenderer.invoke("player-device-list"),
+  playerDeviceScan: () => ipcRenderer.invoke("player-device-scan"),
   playerDeviceClaim: (payload) => ipcRenderer.invoke("player-device-claim", payload),
   playerDeviceUnpair: (id) => ipcRenderer.invoke("player-device-unpair", id),
   playerDeviceDelete: (id) => ipcRenderer.invoke("player-device-delete", id),

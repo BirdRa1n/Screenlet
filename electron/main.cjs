@@ -655,14 +655,27 @@ function readJsonBody(req) {
   });
 }
 
-// A heartbeat is the only way Studio learns a screenlet-player device
-// exists — there is no separate "announce" call. Upserts by deviceId
-// whether or not the device has been claimed yet.
-function upsertPlayerHeartbeat(body) {
+// Strips the IPv4-mapped-IPv6 prefix Node sometimes reports for dual-stack
+// listeners (e.g. "::ffff:192.168.1.10" -> "192.168.1.10").
+function normalizeIp(addr) {
+  if (!addr) return addr;
+  return addr.startsWith("::ffff:") ? addr.slice(7) : addr;
+}
+
+const PLAYER_CONTROL_PORT = 8089; // screenlet-player's default -addr port
+
+// A heartbeat is one of two ways Studio learns a screenlet-player device
+// exists (the other is an active network scan, see scanForPlayers below).
+// Upserts by deviceId whether or not the device has been claimed yet.
+// remoteIp (the heartbeat's actual source address) is how Studio learns
+// where to reach that device's control API for claiming — the device
+// never has to report its own address.
+function upsertPlayerHeartbeat(body, remoteIp) {
   const { deviceId, hostname, pairingCode, playerVersion, playing, source } = body || {};
   if (!deviceId) return;
   const devices = readPlayerDevices();
   const now = new Date().toISOString();
+  const apiUrl = remoteIp ? `http://${remoteIp}:${PLAYER_CONTROL_PORT}` : null;
   const idx = devices.findIndex((d) => d.deviceId === deviceId);
   if (idx >= 0) {
     devices[idx] = {
@@ -672,6 +685,7 @@ function upsertPlayerHeartbeat(body) {
       playerVersion: playerVersion || devices[idx].playerVersion,
       playing: !!playing,
       source: source || null,
+      apiUrl: apiUrl || devices[idx].apiUrl || null,
       lastSeenAt: now,
     };
   } else {
@@ -686,12 +700,143 @@ function upsertPlayerHeartbeat(body) {
       paired: false,
       playing: !!playing,
       source: source || null,
+      apiUrl,
       lastSeenAt: now,
       pairedAt: null,
       createdAt: now,
     });
   }
   writePlayerDevices(devices);
+}
+
+// ── Network scan: the other way to find a screenlet-player device ──
+//
+// Heartbeats require the device to already know Studio's address
+// (-studio-url). A scan finds devices that don't — Studio sweeps its own
+// local subnet(s), probing each host's control API directly. Compatible,
+// unclaimed devices answer GET /identify with no auth needed.
+
+function ipToInt(ip) {
+  return ip.split(".").reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+}
+
+function intToIp(int) {
+  return [24, 16, 8, 0].map((shift) => (int >>> shift) & 255).join(".");
+}
+
+// Local IPv4 interfaces worth sweeping, with their netmask (unlike
+// getLocalIPs() above, which only ranks addresses for display).
+function getLocalSubnets() {
+  const nets = os.networkInterfaces();
+  return Object.values(nets)
+    .flat()
+    .filter((n) => n.family === "IPv4" && !n.internal && n.netmask);
+}
+
+// All usable host addresses in a subnet, excluding network/broadcast and
+// our own address. Returns [] for anything bigger than a /23 (510 hosts)
+// as a safety cap — chiefly to avoid trying to enumerate a VPN/Tailscale
+// CGNAT range (100.64.0.0/10) that happens to also be up on this machine.
+function subnetHosts(address, netmask) {
+  const ipInt = ipToInt(address);
+  const maskInt = ipToInt(netmask);
+  const networkInt = ipInt & maskInt;
+  const broadcastInt = networkInt | (~maskInt >>> 0);
+  const hostCount = broadcastInt - networkInt - 1;
+  if (hostCount <= 0 || hostCount > 510) return [];
+  const hosts = [];
+  for (let i = networkInt + 1; i < broadcastInt; i++) {
+    const ip = intToIp(i);
+    if (ip !== address) hosts.push(ip);
+  }
+  return hosts;
+}
+
+function probeIdentify(ip, timeoutMs = 800) {
+  return new Promise((resolve) => {
+    const req = http.get(
+      { host: ip, port: PLAYER_CONTROL_PORT, path: "/identify", timeout: timeoutMs },
+      (res) => {
+        let data = "";
+        res.on("data", (c) => { data += c; });
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            resolve(json && typeof json.deviceId === "string" ? { ip, ...json } : null);
+          } catch {
+            resolve(null);
+          }
+        });
+      }
+    );
+    req.on("timeout", () => { req.destroy(); resolve(null); });
+    req.on("error", () => resolve(null));
+  });
+}
+
+// Sweeps every local subnet in parallel (bounded concurrency) and returns
+// only devices that responded and aren't already claimed by some other
+// Screenlet Studio instance — those have nothing for us to do with them.
+async function scanForPlayers() {
+  const candidates = new Set();
+  for (const { address, netmask } of getLocalSubnets()) {
+    for (const ip of subnetHosts(address, netmask)) candidates.add(ip);
+  }
+
+  const queue = Array.from(candidates);
+  const found = [];
+  const concurrency = 48;
+  async function worker() {
+    while (queue.length) {
+      const ip = queue.shift();
+      const result = await probeIdentify(ip);
+      if (result && result.claimed === false) found.push(result);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) || 1 }, worker));
+  return found;
+}
+
+// POSTs JSON to an arbitrary http(s) URL and resolves with the parsed JSON
+// response. Used to call a screenlet-player device's own control API
+// (claim) — distinct from this process's own HTTP server.
+function httpPostJson(targetUrl, body, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    let url;
+    try {
+      url = new URL(targetUrl);
+    } catch {
+      reject(new Error("URL do player inválida"));
+      return;
+    }
+    const payload = JSON.stringify(body || {});
+    const req = http.request(
+      {
+        hostname: url.hostname,
+        port: url.port || 80,
+        path: url.pathname,
+        method: "POST",
+        timeout: timeoutMs,
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (c) => { data += c; });
+        res.on("end", () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            try { resolve(JSON.parse(data)); }
+            catch { reject(new Error("resposta inválida do player")); }
+          } else {
+            reject(new Error(`player respondeu ${res.statusCode}: ${data || "(sem corpo)"}`));
+          }
+        });
+      }
+    );
+    req.on("timeout", () => { req.destroy(); reject(new Error("tempo esgotado ao contatar o player")); });
+    req.on("error", (err) => reject(new Error(`falha ao contatar o player: ${err.message}`)));
+    req.write(payload);
+    req.end();
+  });
 }
 
 // What a paired device polls for. Mirrors the URL Kodi devices already use
@@ -712,18 +857,89 @@ function getPlayerSyncResponse(deviceId) {
   };
 }
 
-ipcMain.handle("player-device-list", () => readPlayerDevices());
+// Strips the encrypted token before it ever reaches the renderer — same
+// pattern as readDevicesForRenderer() for Kodi passwords above.
+ipcMain.handle("player-device-list", () =>
+  readPlayerDevices().map(({ apiToken_enc, ...rest }) => ({ ...rest, hasApiToken: !!apiToken_enc }))
+);
 
-ipcMain.handle("player-device-claim", (_event, { id, channelId, name }) => {
+// Sweeps the local network and merges any unclaimed devices found into
+// the same list heartbeat-discovered devices show up in, so the
+// Dispositivos panel has one unified "detectados" list regardless of how
+// a device was found.
+ipcMain.handle("player-device-scan", async () => {
+  const found = await scanForPlayers();
+  const devices = readPlayerDevices();
+  const now = new Date().toISOString();
+  for (const f of found) {
+    const apiUrl = `http://${f.ip}:${PLAYER_CONTROL_PORT}`;
+    const idx = devices.findIndex((d) => d.deviceId === f.deviceId);
+    if (idx >= 0) {
+      devices[idx] = {
+        ...devices[idx],
+        hostname: f.hostname || devices[idx].hostname,
+        playerVersion: f.playerVersion || devices[idx].playerVersion,
+        apiUrl,
+        lastSeenAt: now,
+      };
+    } else {
+      devices.push({
+        id: crypto.randomUUID(),
+        deviceId: f.deviceId,
+        name: f.hostname || f.deviceId.slice(0, 8),
+        hostname: f.hostname || "",
+        pairingCode: "",
+        playerVersion: f.playerVersion || "",
+        channelId: null,
+        paired: false,
+        playing: false,
+        source: null,
+        apiUrl,
+        lastSeenAt: now,
+        pairedAt: null,
+        createdAt: now,
+      });
+    }
+  }
+  writePlayerDevices(devices);
+  return readPlayerDevices().map(({ apiToken_enc, ...rest }) => ({ ...rest, hasApiToken: !!apiToken_enc }));
+});
+
+ipcMain.handle("player-device-claim", async (_event, { id, channelId, name }) => {
   const devices = readPlayerDevices();
   const idx = devices.findIndex((d) => d.id === id);
-  if (idx < 0) return;
+  if (idx < 0) throw new Error("Dispositivo não encontrado.");
+  const device = devices[idx];
+
+  // Already have a token for this device (e.g. re-claiming after a local
+  // unpair) — the player would reject a second /claim with 409, so reuse
+  // what we have instead of calling it again.
+  let apiToken_enc = device.apiToken_enc || null;
+
+  if (!apiToken_enc) {
+    if (!device.apiUrl) {
+      throw new Error("URL do player desconhecida — rode uma varredura na rede ou aguarde um novo heartbeat antes de parear.");
+    }
+    const studioUrl = `http://${getSelectedIp()}:${IPTV_PORT}`;
+    let claimResult;
+    try {
+      claimResult = await httpPostJson(`${device.apiUrl}/claim`, { studioUrl });
+    } catch (err) {
+      throw new Error(`Não foi possível parear: ${err.message}`);
+    }
+    if (!claimResult || !claimResult.token) {
+      throw new Error("Player não retornou um token de autenticação válido.");
+    }
+    apiToken_enc = encryptPwd(claimResult.token);
+  }
+
   devices[idx] = {
-    ...devices[idx],
+    ...device,
     channelId,
-    name: name?.trim() || devices[idx].name,
+    name: name?.trim() || device.name,
     paired: true,
     pairedAt: new Date().toISOString(),
+    apiToken_enc,
   };
   writePlayerDevices(devices);
 });
@@ -1079,8 +1295,9 @@ function handleIptvRequest(req, res) {
   // --- screenlet-player: pairing + sync (see docs in that repo's docs/PAIRING.md) ---
 
   if (urlPath === "/api/player/heartbeat" && req.method === "POST") {
+    const remoteIp = normalizeIp(req.socket.remoteAddress);
     readJsonBody(req)
-      .then((body) => { upsertPlayerHeartbeat(body); res.writeHead(204); res.end(); })
+      .then((body) => { upsertPlayerHeartbeat(body, remoteIp); res.writeHead(204); res.end(); })
       .catch(() => { res.writeHead(400, { "Content-Type": "text/plain" }); res.end("invalid json"); });
     return;
   }

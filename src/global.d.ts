@@ -86,6 +86,11 @@ declare global {
 
       // Screenlet Player devices
       playerDeviceList: () => Promise<import("./types/playerDevice").PlayerDevice[]>;
+      // Sweeps the local network for unclaimed devices; throws nothing,
+      // just returns whatever the (possibly empty) result is.
+      playerDeviceScan: () => Promise<import("./types/playerDevice").PlayerDevice[]>;
+      // May reject — device unreachable, or already claimed by another
+      // Screenlet Studio instance.
       playerDeviceClaim: (payload: { id: string; channelId: string; name?: string }) => Promise<void>;
       playerDeviceUnpair: (id: string) => Promise<void>;
       playerDeviceDelete: (id: string) => Promise<void>;
