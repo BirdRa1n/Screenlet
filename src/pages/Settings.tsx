@@ -110,7 +110,7 @@ export const Settings: React.FC = () => {
               <Checkbox
                 checked={appSettings.launchAtLogin}
                 onChange={setLaunchAtLogin}
-                label="Iniciar o Screenlet junto com o Windows"
+                label="Iniciar o Screenlet junto com o Windows (minimizado, na bandeja do sistema)"
               />
               {appSettings.launchAtLogin && (
                 <Checkbox

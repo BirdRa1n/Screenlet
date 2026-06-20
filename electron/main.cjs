@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, protocol, net, globalShortcut, shell, nativeTheme, safeStorage } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, protocol, net, globalShortcut, shell, nativeTheme, safeStorage, Tray, Menu } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -21,6 +21,20 @@ try {
 }
 
 const isDev = !app.isPackaged;
+
+// Set on the login-item's launch args (see app-settings-set-launch-at-login)
+// so a boot launch on a kiosk machine doesn't pop the window open every time.
+const startedHidden = process.argv.includes("--hidden");
+
+function getTrayIconPath() {
+  const relative = path.join("assets", "icons", "windows", "32x32.png");
+  return isDev
+    ? path.join(__dirname, "..", "public", relative)
+    : path.join(process.resourcesPath, "app", "dist", relative);
+}
+
+let tray = null;
+let isQuitting = false;
 
 // ── Remotion browser management ──────────────────────────────────────────────
 // Chrome is cached in userData/remotion-root/node_modules/.remotion so it
@@ -123,6 +137,10 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 960,
+    // Launched at Windows login (see app-settings-set-launch-at-login) — stay
+    // hidden until the tray's "Abrir Screenlet" is clicked, instead of
+    // popping the window open on every boot of an unattended kiosk.
+    show: !startedHidden,
     // macOS: custom inset title bar with traffic lights over the sidebar header.
     // Windows/Linux: hidden title bar with a native overlay that keeps ─ □ ✕ controls.
     ...(isMac
@@ -145,6 +163,18 @@ function createWindow() {
   } else {
     // Load via app:// so staticFile('/uploads/x') resolves correctly inside Remotion Player
     mainWindow.loadURL("app://index.html");
+  }
+
+  // Minimize-to-tray on Windows: closing the window hides it instead of
+  // quitting, so the tray icon (and whatever's running — IPTV server,
+  // playback) survives. "Sair" in the tray menu is the only thing that
+  // actually sets isQuitting and lets the window really close.
+  if (!isMac) {
+    mainWindow.on("close", (event) => {
+      if (isQuitting || !tray) return;
+      event.preventDefault();
+      mainWindow.hide();
+    });
   }
 }
 
@@ -205,6 +235,20 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // Tray icon — Windows only (the rest of this feature, in Settings, is
+  // also Windows-scoped; Linux tray support is too inconsistent across
+  // desktop environments to rely on here).
+  if (process.platform === "win32") {
+    tray = new Tray(getTrayIconPath());
+    tray.setToolTip("Screenlet");
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: "Abrir Screenlet", click: () => mainWindow?.show() },
+      { type: "separator" },
+      { label: "Sair", click: () => { isQuitting = true; app.quit(); } },
+    ]));
+    tray.on("click", () => mainWindow?.show());
+  }
 
   // "Iniciar com o sistema" + "Iniciar servidor IPTV já na inicialização"
   // (Settings page, Windows) — only fires when both are enabled, since the
@@ -1201,7 +1245,14 @@ ipcMain.handle("app-settings-set-launch-at-login", (_event, value) => {
   saveAppSettings(appSettings);
   // setLoginItemSettings registers electron.exe itself in dev (wrong binary,
   // and confusing while iterating) — only apply it in a packaged build.
-  if (!isDev) app.setLoginItemSettings({ openAtLogin: appSettings.launchAtLogin });
+  // --hidden tells the next boot launch to skip showing the window (see
+  // startedHidden) and rely on the tray icon instead.
+  if (!isDev) {
+    app.setLoginItemSettings({
+      openAtLogin: appSettings.launchAtLogin,
+      args: appSettings.launchAtLogin ? ["--hidden"] : [],
+    });
+  }
   return appSettings;
 });
 
@@ -1639,7 +1690,9 @@ ipcMain.handle("set-titlebar-theme", (_, isDark) => updateTitleBarOverlay(isDark
 nativeTheme.on("updated", () => updateTitleBarOverlay(nativeTheme.shouldUseDarkColors));
 
 app.on("before-quit", () => {
+  isQuitting = true;
   if (iptvServer) iptvServer.close();
+  tray?.destroy();
 });
 
 /* ---- Export ---- */
