@@ -30,8 +30,12 @@ export const Studio: React.FC<Props> = ({ channel, onClose, onSave }) => {
 
   // ── Preview player ──────────────────────────────────────────────────────
   // Plays through the in-memory playlist sequentially via the actual export
-  // files (app://exports/...) — a rough approximation of the real IPTV
-  // broadcast, which remuxes the same files with mpegts/ffmpeg and isn't
+  // files ("exports/..." — relative, resolves against the page's app://
+  // base the same way asset.filename does for uploads; an absolute
+  // "app://exports/..." would put "exports" in the URL host instead of the
+  // path and never match the protocol handler) — a rough approximation of
+  // the real IPTV broadcast, which remuxes the same files with mpegts/ffmpeg
+  // and isn't
   // playable in a plain <video> tag. Transitions aren't simulated, only order.
   const videoRef = useRef<HTMLVideoElement>(null);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -237,7 +241,7 @@ export const Studio: React.FC<Props> = ({ channel, onClose, onSave }) => {
                     ref={videoRef}
                     key={previewItem?.id}
                     className="vt-studio__preview-video"
-                    src={previewItem ? `app://exports/${previewItem.filename}` : undefined}
+                    src={previewItem ? `exports/${previewItem.filename}` : undefined}
                     onEnded={handlePreviewEnded}
                     controls
                     autoPlay

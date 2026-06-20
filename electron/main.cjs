@@ -207,7 +207,11 @@ app.whenReady().then(() => {
     // player. net.fetch on file:// supports Range requests, so seeking works.
     if (pathname.startsWith("/exports/")) {
       const filePath = path.join(EXPORTS_DIR, path.basename(pathname));
-      return net.fetch(`file://${filePath}`, { headers: request.headers });
+      // Forwarding the whole incoming Headers object can throw (some of its
+      // entries aren't valid to set on a fetch Request) and silently kills
+      // the load — only Range actually matters here, for seeking.
+      const range = request.headers.get("range");
+      return net.fetch(`file://${filePath}`, range ? { headers: { Range: range } } : undefined);
     }
 
     // App bundle assets → dist/ (may be inside .asar — use fs.readFileSync)
