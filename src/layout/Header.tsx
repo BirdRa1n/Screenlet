@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Download, Save, Smartphone, Tv2 } from "lucide-react";
+import { ArrowLeft, Download, Save } from "lucide-react";
 import { Button, Dialog, IconButton, ProgressBar, Field, TextField } from "../design-system/components";
 import { useNavigationStore } from "../store/useNavigationStore";
 import { useAdStore } from "../store/useAdStore";
 import { useProjectsStore } from "../store/useProjectsStore";
 import { toast } from "../store/useToastStore";
+import { formatIcon } from "../lib/exportFormats";
 import { FORMAT_DIMENSIONS, type ExportFormat } from "../remotion/types";
 import type { ExportProgress } from "../global";
 import "../styles/layout/Header.css";
@@ -12,10 +13,10 @@ import "../styles/layout/Header.css";
 /* ---- Export format dialog ---- */
 
 const FORMAT_ICONS: Record<ExportFormat, React.ReactNode> = {
-  tv:        <Tv2 size={18} />,
-  instagram: <Smartphone size={18} />,
-  stories:   <Smartphone size={18} />,
-  tiktok:    <Smartphone size={18} />,
+  tv: formatIcon("tv", 18),
+  instagram: formatIcon("instagram", 18),
+  stories: formatIcon("stories", 18),
+  tiktok: formatIcon("tiktok", 18),
 };
 
 const ExportDialog: React.FC<{

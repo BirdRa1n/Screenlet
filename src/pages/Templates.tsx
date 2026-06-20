@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Player } from "@remotion/player";
-import { Clock, Clapperboard, Copy, Download, Play, Plus, Trash2, Tv2, SquareIcon, Smartphone, Upload, Pencil } from "lucide-react";
+import { Clock, Clapperboard, Copy, Download, Play, Plus, Trash2, Upload, Pencil } from "lucide-react";
 import { Button, IconButton } from "../design-system/components";
 import { ContextMenu, useContextMenu } from "../design-system/components/ContextMenu";
 import { TemplateRenderer } from "../remotion/TemplateRenderer";
@@ -10,17 +10,11 @@ import { useTemplateStore } from "../store/useTemplateStore";
 import { useNavigationStore } from "../store/useNavigationStore";
 import { useTemplateInstanceStore } from "../store/useTemplateInstanceStore";
 import { toast } from "../store/useToastStore";
+import { formatIcon, type ExportFormatId } from "../lib/exportFormats";
 import type { Template } from "../remotion/template-types";
 import "../styles/pages/Templates.css";
 
 const ALL_TAGS = ["Geral", "Varejo", "Açougue", "Sazonal"];
-
-const FORMAT_ICONS: Record<string, React.ReactNode> = {
-  tv: <Tv2 size={12} />,
-  instagram: <SquareIcon size={12} />,
-  stories: <Smartphone size={12} />,
-  tiktok: <Smartphone size={12} />,
-};
 
 const container = {
   hidden: { opacity: 0 },
@@ -210,9 +204,9 @@ const TemplateCard: React.FC<{
           </div>
 
           <div className="vt-tpl-card__formats">
-            {(["tv", "instagram", "stories", "tiktok"] as const).map((f) => (
+            {(["tv", "instagram", "stories", "tiktok"] as const satisfies readonly ExportFormatId[]).map((f) => (
               <span key={f} className="vt-tpl-card__format">
-                {FORMAT_ICONS[f]}
+                {formatIcon(f, 12)}
                 {f === "tv" ? "TV" : f === "instagram" ? "Instagram" : f === "stories" ? "Stories" : "TikTok"}
               </span>
             ))}

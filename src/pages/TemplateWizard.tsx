@@ -7,9 +7,6 @@ import {
   Check,
   Clock,
   Clapperboard,
-  Monitor,
-  Square,
-  Smartphone,
   ImageIcon,
 } from "lucide-react";
 import { Button, IconButton } from "../design-system/components";
@@ -19,6 +16,7 @@ import { templateTotalFrames } from "../remotion/template-utils";
 import { useTemplateInstanceStore } from "../store/useTemplateInstanceStore";
 import { useNavigationStore } from "../store/useNavigationStore";
 import { toast } from "../store/useToastStore";
+import { formatIcon } from "../lib/exportFormats";
 import type { TemplateVariable } from "../remotion/template-types";
 import type { ExportFormat } from "../remotion/types";
 import "../styles/pages/TemplateWizard.css";
@@ -32,10 +30,10 @@ const FORMAT_OPTIONS: Array<{
   icon: React.ReactNode;
   aspect: string;
 }> = [
-  { id: "tv", label: "TV / YouTube", res: "1920 × 1080", icon: <Monitor size={22} />, aspect: "16/9" },
-  { id: "instagram", label: "Instagram", res: "1080 × 1080", icon: <Square size={22} />, aspect: "1/1" },
-  { id: "stories", label: "Stories", res: "1080 × 1920", icon: <Smartphone size={22} />, aspect: "9/16" },
-  { id: "tiktok", label: "TikTok", res: "1080 × 1920", icon: <Smartphone size={22} />, aspect: "9/16" },
+  { id: "tv", label: "TV / YouTube", res: "1920 × 1080", icon: formatIcon("tv", 22), aspect: "16/9" },
+  { id: "instagram", label: "Instagram", res: "1080 × 1080", icon: formatIcon("instagram", 22), aspect: "1/1" },
+  { id: "stories", label: "Stories", res: "1080 × 1920", icon: formatIcon("stories", 22), aspect: "9/16" },
+  { id: "tiktok", label: "TikTok", res: "1080 × 1920", icon: formatIcon("tiktok", 22), aspect: "9/16" },
 ];
 
 export const TemplateWizard: React.FC<{

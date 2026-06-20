@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Plus, Trash2, Tv2, Smartphone } from "lucide-react";
+import { Check, Plus, Trash2 } from "lucide-react";
 import { Player } from "@remotion/player";
 import {
   Button,
@@ -19,6 +19,7 @@ import {
   type ExportFormat,
 } from "../store/useWizardStore";
 import { toast } from "../store/useToastStore";
+import { formatIcon } from "../lib/exportFormats";
 import { DynamicAd } from "../remotion/DynamicAd";
 import { buildPreset, type PresetId } from "../remotion/presets";
 import "../styles/pages/Wizard.css";
@@ -79,10 +80,10 @@ type FormatOption = {
 };
 
 const FORMATS: FormatOption[] = [
-  { id: "tv", name: "TV / Monitor", dims: "1920 × 1080", icon: <Tv2 size={20} />, available: true },
-  { id: "instagram", name: "Instagram", dims: "1080 × 1080", icon: <Smartphone size={20} />, available: true },
-  { id: "stories", name: "Stories", dims: "1080 × 1920", icon: <Smartphone size={20} />, available: true },
-  { id: "tiktok", name: "TikTok", dims: "1080 × 1920", icon: <Smartphone size={20} />, available: true },
+  { id: "tv", name: "TV / Monitor", dims: "1920 × 1080", icon: formatIcon("tv", 20), available: true },
+  { id: "instagram", name: "Instagram", dims: "1080 × 1080", icon: formatIcon("instagram", 20), available: true },
+  { id: "stories", name: "Stories", dims: "1080 × 1920", icon: formatIcon("stories", 20), available: true },
+  { id: "tiktok", name: "TikTok", dims: "1080 × 1920", icon: formatIcon("tiktok", 20), available: true },
 ];
 
 const paneVariants = {
@@ -508,6 +509,7 @@ const StepPreview: React.FC<{
           style={{ width: "100%", aspectRatio: "16/9" }}
           controls
           loop
+          autoPlay
           acknowledgeRemotionLicense
         />
       ) : (
@@ -536,8 +538,7 @@ const StepExportar: React.FC = () => {
     <>
       <h2 className="vt-wizard__pane-title">Formato de exportação</h2>
       <p className="vt-wizard__pane-sub">
-        Escolha o destino do vídeo. TV já está disponível; outros formatos em
-        breve.
+        Escolha o destino do vídeo — TV, Instagram, Stories e TikTok já estão disponíveis.
       </p>
       <div className="vt-wizard__formats">
         {FORMATS.map((f) => {
