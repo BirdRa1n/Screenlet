@@ -25,6 +25,12 @@ npm run dist:mac:arm64
 
 # Package macOS — Intel only
 npm run dist:mac:intel
+
+# Package Windows installer
+npm run dist:win
+
+# Package Linux
+npm run dist:linux
 ```
 
 ## Architecture
@@ -32,8 +38,8 @@ npm run dist:mac:intel
 Screenlet is an Electron desktop app for digital signage — creating, rendering and broadcasting MP4 video ads (TV, Instagram, Stories, TikTok) via a built-in IPTV server. It combines a Vite+React UI with Remotion for video rendering and export.
 
 ### Process model
-- **`electron/main.cjs`** — Electron main process (CommonJS). Registers `app://` protocol (serves `dist/` and user uploads). All user data lives under `~/Documents/Screenlet/` (or a user-configured path). Runs Remotion `renderMedia()` for MP4 export with adaptive concurrency. Runs an HTTP IPTV server on port 7095.
-- **`electron/preload.cjs`** — Exposes `window.adFrame` via `contextBridge`. Key groups: file utils (`selectImage`, `copyFile`, `selectVideo`), projects CRUD, templates CRUD, library CRUD, channels CRUD, exports list/delete/reveal, IPTV start/stop/setIp, `exportVideo`, `onExportProgress`, storage management (`storageGetDir`, `storageChooseDir`, `storageMigrate`, `storageOpenDir`), platform info (`platform: NodeJS.Platform`, `setTitleBarTheme(isDark)`).
+- **`electron/main.cjs`** — Electron main process (CommonJS). Registers `app://` protocol (serves `dist/` and user uploads). All user data lives under `~/Documents/Screenlet/` (or a user-configured path). Runs Remotion `renderMedia()`/`renderStill()` for MP4 export and project-thumbnail generation with adaptive concurrency. Runs an HTTP IPTV server on port 7095. Manages a `Tray` icon + login-item (autostart) settings on Windows.
+- **`electron/preload.cjs`** — Exposes `window.adFrame` via `contextBridge`. Key groups: file utils (`selectImage`, `copyFile`, `selectVideo`), projects CRUD, templates CRUD, library CRUD, channels CRUD, Kodi devices CRUD + `kodiPing`/`kodiRestartAndOpen`/`kodiListChannels`/`kodiFetchConfig`, Screenlet Player devices (`playerDeviceList`/`playerDeviceScan`/`playerDeviceClaim`/`playerDeviceUnpair`/`playerDeviceDelete`), exports list/delete/reveal, IPTV start/stop/setIp, app settings (`appSettingsGet`/`appSettingsSetLaunchAtLogin`/`appSettingsSetAutoStartIptv`), `exportVideo`, `onExportProgress`, storage management (`storageGetDir`, `storageChooseDir`, `storageMigrate`, `storageOpenDir`), platform info (`platform: NodeJS.Platform`, `appGetVersion`, `setTitleBarTheme(isDark)`). See `src/global.d.ts` for the full typed surface.
 - **`src/main.tsx`** — Sets `document.documentElement.dataset.platform` from `window.adFrame.platform` at startup so CSS rules can branch per OS. Also sets `--win-controls-w: 152px` on Windows as a CSS fallback for the titlebar overlay width.
 - **`src/`** — React renderer process (ESM, Vite).
 
@@ -57,9 +63,11 @@ Vite dev server has a `serve-user-uploads` plugin (in `vite.config.ts`) that pro
 ### Routing
 Single-page with Zustand-driven navigation. `Page` type in `src/store/useNavigationStore.ts`:
 ```ts
-"dashboard" | "wizard" | "editor" | "projects" | "library" | "media-hub" | "renders"
-| "templates" | "template-builder" | "template-wizard"
-| "channels" | "iptv" | "settings"
+"dashboard" | "wizard" | "editor"
+| "projects" | "library" | "media-hub" | "templates" | "template-builder" | "template-wizard"
+| "renders"
+| "channels" | "devices"
+| "iptv" | "settings"
 ```
 `navigateToBuilder(templateId?)` opens the template builder for a new or existing template.
 
@@ -69,6 +77,12 @@ Catalogs all uploaded assets (images + videos) in `UPLOADS_DIR`. The catalog is 
 - **SHA-256 dedup**: `media-import` computes a SHA-256 hash before copying; if the same file was already imported it returns the existing asset without duplicating.
 - **Non-destructive delete**: removing an asset from the catalog only removes the catalog entry; the physical file is preserved so existing `image: "uploads/xxx"` references in projects still work.
 - **`MediaPicker` component** (`src/components/media/MediaPicker.tsx`): shared picker used in `InspectorPanel` (ProductInspector image field). Opens a dialog showing the catalog grid + "Import file" button. Replaces `UploadZone` for choosing product images.
+- **Video thumbnails**: `VideoThumbnail` component in `MediaHub.tsx` captures a frame via a detached `<video>` + `<canvas>` + `toDataURL()` (no IPC/disk write — generated client-side on render).
+
+### Devices (`src/pages/Devices.tsx`)
+Two unrelated device-management sections share this one page:
+- **Kodi devices** (`useDeviceStore`, `src/types/device.ts`) — SSH-managed Kodi/LibreELEC boxes. `device-save`/`device-list`/`device-delete` persist `KodiDevice` JSON (passwords encrypted at rest, never sent back to the renderer — only boolean flags). `kodi-ping` checks reachability, `kodi-restart-and-open` restarts Kodi and opens the IPTV M3U, `kodi-list-channels` previews channels from temporary form creds before saving, `kodi-fetch-config` reads `guisettings.xml` over SSH to auto-fill the HTTP API port/credentials fields.
+- **Screenlet Player devices** (`usePlayerDeviceStore`, `src/types/playerDevice.ts`) — sibling Go project (`screenlet-player`, lightweight Linux mpv-based signage player). `player-device-scan` sweeps the local network for unclaimed/unpaired players; `player-device-claim` pairs one to a channel (may reject if unreachable or already claimed by another Studio instance); `player-device-unpair`/`player-device-delete` release/remove it. Claimed players poll the Studio for their assigned channel's programming.
 
 ### State (Zustand stores)
 - **`useAdStore`** — Full ad config + selected scene ID + `seekFrame` + `currentProjectName`. Key actions: `addProductScene`, `addLogoScene`, `addTemplateScene`, `addVideoScene`, `updateScene`, `reorderScenes`, `seekToScene`, `loadConfig`, `setCurrentProjectName`.
@@ -83,14 +97,19 @@ Catalogs all uploaded assets (images + videos) in `UPLOADS_DIR`. The catalog is 
 - **`useChannelStore`** — Channels CRUD, synced with IPC.
 - **`useIptvStore`** — IPTV server status (`running`, `port`, `ips[]`, `selectedIp`, `ffmpegAvailable`). `setIp(ip)` persists the preferred network interface to `userData/iptv-config.json`. `getLocalIPs()` in main sorts IPs: `192.168.x.x` → `10.x.x.x` → `172.16-31.x.x` → VPN/Tailscale last.
 - **`useToastStore`** — Toast notifications.
+- **`useRendersStore`** — Exported MP4 list (`{ videos, loading, refresh(), remove(filename), reveal(filename) }`), backed by `exportsList`/`exportsDelete`/`exportsReveal`. Replaces ad-hoc local state previously kept inside `Renders.tsx`.
+- **`useAppSettingsStore`** — Windows-only app settings: `launchAtLogin` (autostart, default off) and `autoStartIptv` (start the IPTV server on launch, default on). Synced with `appSettingsGet`/`appSettingsSetLaunchAtLogin`/`appSettingsSetAutoStartIptv`, persisted to `userData/app-settings.json`.
+- **`useDeviceStore`** — Kodi device CRUD, synced with `device-list`/`device-save`/`device-delete` IPC.
+- **`usePlayerDeviceStore`** — Screenlet Player device CRUD + pairing (`playerDeviceList`/`playerDeviceScan`/`playerDeviceClaim`/`playerDeviceUnpair`/`playerDeviceDelete`).
 
 ### Channel & Studio system
 Channels live in `SCREENLET_DIR/channels/`. Each channel has `playlist: PlaylistItem[]`, `loop: boolean`, and `rules?: ProgrammingRule[]` (see `src/types/channel.ts`). `rules` is optional for backward compatibility with existing channel JSON files.
 
 `PlaylistItem = { id, filename, name, transition: "cut" | "fade" }`.
 
-The Studio (`src/pages/Studio.tsx`) is a fixed full-screen overlay (`z-index: 200`). It has two tabs:
-- **Playlist** tab — library of rendered videos from `EXPORTS_DIR` (left) + playlist editor with move up/down, transition selector, remove (right)
+The Studio (`src/pages/Studio.tsx`) is a fixed full-screen overlay (`z-index: 200`). `type Tab = "playlist" | "preview" | "schedule"`:
+- **Playlist** tab — library of rendered videos from `EXPORTS_DIR` (left, via `useRendersStore`) + playlist editor with move up/down, transition selector, remove (right)
+- **Pré-visualizar** tab — a real `<Player>` (Remotion) that plays through the current `playlist` in order, switching `src` per item and respecting each item's `transition`; shows an empty state pointing back to the Playlist tab if it has no items
 - **Horários** tab — `ProgrammingTimeline` component for managing `ProgrammingRule[]`
 - Footer: loop toggle + Save/Cancel (saves `{ ...channel, playlist, loop, rules }`)
 
@@ -107,8 +126,16 @@ The Studio (`src/pages/Studio.tsx`) is a fixed full-screen overlay (`z-index: 20
 
 `Channels.tsx` opens Studio by setting `studioChannel` state; while set, it renders `<Studio>` instead of the channel list.
 
+### Windows tray & autostart
+- App can be launched with `--hidden` (checked via `startedHidden = process.argv.includes("--hidden")`), which creates the main `BrowserWindow` with `show: false` and skips the startup focus.
+- A `Tray` icon (`getTrayIconPath()`) is always created; its menu has "Abrir" and "Sair" (`isQuitting = true; app.quit()`).
+- The window's `close` event is intercepted: unless `isQuitting`, it calls `event.preventDefault()` and `window.hide()` instead of actually closing — true quit only happens from the tray's "Sair" or `before-quit`.
+- **Launch at login**: `useAppSettingsStore` (Settings page, Windows-only "Inicialização" section) toggles `appSettingsSetLaunchAtLogin`, which calls `app.setLoginItemSettings({ openAtLogin, args: ["--hidden"] })` — note `setLoginItemSettings` registers `electron.exe` itself in dev (wrong binary), so this only behaves correctly in packaged builds.
+- **Auto-start IPTV**: a second toggle (`autoStartIptv`, default **on**) starts the IPTV server automatically at app launch (`startIptvServer()`, extracted out of the `iptv-start` IPC handler so both the manual and automatic paths share the same code).
+- Settings persisted to `APP_SETTINGS_FILE` (`userData/app-settings.json`), defaults in `DEFAULT_APP_SETTINGS`.
+
 ### Renders page
-`src/pages/Renders.tsx` lists all MP4 files in `EXPORTS_DIR` via `window.adFrame.exportsList()`. Each card has reveal-in-Finder and delete actions.
+`src/pages/Renders.tsx` lists all MP4 files in `EXPORTS_DIR` via `useRendersStore`. Each card has Play (opens a `Dialog` with a `<video>` preview), reveal-in-Finder, and delete actions.
 
 ### Render / export flow
 1. User clicks "Renderizar" → `openFpsDialog(payload, suggestedName)` in `App.tsx`
@@ -116,6 +143,12 @@ The Studio (`src/pages/Studio.tsx`) is a fixed full-screen overlay (`z-index: 20
 3. `confirmRender()` builds filename as `customName + ".mp4"` and calls `runExport`
 4. `runExport` calls `window.adFrame.exportVideo(payload, filename, fps)`
 5. Main process `export-video` handler: auto-saves to `EXPORTS_DIR`, adaptive concurrency, Chrome from cache
+
+Both export and project-thumbnail generation share two helpers in `main.cjs`:
+- **`prepareRenderBundle(onBundleProgress?)`** — bundles (or reuses) the Remotion compositions and returns a writable bundle location via `ensureWritableRenderBundle()` (see gotcha below).
+- **`resolveAdComposition(payload)`** — picks the right composition id + duration/width/height for the given `AdConfig`.
+
+**Project thumbnails**: on `projects-save`, the main process best-effort calls `renderStill()` against `PROJECT_THUMBS_DIR` (`SCREENLET_DIR/project-thumbs/<id>.jpg`) using the same `prepareRenderBundle`/`resolveAdComposition` helpers, and `projects-list` reports `thumbnail: "project-thumbs/<id>.jpg"` (relative path, see protocol gotcha) when the file exists, else `null`. Failures are swallowed — a project without a thumbnail just falls back to a folder icon in `Projects.tsx`.
 
 **Adaptive concurrency** (`computeConcurrency()` in `main.cjs`): reserves 2 GB for OS + app, allocates ~600 MB per Remotion worker, capped at half the CPU count and max 8.
 
@@ -178,9 +211,19 @@ npm run dist:mac
 - `entitlements.plist` includes `cs.disable-library-validation` — required for ffmpeg's dylibs which use relative rpaths blocked by macOS hardened runtime.
 - `HOME` is set at startup via `os.userInfo().homedir` (not `os.homedir()`) because `os.homedir()` reads the `HOME` env var first, which may be empty in packaged Electron on macOS.
 - **DevTools shortcut**: `Cmd+Shift+I` opens DevTools in any build.
+- `"npmRebuild": false` in `package.json`'s `build` config — electron-builder's native-module rebuild step fails on `cpu-features` (an optional perf addon of `ssh2`, used for Kodi SSH) against newer Electron/V8 ABI; `ssh2` already wraps the `require` in `try/catch`, so skipping the rebuild is safe and avoids a hard packaging failure.
+- **Windows resourcesPath can be read-only**: when installed "for all users" into `Program Files`, `process.resourcesPath` is not writable. `export-video` and project-thumbnail rendering used to copy uploads directly into the resources-path Remotion bundle (`{bundleDir}/public/uploads/`) and silently swallow the copy error. Fixed by `ensureWritableRenderBundle(sourceBundleLocation)`, which caches a copy of the bundle under `RENDER_BUNDLE_DIR` (`SCREENLET_DIR/remotion-bundle/`, always writable) and only re-copies when a `.source-mtime` marker file is stale. The render/thumbnail code now always renders out of `RENDER_BUNDLE_DIR`, never out of `process.resourcesPath` directly.
 
 ### `app://` protocol (production)
-Serves app bundle assets using `fs.readFileSync` (handles `.asar` if ever re-enabled) and user uploads via `net.fetch`. Registered before `app.whenReady()` with `registerSchemesAsPrivileged`.
+Serves app bundle assets using `fs.readFileSync` (handles `.asar` if ever re-enabled) and user uploads via `net.fetch`. Registered before `app.whenReady()` with `registerSchemesAsPrivileged({ secure: true, standard: true, supportFetchAPI: true, corsEnabled: true })`.
+
+Routes matched on `pathname`:
+- `/uploads/` → `UPLOADS_DIR`
+- `/project-thumbs/` → `PROJECT_THUMBS_DIR`
+- `/exports/` → `EXPORTS_DIR` (only the `Range` header is forwarded to `net.fetch`, not the full `Headers` object — see gotcha below)
+- anything else falls through to the bundled `dist/` app files
+
+**Critical gotcha — always use relative paths, never `app://host/...` absolute URLs**: in a `scheme://` URL, everything between `//` and the next `/` is the **host**, not the path. `app://exports/foo.mp4` makes `exports` the *host*, so `url.pathname` is `/foo.mp4` — it never matches `pathname.startsWith("/exports/")`. This is why the Studio preview player was stuck at `0:00`: it built `src` as `app://exports/${filename}`. The fix/convention used everywhere else in the codebase (`uploads/...`, `project-thumbs/...`) is to use a **relative** path with no scheme — it resolves against the page's own base URL (`app://index.html`), giving `pathname === "/exports/<file>"` as expected.
 
 ### Key gotchas
 - `electron/main.cjs` is CJS; everything under `src/` is ESM.
@@ -203,3 +246,7 @@ Serves app bundle assets using `fs.readFileSync` (handles `.asar` if ever re-ena
 - `TemplateWizard` and `TemplateBuilder` image fields use `MediaPickerDialog` instead of `window.adFrame.selectImage()`.
 - `Dashboard` stat grid is 4 columns (projects, exports, templates, media catalog count). The 4th `StatCard` uses `iconClass="info"` which needs `.vt-dash__stat-icon--info` in `Dashboard.css`.
 - `IptvServer` shows a "Programação agora" panel using `getCurrentAsset` per channel, refreshed by a 1-minute `setInterval`.
+- **Any path handed to `app://` must be relative** (`"exports/x.mp4"`, never `"app://exports/x.mp4"`) — see the `app://` protocol section above for why the host/path parsing breaks otherwise.
+- `src/lib/exportFormats.tsx` centralizes the format-icon lookup (`formatIcon(format)`) used by `Templates.tsx`, `Wizard.tsx`, `TemplateWizard.tsx`, and `Header.tsx` — don't reintroduce per-component emoji/icon switch statements for export formats.
+- Kodi device passwords are encrypted at rest and never sent to the renderer; only boolean "has password" flags cross the IPC boundary. `kodi-ping`/`kodi-restart-and-open` take only a `deviceId` and decrypt internally in `main.cjs` — never pass plaintext credentials for an already-saved device.
+- `app.setLoginItemSettings()` (autostart) registers whatever binary is currently running — in `npm run electron:dev` that's the `electron` binary itself, not the packaged app, so autostart only works correctly from a packaged build.

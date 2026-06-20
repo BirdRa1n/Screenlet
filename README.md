@@ -37,15 +37,25 @@ Crie anúncios com produtos, preços e logo da sua marca, exporte em **MP4**, or
 
 ### Vídeos renderizados
 - Aba **Vídeos** lista todos os MP4s exportados
-- Revelar no Finder ou excluir diretamente pela interface
+- Pré-visualizar (player embutido), revelar no Finder ou excluir diretamente pela interface
 
 ### Canais e Studio
 - Crie canais IPTV com nome, descrição e logo
-- **Studio** — modal full-screen para montar a playlist de cada canal:
-  - Biblioteca de vídeos renderizados (painel esquerdo)
-  - Playlist com ordenação, transição por clipe (corte / fade) e loop
+- **Studio** — modal full-screen para montar a playlist de cada canal, com 3 abas:
+  - **Playlist** — biblioteca de vídeos renderizados (painel esquerdo) + ordenação, transição por clipe (corte / fade) e loop (painel direito)
+  - **Pré-visualizar** — player que reproduz a playlist na ordem configurada, simulando a transmissão real do canal
+  - **Horários** — regras de programação por horário e dia da semana
 - Servidor IPTV embutido na porta 7095 com playlist M3U e guia EPG
 - Seletor de interface de rede — escolha por qual adaptador transmitir (rede local, Tailscale/VPN, etc.); preferência persistida entre sessões
+
+### Dispositivos
+- **Kodi/LibreELEC** — cadastre boxes Kodi via SSH, teste conexão, liste canais e reinicie/abra o IPTV remotamente. Credenciais armazenadas com criptografia.
+- **Screenlet Player** — pareie players Linux dedicados (projeto irmão `screenlet-player`, baseado em mpv) varrendo a rede local, associe a um canal e acompanhe o status de cada dispositivo pareado.
+
+### Media Hub
+- Catálogo central de todas as imagens e vídeos importados, com miniaturas (inclusive para vídeos, geradas a partir de um frame do clipe)
+- Deduplicação automática por hash do arquivo
+- Seletor de mídia reutilizado no editor, no Template Builder e no Wizard
 
 ### Biblioteca de produtos
 - Cadastre produtos reutilizáveis com categorias
@@ -59,6 +69,7 @@ Crie anúncios com produtos, preços e logo da sua marca, exporte em **MP4**, or
 ### Projetos
 - Salve e carregue projetos com nome personalizado
 - Histórico com data de atualização
+- Miniatura gerada automaticamente para cada projeto salvo
 
 ### Armazenamento
 - Todos os dados (projetos, assets, templates, canais, exports) salvos em `~/Documents/Screenlet/`
@@ -66,8 +77,9 @@ Crie anúncios com produtos, preços e logo da sua marca, exporte em **MP4**, or
 - Seção **Armazenamento** nas configurações para alterar e migrar a pasta com ou sem cópia dos arquivos
 
 ### Configurações
-- Tema claro / escuro / sistema (segue o macOS em tempo real)
+- Tema claro / escuro / sistema (acompanha a preferência do sistema operacional em tempo real)
 - Escolha e migração da pasta de armazenamento
+- **Inicialização (Windows)**: iniciar o Screenlet junto com o sistema (minimizado na bandeja/tray) e, opcionalmente, já iniciar o servidor IPTV automaticamente
 
 ---
 
@@ -129,6 +141,12 @@ npm run dist:mac:arm64
 
 # Só Intel
 npm run dist:mac:intel
+
+# Instalador Windows
+npm run dist:win
+
+# Linux
+npm run dist:linux
 ```
 
 O script `install-cross-compositors.mjs` é executado automaticamente antes de cada `dist:mac*` para garantir que os binários do Remotion para ambas as arquiteturas estejam presentes — mesmo ao buildar em um Mac ARM64.
@@ -141,27 +159,33 @@ O script `install-cross-compositors.mjs` é executado automaticamente antes de c
 src/
   components/
     builder/           # CanvasEditor (drag/resize), Timeline (por camada)
+    media/             # MediaPicker, MediaPickerDialog (catálogo de mídia)
+    programming/       # ProgrammingTimeline, ProgrammingRuleBlock, ProgrammingRuleForm
   design-system/
     components/        # Button, Dialog, Field, UploadZone, ContextMenu, etc.
   layout/              # Sidebar, Header, SceneListPanel, PreviewPanel, InspectorPanel
-  pages/               # Dashboard, Wizard, Projects, Library, Settings
+  lib/                 # exportFormats.tsx (ícones por formato), programmingEngine.ts
+  pages/               # Dashboard, Wizard, Projects, Library, Settings, MediaHub, Devices
                        # Templates, TemplateBuilder, TemplateWizard
                        # Channels, Studio, Renders, IptvServer
   remotion/            # DynamicAd, ProductScene, LogoScene, TemplateRenderer,
                        # LayerRenderer, animations, types, template-types
   store/               # useAdStore, useWizardStore, useLibraryStore, useProjectsStore,
                        # useTemplateStore, useTemplateInstanceStore, useNavigationStore,
-                       # useChannelStore, useIptvStore, useThemeStore, useToastStore
+                       # useChannelStore, useIptvStore, useThemeStore, useToastStore,
+                       # useMediaStore, useRendersStore, useAppSettingsStore,
+                       # useDeviceStore, usePlayerDeviceStore
   styles/
     components/        # CSS dos componentes do design system
     layout/            # CSS dos painéis e layout
-    pages/             # CSS das páginas (incluindo Studio.css e Renders.css)
+    pages/             # CSS das páginas (incluindo Studio.css, Renders.css, MediaHub.css, Devices.css)
     tokens.css         # Variáveis de design (cores, espaçamento, tipografia)
   templates/           # Templates embutidos (generico, carnes, natal, pascoa)
-  types/               # channel.ts (Channel, PlaylistItem, TransitionType)
+  types/               # channel.ts, device.ts (Kodi), playerDevice.ts (Screenlet Player), media.ts
 electron/
   main.cjs             # Processo principal: protocolo app://, armazenamento em ~/Documents/Screenlet/,
-                       # exportação MP4 com concorrência adaptativa, servidor IPTV
+                       # exportação MP4 e thumbnails com concorrência adaptativa, servidor IPTV,
+                       # tray/autostart (Windows), pareamento de Screenlet Player, SSH para Kodi
   preload.cjs          # Bridge window.adFrame (selectImage, exportVideo, channelList, etc.)
 scripts/
   bundle-remotion.mjs            # Pré-compila as composições Remotion em dist/remotion-bundle/
