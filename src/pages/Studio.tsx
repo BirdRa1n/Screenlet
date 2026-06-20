@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, CalendarClock, ChevronLeft, Film, List, Pause, Play, PlayCircle, Plus, X } from "lucide-react";
 import { Button, Checkbox, IconButton } from "../design-system/components";
 import { ProgrammingTimeline } from "../components/programming/ProgrammingTimeline";
+import { useRendersStore } from "../store/useRendersStore";
+import type { ExportedVideo } from "../global";
 import type { Channel, PlaylistItem, TransitionType } from "../types/channel";
 import type { ProgrammingRule } from "../types/programming";
-import type { ExportedVideo } from "../global";
 import "../styles/pages/Studio.css";
 
 function formatBytes(bytes: number) {
@@ -21,7 +22,7 @@ type Props = {
 };
 
 export const Studio: React.FC<Props> = ({ channel, onClose, onSave }) => {
-  const [videos, setVideos] = useState<ExportedVideo[]>([]);
+  const { videos, refresh: refreshVideos } = useRendersStore();
   const [playlist, setPlaylist] = useState<PlaylistItem[]>(channel.playlist ?? []);
   const [loop, setLoop] = useState(channel.loop ?? false);
   const [rules, setRules] = useState<ProgrammingRule[]>(channel.rules ?? []);
@@ -42,8 +43,8 @@ export const Studio: React.FC<Props> = ({ channel, onClose, onSave }) => {
   const [previewPlaying, setPreviewPlaying] = useState(true);
 
   useEffect(() => {
-    window.adFrame.exportsList().then(setVideos);
-  }, []);
+    refreshVideos();
+  }, [refreshVideos]);
 
   useEffect(() => {
     if (tab === "preview") {

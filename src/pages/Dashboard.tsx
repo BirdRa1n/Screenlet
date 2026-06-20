@@ -9,6 +9,7 @@ import { useProjectsStore } from "../store/useProjectsStore";
 import { useTemplateStore } from "../store/useTemplateStore";
 import { useTemplateInstanceStore } from "../store/useTemplateInstanceStore";
 import { useMediaStore } from "../store/useMediaStore";
+import { useRendersStore } from "../store/useRendersStore";
 import { toast } from "../store/useToastStore";
 import { TemplateRenderer } from "../remotion/TemplateRenderer";
 import { templateTotalFrames, defaultValues } from "../remotion/template-utils";
@@ -25,8 +26,14 @@ export const Dashboard: React.FC = () => {
   const { templates, refresh: refreshTemplates } = useTemplateStore();
   const setTemplateInstance = useTemplateInstanceStore((s) => s.setTemplate);
   const { assets, refresh: refreshMedia } = useMediaStore();
+  const { videos, refresh: refreshRenders } = useRendersStore();
 
-  useEffect(() => { refresh(); refreshTemplates(); refreshMedia(); }, [refresh, refreshTemplates, refreshMedia]);
+  useEffect(() => {
+    refresh();
+    refreshTemplates();
+    refreshMedia();
+    refreshRenders();
+  }, [refresh, refreshTemplates, refreshMedia, refreshRenders]);
 
   // Show at most 4 builtin templates on dashboard
   const featuredTemplates = templates.filter((t) => t.builtin).slice(0, 4);
@@ -51,7 +58,7 @@ export const Dashboard: React.FC = () => {
       {/* Stats */}
       <motion.div className="vt-dash__stats" variants={item}>
         <StatCard icon={<FolderOpen size={17} />} iconClass="primary" value={String(projects.length)} label="Projetos salvos" />
-        <StatCard icon={<Video size={17} />} iconClass="success" value="0" label="Vídeos exportados" />
+        <StatCard icon={<Video size={17} />} iconClass="success" value={String(videos.length)} label="Vídeos exportados" />
         <StatCard icon={<LayoutTemplate size={17} />} iconClass="warning" value={String(templates.length)} label="Templates disponíveis" />
         <StatCard icon={<HardDrive size={17} />} iconClass="info" value={String(assets.length)} label="Mídias no catálogo" />
       </motion.div>

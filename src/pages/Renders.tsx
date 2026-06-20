@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Film, FolderOpen, RefreshCw, Trash2 } from "lucide-react";
-import { Button, IconButton } from "../design-system/components";
+import { Film, FolderOpen, Play, RefreshCw, Trash2 } from "lucide-react";
+import { Button, Dialog, IconButton } from "../design-system/components";
+import { useRendersStore } from "../store/useRendersStore";
 import { toast } from "../store/useToastStore";
 import type { ExportedVideo } from "../global";
 import "../styles/pages/Renders.css";
@@ -18,22 +19,14 @@ function formatDate(iso: string) {
 }
 
 export const Renders: React.FC = () => {
-  const [videos, setVideos] = useState<ExportedVideo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { videos, loading, refresh, remove } = useRendersStore();
+  const [previewVideo, setPreviewVideo] = useState<ExportedVideo | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    const list = await window.adFrame.exportsList();
-    setVideos(list);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, []);
+  useEffect(() => { refresh(); }, [refresh]);
 
   const handleDelete = async (video: ExportedVideo) => {
-    await window.adFrame.exportsDelete(video.filename);
+    await remove(video.filename);
     toast.info(`"${video.name}" removido.`);
-    setVideos((v) => v.filter((x) => x.filename !== video.filename));
   };
 
   const handleReveal = (video: ExportedVideo) => {
@@ -53,7 +46,7 @@ export const Renders: React.FC = () => {
           <Button variant="secondary" size="sm" icon={<FolderOpen size={13} />} onClick={() => window.adFrame.storageOpenDir()}>
             Abrir pasta
           </Button>
-          <Button variant="secondary" size="sm" icon={<RefreshCw size={13} />} onClick={load}>
+          <Button variant="secondary" size="sm" icon={<RefreshCw size={13} />} onClick={refresh}>
             Atualizar
           </Button>
         </div>
@@ -83,6 +76,9 @@ export const Renders: React.FC = () => {
                 </div>
               </div>
               <div className="vt-renders__card-actions">
+                <IconButton label="Reproduzir" onClick={() => setPreviewVideo(v)}>
+                  <Play size={13} />
+                </IconButton>
                 <IconButton label="Revelar no Finder" onClick={() => handleReveal(v)}>
                   <FolderOpen size={13} />
                 </IconButton>
@@ -94,6 +90,24 @@ export const Renders: React.FC = () => {
           ))}
         </div>
       )}
+
+      <Dialog
+        open={!!previewVideo}
+        onClose={() => setPreviewVideo(null)}
+        size="lg"
+        title={previewVideo?.name ?? ""}
+      >
+        {previewVideo && (
+          // Relative path — resolves against the app:// page base, same as
+          // Studio's preview tab and asset.filename for uploads.
+          <video
+            className="vt-renders__preview-video"
+            src={`exports/${previewVideo.filename}`}
+            controls
+            autoPlay
+          />
+        )}
+      </Dialog>
     </div>
   );
 };
