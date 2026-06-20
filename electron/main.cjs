@@ -203,6 +203,12 @@ app.whenReady().then(() => {
       return net.fetch(`file://${filePath}`);
     }
 
+    // Project thumbnails → PROJECT_THUMBS_DIR, generated best-effort on save.
+    if (pathname.startsWith("/project-thumbs/")) {
+      const filePath = path.join(PROJECT_THUMBS_DIR, path.basename(pathname));
+      return net.fetch(`file://${filePath}`);
+    }
+
     // Rendered exports → EXPORTS_DIR, used by the Studio playlist preview
     // player. net.fetch on file:// supports Range requests, so seeking works.
     if (pathname.startsWith("/exports/")) {
@@ -325,7 +331,14 @@ ipcMain.handle("projects-list", () => {
     .map((f) => {
       try {
         const raw = JSON.parse(fs.readFileSync(path.join(PROJECTS_DIR, f), "utf8"));
-        return { id: raw.id, name: raw.name, updatedAt: raw.updatedAt, createdAt: raw.createdAt };
+        const hasThumb = fs.existsSync(path.join(PROJECT_THUMBS_DIR, `${raw.id}.jpg`));
+        return {
+          id: raw.id,
+          name: raw.name,
+          updatedAt: raw.updatedAt,
+          createdAt: raw.createdAt,
+          thumbnail: hasThumb ? `project-thumbs/${raw.id}.jpg` : null,
+        };
       } catch {
         return null;
       }
@@ -348,6 +361,9 @@ ipcMain.handle("projects-save", (_event, config, name) => {
   const now = new Date().toISOString();
   const data = { id, name, createdAt: existing?.createdAt ?? now, updatedAt: now, config };
   fs.writeFileSync(path.join(PROJECTS_DIR, `${id}.json`), JSON.stringify(data, null, 2));
+  // Fire-and-forget — saving shouldn't block on spinning up a renderer just
+  // for a thumbnail; the Projects grid picks it up next time it refreshes.
+  renderProjectThumbnail(id, config).catch(() => {});
   return id;
 });
 
@@ -1733,6 +1749,108 @@ function ensureWritableRenderBundle(sourceBundleLocation) {
   return RENDER_BUNDLE_DIR;
 }
 
+// Prepares (or reuses) the Remotion bundle and syncs uploaded assets into it
+// so staticFile('uploads/x') resolves at render time — shared by export-video
+// and project thumbnail generation, which both need the exact same setup.
+async function prepareRenderBundle(onBundleProgress) {
+  if (isDev) {
+    const devPublicUploads = path.join(__dirname, "..", "public", "uploads");
+    ensureDir(devPublicUploads);
+    if (fs.existsSync(UPLOADS_DIR)) {
+      for (const file of fs.readdirSync(UPLOADS_DIR)) {
+        const dst = path.join(devPublicUploads, file);
+        if (!fs.existsSync(dst)) {
+          try { fs.copyFileSync(path.join(UPLOADS_DIR, file), dst); } catch {}
+        }
+      }
+    }
+    const { bundle } = await import("@remotion/bundler");
+    return bundle({
+      entryPoint: path.join(__dirname, "..", "src", "remotion", "Root.tsx"),
+      publicDir: path.join(__dirname, "..", "public"),
+      onProgress: onBundleProgress,
+    });
+  }
+
+  // process.resourcesPath is read-only on a Windows "install for all users"
+  // setup (Program Files) — copying uploads straight into it silently fails
+  // there, so the image is missing from the bundle's public/uploads and
+  // Remotion's render-time fetch 404s. Cache the static bundle in the
+  // already user-writable SCREENLET_DIR instead and sync uploads into that copy.
+  const sourceBundleLocation = path.join(process.resourcesPath, "app", "dist", "remotion-bundle");
+  const bundleLocation = ensureWritableRenderBundle(sourceBundleLocation);
+
+  const bundleUploads = path.join(bundleLocation, "public", "uploads");
+  if (fs.existsSync(UPLOADS_DIR)) {
+    ensureDir(bundleUploads);
+    for (const file of fs.readdirSync(UPLOADS_DIR)) {
+      const dst = path.join(bundleUploads, file);
+      if (!fs.existsSync(dst)) {
+        try {
+          fs.copyFileSync(path.join(UPLOADS_DIR, file), dst);
+        } catch (err) {
+          console.error(`render: failed to copy upload asset "${file}" into render bundle:`, err);
+        }
+      }
+    }
+  }
+  return bundleLocation;
+}
+
+// Resolves the composition id + duration/width/height for an ad payload —
+// shared by export-video and thumbnail rendering.
+function resolveAdComposition(payload) {
+  const isTemplatePayload = payload?.template?.scenes;
+  const compositionId = isTemplatePayload ? "TemplateAd" : "DynamicAd";
+  const scenes = isTemplatePayload ? payload.template.scenes : payload.scenes;
+  const durationInFrames = (scenes || []).reduce((s, sc) => s + sc.durationInFrames, 0);
+  const width  = isTemplatePayload ? (payload.width ?? payload.template.width  ?? 1920) : (payload.width  ?? 1920);
+  const height = isTemplatePayload ? (payload.height ?? payload.template.height ?? 1080) : (payload.height ?? 1080);
+  return { compositionId, durationInFrames, width, height };
+}
+
+const PROJECT_THUMBS_DIR = path.join(SCREENLET_DIR, "project-thumbs");
+
+// Renders a single representative frame (midpoint of the ad) as a JPEG
+// thumbnail for the Projects grid — same renderer/bundle as export-video,
+// just renderStill instead of renderMedia, so it's comparatively cheap.
+// Best-effort: a project still shows up (without a thumbnail) if this fails.
+async function renderProjectThumbnail(id, payload) {
+  try {
+    const { renderStill, selectComposition } = await import("@remotion/renderer");
+    const bundleLocation = await prepareRenderBundle();
+    const { compositionId, durationInFrames, width, height } = resolveAdComposition(payload);
+    if (durationInFrames === 0) return;
+
+    const browserOptions = {
+      browserExecutable: cachedBrowserExecutable ?? null,
+      chromiumOptions: { noSandbox: !isDev, disableWebSecurity: false },
+      timeoutInMilliseconds: 30_000,
+    };
+
+    const composition = await selectComposition({
+      serveUrl: bundleLocation,
+      id: compositionId,
+      inputProps: payload,
+      ...browserOptions,
+    });
+
+    ensureDir(PROJECT_THUMBS_DIR);
+    await renderStill({
+      composition: { ...composition, durationInFrames, width, height },
+      serveUrl: bundleLocation,
+      output: path.join(PROJECT_THUMBS_DIR, `${id}.jpg`),
+      frame: Math.floor(durationInFrames / 2),
+      inputProps: payload,
+      imageFormat: "jpeg",
+      jpegQuality: 80,
+      ...browserOptions,
+    });
+  } catch (err) {
+    console.error(`Falha ao gerar thumbnail do projeto ${id}:`, err);
+  }
+}
+
 ipcMain.handle("export-video", async (_event, payload, suggestedName, fps) => {
   ensureDir(EXPORTS_DIR);
 
@@ -1763,67 +1881,14 @@ ipcMain.handle("export-video", async (_event, payload, suggestedName, fps) => {
   }
   const { renderMedia, selectComposition } = renderer;
 
-  // ── Bundle location ───────────────────────────────────────────────────────
-  let bundleLocation;
-
-  if (isDev) {
-    // Sync assets so staticFile('uploads/x') resolves inside the dev bundle server.
-    const devPublicUploads = path.join(__dirname, "..", "public", "uploads");
-    ensureDir(devPublicUploads);
-    if (fs.existsSync(UPLOADS_DIR)) {
-      for (const file of fs.readdirSync(UPLOADS_DIR)) {
-        const dst = path.join(devPublicUploads, file);
-        if (!fs.existsSync(dst)) {
-          try { fs.copyFileSync(path.join(UPLOADS_DIR, file), dst); } catch {}
-        }
-      }
-    }
-    const { bundle } = await import("@remotion/bundler");
-    bundleLocation = await bundle({
-      entryPoint: path.join(__dirname, "..", "src", "remotion", "Root.tsx"),
-      publicDir: path.join(__dirname, "..", "public"),
-      onProgress: (progress) => {
-        mainWindow.webContents.send("export-progress", { phase: "bundling", progress });
-      },
-    });
-  } else {
-    // process.resourcesPath is read-only on a Windows "install for all
-    // users" setup (Program Files) — copying uploads straight into it
-    // silently fails there (caught and ignored below the old way), so the
-    // image is missing from the bundle's public/uploads and Remotion's
-    // render-time fetch 404s. Cache the static bundle in the already
-    // user-writable SCREENLET_DIR instead and sync uploads into that copy.
-    const sourceBundleLocation = path.join(process.resourcesPath, "app", "dist", "remotion-bundle");
-    bundleLocation = ensureWritableRenderBundle(sourceBundleLocation);
-
-    const bundleUploads = path.join(bundleLocation, "public", "uploads");
-    if (fs.existsSync(UPLOADS_DIR)) {
-      ensureDir(bundleUploads);
-      for (const file of fs.readdirSync(UPLOADS_DIR)) {
-        const dst = path.join(bundleUploads, file);
-        if (!fs.existsSync(dst)) {
-          try {
-            fs.copyFileSync(path.join(UPLOADS_DIR, file), dst);
-          } catch (err) {
-            console.error(`export-video: failed to copy upload asset "${file}" into render bundle:`, err);
-          }
-        }
-      }
-    }
-    mainWindow.webContents.send("export-progress", { phase: "bundling", progress: 1 });
-  }
+  const bundleLocation = await prepareRenderBundle((progress) => {
+    mainWindow.webContents.send("export-progress", { phase: "bundling", progress });
+  });
+  mainWindow.webContents.send("export-progress", { phase: "bundling", progress: 1 });
 
   // ── Render ────────────────────────────────────────────────────────────────
-  const isTemplatePayload = payload?.template?.scenes;
-  const compositionId     = isTemplatePayload ? "TemplateAd" : "DynamicAd";
-  const inputProps        = payload;
-
-  const durationInFrames = isTemplatePayload
-    ? payload.template.scenes.reduce((s, sc) => s + sc.durationInFrames, 0)
-    : payload.scenes.reduce((s, sc) => s + sc.durationInFrames, 0);
-
-  const width  = isTemplatePayload ? (payload.width ?? payload.template.width  ?? 1920) : (payload.width  ?? 1920);
-  const height = isTemplatePayload ? (payload.height ?? payload.template.height ?? 1080) : (payload.height ?? 1080);
+  const inputProps = payload;
+  const { compositionId, durationInFrames, width, height } = resolveAdComposition(payload);
 
   const browserOptions = {
     browserExecutable: cachedBrowserExecutable ?? null,
@@ -1856,6 +1921,8 @@ ipcMain.handle("export-video", async (_event, payload, suggestedName, fps) => {
 
   return { ok: true, filename: path.basename(outputPath) };
 });
+
+ipcMain.handle("app-get-version", () => app.getVersion());
 
 /* ---- Storage location ---- */
 

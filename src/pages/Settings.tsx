@@ -24,7 +24,7 @@ const THEME_OPTIONS: ThemeOption[] = [
   {
     value: "system",
     label: "Sistema",
-    description: "Segue a preferência do macOS",
+    description: "Segue a preferência do sistema",
     icon: <Monitor size={18} />,
   },
 ];
@@ -35,11 +35,13 @@ export const Settings: React.FC = () => {
   const [pendingDir, setPendingDir] = useState<string | null>(null);
   const [copyFiles, setCopyFiles] = useState(true);
   const [migrating, setMigrating] = useState(false);
+  const [appVersion, setAppVersion] = useState("");
   const isWindows = window.adFrame.platform === "win32";
   const { settings: appSettings, refresh: refreshAppSettings, setLaunchAtLogin, setAutoStartIptv } = useAppSettingsStore();
 
   useEffect(() => {
     window.adFrame.storageGetDir().then(setCurrentDir);
+    window.adFrame.appGetVersion().then(setAppVersion);
     if (isWindows) refreshAppSettings();
   }, [isWindows]);
 
@@ -159,7 +161,7 @@ export const Settings: React.FC = () => {
             </div>
             <div className="vt-settings__about-row">
               <span className="vt-settings__about-key">Versão</span>
-              <span className="vt-settings__about-val">1.0.0</span>
+              <span className="vt-settings__about-val">{appVersion || "—"}</span>
             </div>
             <div className="vt-settings__about-row">
               <span className="vt-settings__about-key">Tecnologia</span>

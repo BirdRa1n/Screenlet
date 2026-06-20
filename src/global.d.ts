@@ -19,6 +19,10 @@ export type ProjectMeta = {
   name: string;
   createdAt: string;
   updatedAt: string;
+  // Relative path ("project-thumbs/x.jpg") resolving against the app://
+  // page base, same convention as asset.filename for uploads — null until
+  // the background render finishes (best-effort, generated on save).
+  thumbnail: string | null;
 };
 
 declare global {
@@ -102,6 +106,7 @@ declare global {
 
       // Platform info
       platform: NodeJS.Platform;
+      appGetVersion: () => Promise<string>;
       setTitleBarTheme: (isDark: boolean) => Promise<void>;
 
       // Storage location
