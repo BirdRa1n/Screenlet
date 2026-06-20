@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Image, Search, Trash2, Video } from "lucide-react";
+import { Image, Play, Search, Trash2, Video } from "lucide-react";
 import { Button, IconButton } from "../design-system/components";
 import { useMediaStore } from "../store/useMediaStore";
 import { toast } from "../store/useToastStore";
@@ -135,6 +135,55 @@ export const MediaHub: React.FC = () => {
   );
 };
 
+// Generates a thumbnail from the video's own first frame, client-side —
+// avoids needing ffmpeg or a backend thumbnail cache for what's otherwise
+// just a one-off canvas capture.
+const VideoThumbnail: React.FC<{ src: string; alt: string }> = ({ src, alt }) => {
+  const [thumb, setThumb] = useState<string | null>(null);
+
+  useEffect(() => {
+    setThumb(null);
+    const video = document.createElement("video");
+    video.src = src;
+    video.muted = true;
+    video.preload = "metadata";
+
+    const capture = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx || !canvas.width || !canvas.height) return;
+      ctx.drawImage(video, 0, 0);
+      setThumb(canvas.toDataURL("image/jpeg", 0.7));
+    };
+
+    // Seeking past frame 0 avoids capturing a black/blank opening frame.
+    const onLoadedData = () => {
+      try {
+        video.currentTime = Math.min(1, (video.duration || 2) / 2);
+      } catch {
+        capture();
+      }
+    };
+    video.addEventListener("loadeddata", onLoadedData);
+    video.addEventListener("seeked", capture);
+
+    return () => {
+      video.removeEventListener("loadeddata", onLoadedData);
+      video.removeEventListener("seeked", capture);
+      video.src = "";
+    };
+  }, [src]);
+
+  return (
+    <div className="vt-mediahub__card-video-thumb">
+      {thumb ? <img src={thumb} alt={alt} /> : <Video size={28} className="vt-mediahub__card-video-icon" />}
+      <Play size={16} className="vt-mediahub__card-play-badge" />
+    </div>
+  );
+};
+
 const MediaCard: React.FC<{
   asset: MediaAsset;
   onDelete: () => void;
@@ -148,9 +197,7 @@ const MediaCard: React.FC<{
       {asset.type === "image" ? (
         <img src={asset.filename} alt={asset.originalName} />
       ) : (
-        <div className="vt-mediahub__card-video-icon">
-          <Video size={28} />
-        </div>
+        <VideoThumbnail src={asset.filename} alt={asset.originalName} />
       )}
       <span className={`vt-mediahub__card-badge vt-mediahub__card-badge--${asset.type}`}>
         {asset.type === "image" ? "IMG" : "VID"}

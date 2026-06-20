@@ -213,8 +213,33 @@
   object-fit: contain;
 }
 
+.vt-mediahub__card-video-thumb {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vt-mediahub__card-video-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .vt-mediahub__card-video-icon {
   color: var(--text-tertiary);
+}
+
+.vt-mediahub__card-play-badge {
+  position: absolute;
+  bottom: var(--space-2);
+  left: var(--space-2);
+  padding: 3px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border-radius: var(--radius-full);
 }
 
 .vt-mediahub__card-badge {
