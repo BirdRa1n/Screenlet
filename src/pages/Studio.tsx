@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, CalendarClock, ChevronLeft, Film, List, Plus, X } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, CalendarClock, ChevronLeft, Film, List, Pause, Play, PlayCircle, Plus, X } from "lucide-react";
 import { Button, Checkbox, IconButton } from "../design-system/components";
 import { ProgrammingTimeline } from "../components/programming/ProgrammingTimeline";
 import type { Channel, PlaylistItem, TransitionType } from "../types/channel";
@@ -12,7 +12,7 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-type Tab = "playlist" | "schedule";
+type Tab = "playlist" | "preview" | "schedule";
 
 type Props = {
   channel: Channel;
@@ -28,9 +28,48 @@ export const Studio: React.FC<Props> = ({ channel, onClose, onSave }) => {
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<Tab>("playlist");
 
+  // ── Preview player ──────────────────────────────────────────────────────
+  // Plays through the in-memory playlist sequentially via the actual export
+  // files (app://exports/...) — a rough approximation of the real IPTV
+  // broadcast, which remuxes the same files with mpegts/ffmpeg and isn't
+  // playable in a plain <video> tag. Transitions aren't simulated, only order.
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [previewPlaying, setPreviewPlaying] = useState(true);
+
   useEffect(() => {
     window.adFrame.exportsList().then(setVideos);
   }, []);
+
+  useEffect(() => {
+    if (tab === "preview") {
+      setPreviewIndex(0);
+      setPreviewPlaying(true);
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "preview") return;
+    if (previewPlaying) videoRef.current?.play().catch(() => {});
+    else videoRef.current?.pause();
+  }, [tab, previewIndex, previewPlaying]);
+
+  const previewItem = playlist[previewIndex];
+
+  const handlePreviewEnded = () => {
+    setPreviewIndex((idx) => {
+      const next = idx + 1;
+      if (next < playlist.length) return next;
+      if (loop) return 0;
+      setPreviewPlaying(false);
+      return idx;
+    });
+  };
+
+  const jumpToPreviewItem = (idx: number) => {
+    setPreviewIndex(idx);
+    setPreviewPlaying(true);
+  };
 
   const addVideo = (video: ExportedVideo) => {
     setPlaylist((prev) => [
@@ -77,6 +116,12 @@ export const Studio: React.FC<Props> = ({ channel, onClose, onSave }) => {
             onClick={() => setTab("playlist")}
           >
             <List size={13} /> Playlist
+          </button>
+          <button
+            className={`vt-studio__tab${tab === "preview" ? " vt-studio__tab--active" : ""}`}
+            onClick={() => setTab("preview")}
+          >
+            <PlayCircle size={13} /> Pré-visualizar
           </button>
           <button
             className={`vt-studio__tab${tab === "schedule" ? " vt-studio__tab--active" : ""}`}
@@ -171,6 +216,66 @@ export const Studio: React.FC<Props> = ({ channel, onClose, onSave }) => {
               </div>
             )}
           </main>
+        </div>
+      )}
+
+      {tab === "preview" && (
+        <div className="vt-studio__body vt-studio__body--preview">
+          <main className="vt-studio__preview">
+            {playlist.length === 0 ? (
+              <div className="vt-studio__preview-empty">
+                <PlayCircle size={22} />
+                <span>Nenhum vídeo na sequência.</span>
+                <span className="vt-studio__playlist-empty-hint">
+                  Adicione vídeos na aba Playlist para pré-visualizar.
+                </span>
+              </div>
+            ) : (
+              <>
+                <div className="vt-studio__preview-frame">
+                  <video
+                    ref={videoRef}
+                    key={previewItem?.id}
+                    className="vt-studio__preview-video"
+                    src={previewItem ? `app://exports/${previewItem.filename}` : undefined}
+                    onEnded={handlePreviewEnded}
+                    controls
+                    autoPlay
+                  />
+                </div>
+                <div className="vt-studio__preview-controls">
+                  <IconButton
+                    label={previewPlaying ? "Pausar" : "Reproduzir"}
+                    onClick={() => setPreviewPlaying((p) => !p)}
+                  >
+                    {previewPlaying ? <Pause size={14} /> : <Play size={14} />}
+                  </IconButton>
+                  <span className="vt-studio__preview-now">
+                    {previewIndex + 1} / {playlist.length} — {previewItem?.name}
+                  </span>
+                </div>
+              </>
+            )}
+          </main>
+
+          {playlist.length > 0 && (
+            <aside className="vt-studio__preview-list">
+              <h2 className="vt-studio__panel-title">Sequência</h2>
+              <p className="vt-studio__panel-sub">Clique para saltar para um item</p>
+              <div className="vt-studio__playlist-list">
+                {playlist.map((item, idx) => (
+                  <button
+                    key={item.id}
+                    className={`vt-studio__preview-item${idx === previewIndex ? " vt-studio__preview-item--active" : ""}`}
+                    onClick={() => jumpToPreviewItem(idx)}
+                  >
+                    <span className="vt-studio__playlist-num">{idx + 1}</span>
+                    <span className="vt-studio__playlist-name" title={item.name}>{item.name}</span>
+                  </button>
+                ))}
+              </div>
+            </aside>
+          )}
         </div>
       )}
 

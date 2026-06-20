@@ -761,8 +761,8 @@ export const Devices: React.FC = () => {
             <Cast size={16} /> Screenlet Player
           </h2>
           <p className="vt-devices__section-sub">
-            Cliente nativo (sem Kodi, sem SSH) — dispositivos aparecem sozinhos ao ligar, ou
-            procure por dispositivos que ainda não sabem o endereço deste computador.
+            Cliente nativo (sem Kodi, sem SSH) — dispositivos já pareados reaparecem sozinhos ao
+            ligar; para parear um dispositivo novo, clique em "Procurar na rede".
           </p>
         </div>
         <Button
@@ -789,9 +789,9 @@ export const Devices: React.FC = () => {
           <div className="vt-devices__empty-icon"><Cast size={24} /></div>
           <p className="vt-devices__empty-title">Nenhum Screenlet Player detectado</p>
           <p className="vt-devices__empty-text">
-            Instale e inicie o screenlet-player com <code>-studio-url</code> apontando para este
-            computador — ele aparecerá aqui automaticamente. Já está rodando mas sem
-            <code>-studio-url</code>? Use "Procurar na rede" acima.
+            Instale e inicie o <code>screenlet-player</code> no dispositivo — não é preciso
+            passar nenhuma flag. Depois clique em "Procurar na rede" acima para encontrá-lo e
+            parear. Uma vez pareado, ele reaparece aqui sozinho nas próximas vezes.
           </p>
         </div>
       ) : pairedPlayers.length > 0 ? (

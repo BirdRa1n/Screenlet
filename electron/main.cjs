@@ -203,6 +203,13 @@ app.whenReady().then(() => {
       return net.fetch(`file://${filePath}`);
     }
 
+    // Rendered exports → EXPORTS_DIR, used by the Studio playlist preview
+    // player. net.fetch on file:// supports Range requests, so seeking works.
+    if (pathname.startsWith("/exports/")) {
+      const filePath = path.join(EXPORTS_DIR, path.basename(pathname));
+      return net.fetch(`file://${filePath}`, { headers: request.headers });
+    }
+
     // App bundle assets → dist/ (may be inside .asar — use fs.readFileSync)
     const resolved = pathname === "/" ? "/index.html" : pathname;
     const distPath = path.join(__dirname, "..", "dist", resolved);
