@@ -81,6 +81,7 @@ const SCREENLET_DIR = loadStorageDir();
 const UPLOADS_DIR  = path.join(SCREENLET_DIR, "assets");
 const PROJECTS_DIR = path.join(SCREENLET_DIR, "projects");
 const EXPORTS_DIR  = path.join(SCREENLET_DIR, "exports");
+const RENDER_BUNDLE_DIR = path.join(SCREENLET_DIR, "remotion-bundle");
 
 // Register app:// BEFORE app is ready (Electron requirement)
 protocol.registerSchemesAsPrivileged([
@@ -1593,6 +1594,31 @@ app.on("before-quit", () => {
 
 /* ---- Export ---- */
 
+// Copies the build-time Remotion bundle (under process.resourcesPath, which
+// can be read-only depending on how the app was installed on Windows) into
+// the always-writable SCREENLET_DIR, re-copying only when the source bundle
+// actually changed (e.g. after an app update).
+function ensureWritableRenderBundle(sourceBundleLocation) {
+  const marker = path.join(RENDER_BUNDLE_DIR, ".source-mtime");
+  let sourceMtime = "";
+  try {
+    sourceMtime = String(fs.statSync(path.join(sourceBundleLocation, "index.html")).mtimeMs);
+  } catch {}
+
+  let cachedMtime = "";
+  try {
+    cachedMtime = fs.readFileSync(marker, "utf8");
+  } catch {}
+
+  if (cachedMtime !== sourceMtime) {
+    if (fs.existsSync(RENDER_BUNDLE_DIR)) fs.rmSync(RENDER_BUNDLE_DIR, { recursive: true, force: true });
+    fs.cpSync(sourceBundleLocation, RENDER_BUNDLE_DIR, { recursive: true });
+    fs.writeFileSync(marker, sourceMtime);
+  }
+
+  return RENDER_BUNDLE_DIR;
+}
+
 ipcMain.handle("export-video", async (_event, payload, suggestedName, fps) => {
   ensureDir(EXPORTS_DIR);
 
@@ -1647,16 +1673,26 @@ ipcMain.handle("export-video", async (_event, payload, suggestedName, fps) => {
       },
     });
   } else {
-    bundleLocation = path.join(process.resourcesPath, "app", "dist", "remotion-bundle");
+    // process.resourcesPath is read-only on a Windows "install for all
+    // users" setup (Program Files) — copying uploads straight into it
+    // silently fails there (caught and ignored below the old way), so the
+    // image is missing from the bundle's public/uploads and Remotion's
+    // render-time fetch 404s. Cache the static bundle in the already
+    // user-writable SCREENLET_DIR instead and sync uploads into that copy.
+    const sourceBundleLocation = path.join(process.resourcesPath, "app", "dist", "remotion-bundle");
+    bundleLocation = ensureWritableRenderBundle(sourceBundleLocation);
 
-    // Sync user assets into the bundle so staticFile() resolves correctly.
     const bundleUploads = path.join(bundleLocation, "public", "uploads");
     if (fs.existsSync(UPLOADS_DIR)) {
       ensureDir(bundleUploads);
       for (const file of fs.readdirSync(UPLOADS_DIR)) {
         const dst = path.join(bundleUploads, file);
         if (!fs.existsSync(dst)) {
-          try { fs.copyFileSync(path.join(UPLOADS_DIR, file), dst); } catch {}
+          try {
+            fs.copyFileSync(path.join(UPLOADS_DIR, file), dst);
+          } catch (err) {
+            console.error(`export-video: failed to copy upload asset "${file}" into render bundle:`, err);
+          }
         }
       }
     }
