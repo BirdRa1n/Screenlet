@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { FolderOpen, FolderSearch, Monitor, Moon, Sun } from "lucide-react";
 import { Button, Checkbox, Dialog } from "../design-system/components";
 import { useThemeStore, type Theme } from "../store/useThemeStore";
+import { useAppSettingsStore } from "../store/useAppSettingsStore";
 import { toast } from "../store/useToastStore";
 import "../styles/pages/Settings.css";
 
@@ -34,10 +35,13 @@ export const Settings: React.FC = () => {
   const [pendingDir, setPendingDir] = useState<string | null>(null);
   const [copyFiles, setCopyFiles] = useState(true);
   const [migrating, setMigrating] = useState(false);
+  const isWindows = window.adFrame.platform === "win32";
+  const { settings: appSettings, refresh: refreshAppSettings, setLaunchAtLogin, setAutoStartIptv } = useAppSettingsStore();
 
   useEffect(() => {
     window.adFrame.storageGetDir().then(setCurrentDir);
-  }, []);
+    if (isWindows) refreshAppSettings();
+  }, [isWindows]);
 
   const handleChooseDir = async () => {
     const chosen = await window.adFrame.storageChooseDir();
@@ -93,6 +97,31 @@ export const Settings: React.FC = () => {
             ))}
           </div>
         </section>
+
+        {/* Inicialização (Windows) */}
+        {isWindows && (
+          <section className="vt-settings__section">
+            <h2 className="vt-settings__section-title">Inicialização</h2>
+            <p className="vt-settings__section-desc">
+              Comportamento ao iniciar o Windows — útil para equipamentos de sinalização que ficam sempre ligados.
+            </p>
+
+            <div className="vt-settings__startup">
+              <Checkbox
+                checked={appSettings.launchAtLogin}
+                onChange={setLaunchAtLogin}
+                label="Iniciar o Screenlet junto com o Windows"
+              />
+              {appSettings.launchAtLogin && (
+                <Checkbox
+                  checked={appSettings.autoStartIptvOnLaunch}
+                  onChange={setAutoStartIptv}
+                  label="Iniciar o servidor IPTV automaticamente"
+                />
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Armazenamento */}
         <section className="vt-settings__section">

@@ -206,6 +206,16 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
+  // "Iniciar com o sistema" + "Iniciar servidor IPTV já na inicialização"
+  // (Settings page, Windows) — only fires when both are enabled, since the
+  // whole point is having the IPTV server already running on an unattended
+  // kiosk boot, not on every manual launch.
+  if (appSettings.launchAtLogin && appSettings.autoStartIptvOnLaunch) {
+    startIptvServer().catch((err) => {
+      console.error("Falha ao iniciar servidor IPTV automaticamente:", err);
+    });
+  }
+
   // Pre-warm Chrome in the background so the first render doesn't trigger a download.
   warmRemotionBrowser();
 });
@@ -1165,6 +1175,42 @@ function getLocalIPs() {
   return all.sort((a, b) => rank(a.address) - rank(b.address)).map((n) => n.address);
 }
 
+// ── App settings (launch at login, auto-start IPTV) ──────────────────────────
+const APP_SETTINGS_FILE = path.join(app.getPath("userData"), "app-settings.json");
+const DEFAULT_APP_SETTINGS = { launchAtLogin: false, autoStartIptvOnLaunch: true };
+
+function loadAppSettings() {
+  try {
+    if (fs.existsSync(APP_SETTINGS_FILE)) {
+      return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, "utf8")) };
+    }
+  } catch {}
+  return { ...DEFAULT_APP_SETTINGS };
+}
+
+function saveAppSettings(settings) {
+  try { fs.writeFileSync(APP_SETTINGS_FILE, JSON.stringify(settings)); } catch {}
+}
+
+let appSettings = loadAppSettings();
+
+ipcMain.handle("app-settings-get", () => appSettings);
+
+ipcMain.handle("app-settings-set-launch-at-login", (_event, value) => {
+  appSettings.launchAtLogin = !!value;
+  saveAppSettings(appSettings);
+  // setLoginItemSettings registers electron.exe itself in dev (wrong binary,
+  // and confusing while iterating) — only apply it in a packaged build.
+  if (!isDev) app.setLoginItemSettings({ openAtLogin: appSettings.launchAtLogin });
+  return appSettings;
+});
+
+ipcMain.handle("app-settings-set-auto-start-iptv", (_event, value) => {
+  appSettings.autoStartIptvOnLaunch = !!value;
+  saveAppSettings(appSettings);
+  return appSettings;
+});
+
 // ── IPTV config (selected IP preference) ─────────────────────────────────────
 const IPTV_CONFIG_FILE = path.join(app.getPath("userData"), "iptv-config.json");
 
@@ -1550,8 +1596,10 @@ function iptvStatus() {
 
 ipcMain.handle("iptv-status", () => iptvStatus());
 
-ipcMain.handle("iptv-start", () => {
-  if (iptvServer) return iptvStatus();
+// Extracted so app.whenReady() can also call this for the auto-start-on-launch
+// setting, not just the renderer's "Iniciar" button.
+function startIptvServer() {
+  if (iptvServer) return Promise.resolve(iptvStatus());
   return new Promise((resolve, reject) => {
     iptvServer = http.createServer(handleIptvRequest);
     iptvServer.once("error", (err) => {
@@ -1560,7 +1608,9 @@ ipcMain.handle("iptv-start", () => {
     });
     iptvServer.listen(IPTV_PORT, "0.0.0.0", () => resolve(iptvStatus()));
   });
-});
+}
+
+ipcMain.handle("iptv-start", () => startIptvServer());
 
 ipcMain.handle("iptv-stop", () => {
   if (!iptvServer) return iptvStatus();

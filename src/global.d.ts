@@ -72,6 +72,11 @@ declare global {
       iptvStop: () => Promise<import("./store/useIptvStore").IptvStatus>;
       iptvSetIp: (ip: string) => Promise<import("./store/useIptvStore").IptvStatus>;
 
+      // App settings (launch at login, auto-start IPTV on launch — Windows)
+      appSettingsGet: () => Promise<import("./store/useAppSettingsStore").AppSettings>;
+      appSettingsSetLaunchAtLogin: (value: boolean) => Promise<import("./store/useAppSettingsStore").AppSettings>;
+      appSettingsSetAutoStartIptv: (value: boolean) => Promise<import("./store/useAppSettingsStore").AppSettings>;
+
       // Kodi Devices — passwords never returned to renderer; only boolean flags.
       deviceList: () => Promise<import("./types/device").KodiDevice[]>;
       deviceSave: (device: import("./types/device").KodiDevice) => Promise<void>;

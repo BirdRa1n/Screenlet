@@ -40,6 +40,11 @@ contextBridge.exposeInMainWorld("adFrame", {
   iptvStop: () => ipcRenderer.invoke("iptv-stop"),
   iptvSetIp: (ip) => ipcRenderer.invoke("iptv-set-ip", ip),
 
+  // App settings (launch at login, auto-start IPTV on launch — Windows)
+  appSettingsGet: () => ipcRenderer.invoke("app-settings-get"),
+  appSettingsSetLaunchAtLogin: (value) => ipcRenderer.invoke("app-settings-set-launch-at-login", value),
+  appSettingsSetAutoStartIptv: (value) => ipcRenderer.invoke("app-settings-set-auto-start-iptv", value),
+
   // Export / render
   exportVideo: (config, suggestedName, fps) =>
     ipcRenderer.invoke("export-video", config, suggestedName, fps),

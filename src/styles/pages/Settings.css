@@ -126,6 +126,14 @@
   justify-content: center;
 }
 
+/* ---- Startup ---- */
+
+.vt-settings__startup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 /* ---- Storage ---- */
 
 .vt-settings__storage {
