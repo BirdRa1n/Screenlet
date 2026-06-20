@@ -91,7 +91,13 @@ const ProjectCard: React.FC<{ project: ProjectMeta; onRefresh: () => void }> = (
         transition={{ duration: 0.15 }}
         onClick={handleOpen}
       >
-        <div className="vt-projects__card-icon">📁</div>
+        <div className="vt-projects__card-thumb">
+          {project.thumbnail ? (
+            <img src={project.thumbnail} alt="" />
+          ) : (
+            <FolderOpen size={22} className="vt-projects__card-icon" />
+          )}
+        </div>
         <div className="vt-projects__card-name">{project.name}</div>
         <div className="vt-projects__card-date">Editado em {date}</div>
 
