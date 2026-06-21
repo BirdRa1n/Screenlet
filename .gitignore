@@ -92,6 +92,9 @@ web_modules/
 out
 next-env.d.ts
 
+# Claude Code — track shared config + skills, ignore personal/local overrides
+.claude/settings.local.json
+
 # Nuxt.js build / generate output
 .nuxt
 dist
