@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { toast as sonnerToast } from "sonner";
 
 export type ToastType = "success" | "error" | "info";
 
@@ -27,8 +28,9 @@ export const useToastStore = create<ToastStore>((set) => ({
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));
 
+// Forwarded to sonner — rendered by the <Toaster /> mounted in app/providers.tsx.
 export const toast = {
-  success: (msg: string) => useToastStore.getState().push(msg, "success"),
-  error: (msg: string) => useToastStore.getState().push(msg, "error"),
-  info: (msg: string) => useToastStore.getState().push(msg, "info"),
+  success: (msg: string) => sonnerToast.success(msg),
+  error: (msg: string) => sonnerToast.error(msg),
+  info: (msg: string) => sonnerToast(msg),
 };

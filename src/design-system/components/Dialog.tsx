@@ -1,10 +1,23 @@
-import React, { useEffect } from "react";
-import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
-import { X } from "lucide-react";
-import "../../styles/components/Dialog.css";
+"use client";
+
+import * as React from "react";
+import {
+  Dialog as ShadDialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 type Size = "default" | "lg" | "xl";
+
+const SIZE_MAP: Record<Size, string> = {
+  default: "sm:max-w-lg",
+  lg: "sm:max-w-2xl",
+  xl: "sm:max-w-4xl",
+};
 
 type Props = {
   open: boolean;
@@ -24,53 +37,26 @@ export const Dialog: React.FC<Props> = ({
   size = "default",
   children,
   footer,
-}) => {
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
+}) => (
+  <ShadDialog
+    open={open}
+    onOpenChange={(o) => {
+      if (!o) onClose();
+    }}
+  >
+    <DialogContent
+      className={cn(SIZE_MAP[size], "max-h-[85vh] overflow-y-auto")}
+    >
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+        {description ? (
+          <DialogDescription>{description}</DialogDescription>
+        ) : null}
+      </DialogHeader>
 
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          className="ds-dialog-overlay"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
-          onClick={onClose}
-        >
-          <motion.div
-            className={`ds-dialog${size !== "default" ? ` ds-dialog--${size}` : ""}`}
-            initial={{ opacity: 0, scale: 0.94, y: 12 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.94, y: 12 }}
-            transition={{ duration: 0.2, ease: "easeOut" as const }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="ds-dialog__header">
-              <span className="ds-dialog__title">{title}</span>
-              <button className="ds-dialog__close" onClick={onClose}>
-                <X size={14} />
-              </button>
-            </div>
+      {children}
 
-            {description && (
-              <p className="ds-dialog__description">{description}</p>
-            )}
-
-            {children && <div className="ds-dialog__body">{children}</div>}
-
-            {footer && <div className="ds-dialog__footer">{footer}</div>}
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>,
-    document.body
-  );
-};
+      {footer ? <DialogFooter>{footer}</DialogFooter> : null}
+    </DialogContent>
+  </ShadDialog>
+);

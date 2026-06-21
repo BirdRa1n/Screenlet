@@ -1,30 +1,41 @@
-import React from "react";
-import "../../styles/components/Field.css";
+"use client";
+
+import * as React from "react";
+import { Input } from "@/components/ui/input";
+import { Checkbox as ShadCheckbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 
 export const Field: React.FC<{
   label: string;
   children: React.ReactNode;
   hint?: string;
-}> = ({ label, children, hint }) => {
-  return (
-    <label className="ds-field">
-      <span className="ds-field__label">{label}</span>
-      {children}
-      {hint ? <span className="ds-field__hint">{hint}</span> : null}
-    </label>
-  );
-};
-
-export const TextField: React.FC<
-  React.InputHTMLAttributes<HTMLInputElement>
-> = ({ className, ...rest }) => (
-  <input className={`ds-input ${className ?? ""}`} {...rest} />
+}> = ({ label, children, hint }) => (
+  <label className="flex flex-col gap-1.5">
+    <span className="text-xs font-medium text-muted-foreground">{label}</span>
+    {children}
+    {hint ? (
+      <span className="text-xs text-muted-foreground/80">{hint}</span>
+    ) : null}
+  </label>
 );
 
-export const SelectField: React.FC<
-  React.SelectHTMLAttributes<HTMLSelectElement>
-> = ({ className, children, ...rest }) => (
-  <select className={`ds-input ds-select ${className ?? ""}`} {...rest}>
+export const TextField: React.FC<React.ComponentProps<"input">> = ({
+  className,
+  ...rest
+}) => <Input className={cn(className)} {...rest} />;
+
+export const SelectField: React.FC<React.ComponentProps<"select">> = ({
+  className,
+  children,
+  ...rest
+}) => (
+  <select
+    className={cn(
+      "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50",
+      className,
+    )}
+    {...rest}
+  >
     {children}
   </select>
 );
@@ -34,18 +45,20 @@ export const ColorField: React.FC<{
   onChange: (value: string) => void;
   label: string;
 }> = ({ value, onChange, label }) => (
-  <label className="ds-color-field">
+  <label className="flex cursor-pointer items-center gap-2">
     <span
-      className="ds-color-field__swatch"
+      className="relative inline-flex size-7 overflow-hidden rounded-md border border-border"
       style={{ background: value }}
-    />
-    <input
-      type="color"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label={label}
-    />
-    <span className="ds-color-field__label">{label}</span>
+    >
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+        className="absolute inset-0 size-full cursor-pointer opacity-0"
+      />
+    </span>
+    <span className="text-sm text-foreground">{label}</span>
   </label>
 );
 
@@ -54,13 +67,11 @@ export const Checkbox: React.FC<{
   onChange: (checked: boolean) => void;
   label: string;
 }> = ({ checked, onChange, label }) => (
-  <label className="ds-checkbox">
-    <input
-      type="checkbox"
+  <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-foreground">
+    <ShadCheckbox
       checked={checked}
-      onChange={(e) => onChange(e.target.checked)}
+      onCheckedChange={(v) => onChange(v === true)}
     />
-    <span className="ds-checkbox__box" data-checked={checked} />
     {label}
   </label>
 );

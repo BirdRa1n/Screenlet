@@ -1,5 +1,8 @@
-import React, { useEffect, useState } from "react";
+"use client";
+
+import { useEffect, useState } from "react";
 import { Button, Dialog, Field, SelectField, TextField } from "../../design-system/components";
+import { cn } from "@/lib/utils";
 import type { ProgrammingRule, ProgrammingSchedule, ScheduleDay } from "../../types/programming";
 import type { ExportedVideo } from "../../global";
 
@@ -50,7 +53,7 @@ export const ProgrammingRuleForm: React.FC<Props> = ({ open, rule, exports, onSa
   }, [open, rule, exports]);
 
   const toggleDay = (d: ScheduleDay) => {
-    setDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort());
+    setDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
   };
 
   const buildSchedule = (): ProgrammingSchedule => {
@@ -77,23 +80,27 @@ export const ProgrammingRuleForm: React.FC<Props> = ({ open, rule, exports, onSa
       title={rule ? "Editar regra" : "Nova regra de horário"}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
           <Button variant="primary" onClick={handleSave} disabled={!assetFilename}>
             Salvar
           </Button>
         </>
       }
     >
-      <div className="vt-prog-form">
+      <div className="flex flex-col gap-4">
         <Field label="Vídeo">
           {exports.length === 0 ? (
-            <p style={{ fontSize: 12, color: "var(--text-tertiary)", margin: 0 }}>
+            <p className="text-xs text-muted-foreground">
               Nenhum vídeo renderizado disponível. Exporte um vídeo primeiro.
             </p>
           ) : (
             <SelectField value={assetFilename} onChange={(e) => setAssetFilename(e.target.value)}>
               {exports.map((v) => (
-                <option key={v.filename} value={v.filename}>{v.name}</option>
+                <option key={v.filename} value={v.filename}>
+                  {v.name}
+                </option>
               ))}
             </SelectField>
           )}
@@ -111,7 +118,7 @@ export const ProgrammingRuleForm: React.FC<Props> = ({ open, rule, exports, onSa
         </Field>
 
         {scheduleType === "time-range" && (
-          <div className="vt-prog-form__row">
+          <div className="grid grid-cols-2 gap-4">
             <Field label="Início">
               <TextField type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
             </Field>
@@ -123,12 +130,17 @@ export const ProgrammingRuleForm: React.FC<Props> = ({ open, rule, exports, onSa
 
         {scheduleType === "day-of-week" && (
           <Field label="Dias">
-            <div className="vt-prog-form__days">
+            <div className="flex flex-wrap gap-1.5">
               {DAY_OPTIONS.map(({ value, label }) => (
                 <button
                   key={value}
                   type="button"
-                  className={`vt-prog-form__day${days.includes(value) ? " vt-prog-form__day--active" : ""}`}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                    days.includes(value)
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground",
+                  )}
                   onClick={() => toggleDay(value)}
                 >
                   {label.slice(0, 3)}

@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+"use client";
+
+import { useMemo, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -19,10 +20,11 @@ import { BookMarked, Check, Clapperboard, Film, GripVertical, Megaphone, Search,
 import { useAdStore } from "../store/useAdStore";
 import { useTemplateStore } from "../store/useTemplateStore";
 import { Button, Dialog, IconButton, UploadZone } from "../design-system/components";
+import { cn } from "@/lib/utils";
+import { assetUrl } from "@/lib/assetUrl";
 import { useLibraryStore, type LibraryProduct } from "../store/useLibraryStore";
 import { MediaPickerDialog } from "../components/media/MediaPicker";
 import { toast } from "../store/useToastStore";
-import "../styles/layout/SceneListPanel.css";
 
 export const SceneListPanel: React.FC = () => {
   const config = useAdStore((s) => s.config);
@@ -37,7 +39,7 @@ export const SceneListPanel: React.FC = () => {
 
   const allTemplates = useTemplateStore((s) => s.templates);
   const refreshTemplates = useTemplateStore((s) => s.refresh);
-  const [templatePickerOpen, setTemplatePickerOpen] = React.useState(false);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
 
   const handleOpenTemplatePicker = async () => {
     await refreshTemplates();
@@ -75,11 +77,8 @@ export const SceneListPanel: React.FC = () => {
     return list;
   }, [library, activeCategory, search]);
 
-  const toggleSelect = (id: string) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const handleImport = () => {
     const toImport = selected
@@ -106,9 +105,7 @@ export const SceneListPanel: React.FC = () => {
     toast.success(`${toImport.length} produto${toImport.length > 1 ? "s" : ""} importado${toImport.length > 1 ? "s" : ""} como cenas.`);
   };
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -120,9 +117,9 @@ export const SceneListPanel: React.FC = () => {
   };
 
   return (
-    <aside className="vt-panel vt-panel--left">
-      <section className="vt-panel__section">
-        <h2 className="vt-panel__title">Logo da empresa</h2>
+    <aside className="flex w-72 shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-card/40 p-4">
+      <section className="flex flex-col gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Logo da empresa</h2>
         <UploadZone
           value={config.logoImage}
           onUpload={(path) => {
@@ -136,94 +133,59 @@ export const SceneListPanel: React.FC = () => {
         />
       </section>
 
-      <section className="vt-panel__section vt-panel__section--grow">
-        <h2 className="vt-panel__title">Cenas</h2>
+      <section className="flex flex-1 flex-col gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cenas</h2>
 
-        <div className="vt-scene-list">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={config.scenes.map((s) => s.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <AnimatePresence initial={false}>
-                {config.scenes.map((scene) => {
-                  const isSelected = scene.id === selectedSceneId;
-                  const label =
-                    scene.type === "logo"
-                      ? scene.tagline || "Logo / Chamada"
-                      : scene.type === "template"
-                      ? allTemplates.find((t) => t.id === scene.templateId)?.name || "Template"
-                      : scene.type === "video"
-                      ? scene.src.split("/").pop() || "Vídeo"
-                      : scene.productName || "Produto";
+        <div className="flex flex-col gap-2">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={config.scenes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+              {config.scenes.map((scene) => {
+                const isSelected = scene.id === selectedSceneId;
+                const label =
+                  scene.type === "logo"
+                    ? scene.tagline || "Logo / Chamada"
+                    : scene.type === "template"
+                    ? allTemplates.find((t) => t.id === scene.templateId)?.name || "Template"
+                    : scene.type === "video"
+                    ? scene.src.split("/").pop() || "Vídeo"
+                    : scene.productName || "Produto";
 
-                  return (
-                    <SortableSceneChip
-                      key={scene.id}
-                      id={scene.id}
-                      label={label}
-                      type={scene.type}
-                      isSelected={isSelected}
-                      onSelect={() => seekToScene(scene.id)}
-                      onRemove={() => {
-                        removeScene(scene.id);
-                        toast.info("Cena removida.");
-                      }}
-                    />
-                  );
-                })}
-              </AnimatePresence>
+                return (
+                  <SortableSceneChip
+                    key={scene.id}
+                    id={scene.id}
+                    label={label}
+                    type={scene.type}
+                    isSelected={isSelected}
+                    onSelect={() => seekToScene(scene.id)}
+                    onRemove={() => {
+                      removeScene(scene.id);
+                      toast.info("Cena removida.");
+                    }}
+                  />
+                );
+              })}
             </SortableContext>
           </DndContext>
 
           {config.scenes.length === 0 && (
-            <div className="vt-scene-list__empty">
+            <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
               Adicione cenas abaixo para começar.
             </div>
           )}
         </div>
 
-        <div className="vt-panel__add-row">
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<ShoppingBag size={14} />}
-            onClick={() => {
-              addProductScene();
-              toast.success("Cena de produto adicionada.");
-            }}
-          >
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Button variant="secondary" size="sm" icon={<ShoppingBag size={14} />} onClick={() => { addProductScene(); toast.success("Cena de produto adicionada."); }}>
             Produto
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Megaphone size={14} />}
-            onClick={() => {
-              addLogoScene();
-              toast.success("Cena de logo adicionada.");
-            }}
-          >
+          <Button variant="secondary" size="sm" icon={<Megaphone size={14} />} onClick={() => { addLogoScene(); toast.success("Cena de logo adicionada."); }}>
             Logo/Texto
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<BookMarked size={14} />}
-            onClick={handleOpenLibrary}
-          >
+          <Button variant="secondary" size="sm" icon={<BookMarked size={14} />} onClick={handleOpenLibrary}>
             Biblioteca
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Clapperboard size={14} />}
-            onClick={handleOpenTemplatePicker}
-          >
+          <Button variant="secondary" size="sm" icon={<Clapperboard size={14} />} onClick={handleOpenTemplatePicker}>
             Template
           </Button>
           <VideoPickerButton
@@ -239,41 +201,36 @@ export const SceneListPanel: React.FC = () => {
         </div>
       </section>
 
-      <Dialog
-        open={templatePickerOpen}
-        onClose={() => setTemplatePickerOpen(false)}
-        title="Escolher Template"
-        size="xl"
-      >
-        <div className="vt-lib-picker">
-          {allTemplates.length === 0 ? (
-            <div className="vt-lib-picker__empty">Nenhum template encontrado.</div>
-          ) : (
-            <div className="vt-lib-picker__grid">
-              {allTemplates.map((tpl) => (
-                <button
-                  key={tpl.id}
-                  className="vt-lib-picker__card"
-                  onClick={() => {
-                    addTemplateScene(tpl.id);
-                    setTemplatePickerOpen(false);
-                    toast.success(`Template "${tpl.name}" adicionado como cena.`);
-                  }}
-                >
-                  <div className="vt-lib-picker__img" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Clapperboard size={28} />
-                  </div>
-                  <div className="vt-lib-picker__info">
-                    <span className="vt-lib-picker__name">{tpl.name}</span>
-                    <span className="vt-lib-picker__price">{tpl.scenes.length} cenas</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Template picker */}
+      <Dialog open={templatePickerOpen} onClose={() => setTemplatePickerOpen(false)} title="Escolher Template" size="xl">
+        {allTemplates.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">Nenhum template encontrado.</div>
+        ) : (
+          <div className="grid max-h-[55vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3">
+            {allTemplates.map((tpl) => (
+              <button
+                key={tpl.id}
+                className="flex flex-col overflow-hidden rounded-lg border border-border bg-card text-left transition-colors hover:border-primary/50"
+                onClick={() => {
+                  addTemplateScene(tpl.id);
+                  setTemplatePickerOpen(false);
+                  toast.success(`Template "${tpl.name}" adicionado como cena.`);
+                }}
+              >
+                <div className="flex aspect-video items-center justify-center bg-muted text-muted-foreground">
+                  <Clapperboard size={28} />
+                </div>
+                <div className="flex flex-col gap-0.5 p-2">
+                  <span className="truncate text-sm font-medium">{tpl.name}</span>
+                  <span className="text-xs text-muted-foreground">{tpl.scenes.length} cenas</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </Dialog>
 
+      {/* Library import */}
       <Dialog
         open={libraryOpen}
         onClose={() => setLibraryOpen(false)}
@@ -282,10 +239,12 @@ export const SceneListPanel: React.FC = () => {
         footer={
           selected.length > 0 ? (
             <>
-              <span className="vt-lib-picker__count">
+              <span className="mr-auto text-sm text-muted-foreground">
                 {selected.length} produto{selected.length > 1 ? "s" : ""} selecionado{selected.length > 1 ? "s" : ""}
               </span>
-              <Button variant="secondary" onClick={() => setSelected([])}>Limpar</Button>
+              <Button variant="secondary" onClick={() => setSelected([])}>
+                Limpar
+              </Button>
               <Button variant="primary" onClick={handleImport}>
                 Importar {selected.length} {selected.length > 1 ? "cenas" : "cena"}
               </Button>
@@ -293,25 +252,28 @@ export const SceneListPanel: React.FC = () => {
           ) : undefined
         }
       >
-        <div className="vt-lib-picker">
-          {/* Search */}
-          <div className="vt-lib-picker__search-wrap">
-            <Search size={14} className="vt-lib-picker__search-icon" />
+        <div className="flex flex-col gap-4">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
-              className="vt-lib-picker__search"
+              className="h-9 w-full rounded-md border border-input bg-transparent pl-9 pr-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               placeholder="Buscar produto..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
 
-          {/* Category pills */}
           {categories.length > 1 && (
-            <div className="vt-lib-picker__cats">
+            <div className="flex flex-wrap gap-2">
               {categories.map((cat) => (
                 <button
                   key={cat}
-                  className={`vt-lib-picker__cat${activeCategory === cat ? " vt-lib-picker__cat--active" : ""}`}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    activeCategory === cat
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground",
+                  )}
                   onClick={() => setActiveCategory(cat)}
                 >
                   {cat}
@@ -320,40 +282,42 @@ export const SceneListPanel: React.FC = () => {
             </div>
           )}
 
-          {/* Grid */}
           {library.length === 0 ? (
-            <div className="vt-lib-picker__empty">
-              Nenhum produto salvo na biblioteca ainda.
-            </div>
+            <div className="py-10 text-center text-sm text-muted-foreground">Nenhum produto salvo na biblioteca ainda.</div>
           ) : filtered.length === 0 ? (
-            <div className="vt-lib-picker__empty">Nenhum resultado encontrado.</div>
+            <div className="py-10 text-center text-sm text-muted-foreground">Nenhum resultado encontrado.</div>
           ) : (
-            <div className="vt-lib-picker__grid">
+            <div className="grid max-h-[50vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 lg:grid-cols-4">
               {filtered.map((product) => {
                 const idx = selected.indexOf(product.id);
                 const isSelected = idx !== -1;
                 return (
                   <button
                     key={product.id}
-                    className={`vt-lib-picker__card${isSelected ? " vt-lib-picker__card--selected" : ""}`}
+                    className={cn(
+                      "relative flex flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors",
+                      isSelected ? "border-primary ring-1 ring-primary" : "border-border hover:border-primary/50",
+                    )}
                     onClick={() => toggleSelect(product.id)}
                   >
                     {isSelected && (
-                      <div className="vt-lib-picker__badge">{idx + 1}</div>
+                      <div className="absolute left-2 top-2 z-10 flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                        {idx + 1}
+                      </div>
                     )}
-                    <div className="vt-lib-picker__img">
+                    <div className="flex aspect-square items-center justify-center overflow-hidden bg-muted">
                       {product.image ? (
-                        <img src={product.image} alt={product.name} />
+                        <img src={assetUrl(product.image)} alt={product.name} className="size-full object-contain p-1" />
                       ) : (
-                        <ShoppingBag size={22} />
+                        <ShoppingBag size={22} className="text-muted-foreground" />
                       )}
                     </div>
-                    <div className="vt-lib-picker__info">
+                    <div className="flex flex-col gap-0.5 p-2">
                       {product.category && (
-                        <span className="vt-lib-picker__cat-tag">{product.category}</span>
+                        <span className="w-fit rounded bg-muted px-1 text-[10px] uppercase text-muted-foreground">{product.category}</span>
                       )}
-                      <span className="vt-lib-picker__name">{product.name}</span>
-                      <span className="vt-lib-picker__price">
+                      <span className="truncate text-xs font-medium">{product.name}</span>
+                      <span className="text-[11px] text-muted-foreground">
                         {product.priceMode === "offer"
                           ? `R$ ${product.oldPrice} → R$ ${product.newPrice}`
                           : `R$ ${product.newPrice}`}
@@ -361,7 +325,9 @@ export const SceneListPanel: React.FC = () => {
                       </span>
                     </div>
                     {isSelected && (
-                      <div className="vt-lib-picker__check"><Check size={11} /></div>
+                      <div className="absolute bottom-2 right-2 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <Check size={11} />
+                      </div>
                     )}
                   </button>
                 );
@@ -375,7 +341,7 @@ export const SceneListPanel: React.FC = () => {
 };
 
 const VideoPickerButton: React.FC<{ onPick: (path: string) => void }> = ({ onPick }) => {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useState(false);
   return (
     <>
       <Button variant="secondary" size="sm" icon={<Film size={14} />} onClick={() => setOpen(true)}>
@@ -385,7 +351,10 @@ const VideoPickerButton: React.FC<{ onPick: (path: string) => void }> = ({ onPic
         open={open}
         accept="video"
         currentValue=""
-        onSelect={(path) => { onPick(path); setOpen(false); }}
+        onSelect={(path) => {
+          onPick(path);
+          setOpen(false);
+        }}
         onClose={() => setOpen(false)}
       />
     </>
@@ -400,14 +369,7 @@ const SortableSceneChip: React.FC<{
   onSelect: () => void;
   onRemove: () => void;
 }> = ({ id, label, type, isSelected, onSelect, onRemove }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -416,34 +378,31 @@ const SortableSceneChip: React.FC<{
     zIndex: isDragging ? 10 : undefined,
   };
 
+  const Icon = type === "logo" ? Megaphone : type === "template" ? Clapperboard : type === "video" ? Film : ShoppingBag;
+
   return (
-    <motion.div
+    <div
       ref={setNodeRef}
       style={style}
-      layout
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -16 }}
-      transition={{ duration: 0.18, ease: "easeOut" as const }}
-      className={`vt-scene-chip${isSelected ? " vt-scene-chip--selected" : ""}`}
+      className={cn(
+        "group flex cursor-pointer items-center gap-2 rounded-lg border p-2 transition-colors",
+        isSelected ? "border-primary bg-primary/10" : "border-border bg-card hover:bg-accent/40",
+      )}
       onClick={onSelect}
     >
       <span
-        className="vt-scene-chip__drag"
+        className="cursor-grab text-muted-foreground active:cursor-grabbing"
         {...attributes}
         {...listeners}
         onClick={(e) => e.stopPropagation()}
       >
         <GripVertical size={14} />
       </span>
-
-      <span className="vt-scene-chip__icon">
-        {type === "logo" ? <Megaphone size={14} /> : type === "template" ? <Clapperboard size={14} /> : type === "video" ? <Film size={14} /> : <ShoppingBag size={14} />}
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+        <Icon size={14} />
       </span>
-
-      <span className="vt-scene-chip__label">{label}</span>
-
-      <span className="vt-scene-chip__actions">
+      <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
+      <span className="opacity-0 transition-opacity group-hover:opacity-100">
         <IconButton
           label="Remover cena"
           variant="danger"
@@ -455,6 +414,6 @@ const SortableSceneChip: React.FC<{
           <Trash2 size={13} />
         </IconButton>
       </span>
-    </motion.div>
+    </div>
   );
 };

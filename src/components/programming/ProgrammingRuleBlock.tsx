@@ -1,4 +1,5 @@
-import React from "react";
+"use client";
+
 import { Clock, Film, Pencil, Repeat, Trash2 } from "lucide-react";
 import { IconButton } from "../../design-system/components";
 import type { ProgrammingRule } from "../../types/programming";
@@ -16,9 +17,8 @@ function scheduleLabel(rule: ProgrammingRule): string {
   return "";
 }
 
-function scheduleIcon(rule: ProgrammingRule) {
-  const { schedule } = rule;
-  if (schedule.type === "always") return <Repeat size={12} />;
+function ScheduleIcon({ rule }: { rule: ProgrammingRule }) {
+  if (rule.schedule.type === "always") return <Repeat size={12} />;
   return <Clock size={12} />;
 }
 
@@ -30,24 +30,29 @@ type Props = {
 };
 
 export const ProgrammingRuleBlock: React.FC<Props> = ({ rule, index, onEdit, onDelete }) => (
-  <div className="vt-prog-rule">
-    <div className="vt-prog-rule__index">{index + 1}</div>
-
-    <div className="vt-prog-rule__icon">
+  <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
+    <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+      {index + 1}
+    </div>
+    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
       <Film size={14} />
     </div>
-
-    <div className="vt-prog-rule__info">
-      <span className="vt-prog-rule__name" title={rule.assetName}>{rule.assetName}</span>
-      <span className="vt-prog-rule__schedule">
-        {scheduleIcon(rule)}
+    <div className="flex min-w-0 flex-1 flex-col">
+      <span className="truncate text-sm font-medium" title={rule.assetName}>
+        {rule.assetName}
+      </span>
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <ScheduleIcon rule={rule} />
         {scheduleLabel(rule)}
       </span>
     </div>
-
-    <div className="vt-prog-rule__actions">
-      <IconButton label="Editar regra" onClick={onEdit}><Pencil size={12} /></IconButton>
-      <IconButton label="Remover regra" variant="danger" onClick={onDelete}><Trash2 size={12} /></IconButton>
+    <div className="flex shrink-0 gap-1">
+      <IconButton label="Editar regra" onClick={onEdit}>
+        <Pencil size={12} />
+      </IconButton>
+      <IconButton label="Remover regra" variant="danger" onClick={onDelete}>
+        <Trash2 size={12} />
+      </IconButton>
     </div>
   </div>
 );

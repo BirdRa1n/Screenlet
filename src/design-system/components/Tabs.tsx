@@ -1,6 +1,11 @@
-import React, { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import "../../styles/components/Tabs.css";
+"use client";
+
+import * as React from "react";
+import {
+  Tabs as ShadTabs,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 type Tab = { value: string; label: string };
 
@@ -11,34 +16,23 @@ type Props = {
 };
 
 export const Tabs: React.FC<Props> = ({ tabs, defaultValue, children }) => {
-  const [active, setActive] = useState(defaultValue ?? tabs[0]?.value ?? "");
+  const [active, setActive] = React.useState(
+    defaultValue ?? tabs[0]?.value ?? "",
+  );
 
   return (
-    <div className="ds-tabs">
-      <div className="ds-tabs__bar">
-        {tabs.map((tab) => (
-          <button
-            key={tab.value}
-            className={`ds-tabs__tab${active === tab.value ? " ds-tabs__tab--active" : ""}`}
-            onClick={() => setActive(tab.value)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+    <div className="flex flex-col gap-4">
+      <ShadTabs value={active} onValueChange={setActive}>
+        <TabsList>
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </ShadTabs>
 
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={active}
-          className="ds-tabs__content"
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.14, ease: "easeOut" as const }}
-        >
-          {children(active)}
-        </motion.div>
-      </AnimatePresence>
+      <div>{children(active)}</div>
     </div>
   );
 };

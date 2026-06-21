@@ -88,7 +88,8 @@ Crie anúncios com produtos, preços e logo da sua marca, exporte em **MP4**, or
 | Camada | Tecnologia |
 |---|---|
 | Desktop | Electron 42 |
-| UI | React 19 + Vite 8 |
+| UI | Next.js 15 (App Router, static export) + React 19 |
+| Estilo | Tailwind CSS v4 + shadcn/ui (Radix) |
 | Animações | Framer Motion |
 | Vídeo | Remotion 4 |
 | Estado | Zustand 5 |
@@ -118,10 +119,10 @@ npm install
 ## Desenvolvimento
 
 ```bash
-# Inicia Vite + Electron juntos (recomendado)
+# Inicia Next (dev server) + Electron juntos (recomendado)
 npm run electron:dev
 
-# Só o browser (sem Electron APIs)
+# Só o browser em http://localhost:3000 (sem Electron APIs)
 npm run dev
 ```
 
@@ -130,7 +131,7 @@ npm run dev
 ## Build
 
 ```bash
-# Compila TypeScript + Vite + pré-bundle Remotion (dist/remotion-bundle/)
+# Static export do Next (out/) + pré-bundle Remotion (out/remotion-bundle/)
 npm run build
 
 # Empacota instaladores macOS (Apple Silicon + Intel)
@@ -156,39 +157,45 @@ O script `install-cross-compositors.mjs` é executado automaticamente antes de c
 ## Estrutura do projeto
 
 ```
+app/                   # Next.js App Router (static export)
+  layout.tsx           # Root layout + providers.tsx (tema, tooltip, toaster, platform)
+  globals.css          # Tema: tokens da marca → variáveis shadcn (claro/escuro)
+  (app)/               # Grupo com a Sidebar; uma rota por página:
+                       # / projects library media-hub renders templates
+                       # templates/builder templates/wizard channels devices
+                       # iptv settings wizard editor
 src/
   components/
+    ui/                # Primitivos shadcn (button, dialog, tabs, input, ...)
     builder/           # CanvasEditor (drag/resize), Timeline (por camada)
     media/             # MediaPicker, MediaPickerDialog (catálogo de mídia)
     programming/       # ProgrammingTimeline, ProgrammingRuleBlock, ProgrammingRuleForm
+    RemotionPlayer.tsx # Wrapper client-only do <Player> (seguro no static export)
   design-system/
-    components/        # Button, Dialog, Field, UploadZone, ContextMenu, etc.
-  layout/              # Sidebar, Header, SceneListPanel, PreviewPanel, InspectorPanel
-  lib/                 # exportFormats.tsx (ícones por formato), programmingEngine.ts
-  pages/               # Dashboard, Wizard, Projects, Library, Settings, MediaHub, Devices
-                       # Templates, TemplateBuilder, TemplateWizard
+    components/        # Wrappers sobre shadcn com a API do app (Button, Dialog, Field, ...)
+  layout/              # Sidebar, Header, SceneListPanel, PreviewPanel, InspectorPanel, PageShell
+  lib/                 # utils.ts (cn), exportFormats.tsx, programmingEngine.ts
+  views/               # Dashboard, Wizard, Editor, Projects, Library, Settings, MediaHub,
+                       # Devices, Templates, TemplateBuilder, TemplateWizard,
                        # Channels, Studio, Renders, IptvServer
   remotion/            # DynamicAd, ProductScene, LogoScene, TemplateRenderer,
                        # LayerRenderer, animations, types, template-types
   store/               # useAdStore, useWizardStore, useLibraryStore, useProjectsStore,
-                       # useTemplateStore, useTemplateInstanceStore, useNavigationStore,
+                       # useTemplateStore, useTemplateInstanceStore,
                        # useChannelStore, useIptvStore, useThemeStore, useToastStore,
                        # useMediaStore, useRendersStore, useAppSettingsStore,
                        # useDeviceStore, usePlayerDeviceStore
-  styles/
-    components/        # CSS dos componentes do design system
-    layout/            # CSS dos painéis e layout
-    pages/             # CSS das páginas (incluindo Studio.css, Renders.css, MediaHub.css, Devices.css)
-    tokens.css         # Variáveis de design (cores, espaçamento, tipografia)
   templates/           # Templates embutidos (generico, carnes, natal, pascoa)
   types/               # channel.ts, device.ts (Kodi), playerDevice.ts (Screenlet Player), media.ts
 electron/
-  main.cjs             # Processo principal: protocolo app://, armazenamento em ~/Documents/Screenlet/,
-                       # exportação MP4 e thumbnails com concorrência adaptativa, servidor IPTV,
-                       # tray/autostart (Windows), pareamento de Screenlet Player, SSH para Kodi
+  main.cjs             # Processo principal: protocolo app:// (serve out/), dev asset server (7096),
+                       # armazenamento em ~/Documents/Screenlet/, exportação MP4 e thumbnails,
+                       # servidor IPTV, tray/autostart (Windows), Screenlet Player, SSH para Kodi
   preload.cjs          # Bridge window.adFrame (selectImage, exportVideo, channelList, etc.)
+next.config.mjs        # output: export, distDir: out, rewrites dev p/ assets
+components.json        # Config do shadcn (alias @/* → src/*, base radix)
 scripts/
-  bundle-remotion.mjs            # Pré-compila as composições Remotion em dist/remotion-bundle/
+  bundle-remotion.mjs            # Pré-compila as composições Remotion em out/remotion-bundle/
   install-cross-compositors.mjs  # Baixa compositors ARM64 e x64 para builds cross-platform
 entitlements.plist     # Entitlements macOS para hardened runtime (dylibs do ffmpeg)
 ```
