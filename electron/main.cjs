@@ -271,15 +271,30 @@ app.whenReady().then(() => {
     }
 
     // App bundle assets → out/ (Next static export; may be inside .asar — use fs.readFileSync).
-    // With `trailingSlash: true`, routes export as <route>/index.html, so map
-    // directory-style paths to their index.html.
-    let resolved = pathname === "/" ? "/index.html" : pathname;
-    if (resolved.endsWith("/")) resolved += "index.html";
-    let distPath = path.join(__dirname, "..", "out", resolved);
-    // Fallback: a route requested without a trailing slash (e.g. "/projects").
-    if (!fs.existsSync(distPath) && !path.extname(resolved)) {
-      distPath = path.join(__dirname, "..", "out", resolved, "index.html");
-    }
+    //
+    // Resolve the request to a file under out/. Note: Node's URL parser yields
+    // pathname "" for `app://index.html` (no trailing slash) and "/" for
+    // `app://index.html/` — both mean the app entry. With `trailingSlash: true`
+    // every route exports as <route>/index.html.
+    const outDir = path.join(__dirname, "..", "out");
+    let urlPath = !pathname || pathname === "/" ? "/index.html" : pathname;
+
+    const resolveFile = (rel) => {
+      const p = path.join(outDir, rel);
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) return p;
+      // directory or extension-less route → its index.html / .html sibling
+      if (!path.extname(rel)) {
+        const asIndex = path.join(outDir, rel, "index.html");
+        if (fs.existsSync(asIndex)) return asIndex;
+        const asHtml = path.join(outDir, rel.replace(/\/$/, "") + ".html");
+        if (fs.existsSync(asHtml)) return asHtml;
+      }
+      return null;
+    };
+
+    // Unknown routes fall back to the SPA shell (index.html); the client router
+    // then renders the matching page or its own not-found.
+    const distPath = resolveFile(urlPath) || path.join(outDir, "index.html");
     const MIME = {
       html: "text/html; charset=utf-8",
       js:   "application/javascript",
@@ -294,6 +309,7 @@ app.whenReady().then(() => {
       woff2:"font/woff2",
       ttf:  "font/ttf",
       json: "application/json",
+      txt:  "text/plain; charset=utf-8",
     };
     try {
       const data = fs.readFileSync(distPath);
