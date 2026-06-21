@@ -1,15 +1,23 @@
-import React from "react";
-import { motion, type HTMLMotionProps } from "framer-motion";
-import "../../styles/components/Button.css";
+"use client";
+
+import * as React from "react";
+import { Button as ShadButton } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";
 
-type Props = Omit<HTMLMotionProps<"button">, "ref" | "children"> & {
+const VARIANT_MAP = {
+  primary: "default",
+  secondary: "secondary",
+  ghost: "ghost",
+  danger: "destructive",
+} as const;
+
+type Props = Omit<React.ComponentProps<"button">, "ref"> & {
   variant?: Variant;
   size?: Size;
   icon?: React.ReactNode;
-  children?: React.ReactNode;
 };
 
 export const Button: React.FC<Props> = ({
@@ -18,20 +26,17 @@ export const Button: React.FC<Props> = ({
   icon,
   className,
   children,
-  disabled,
   ...rest
 }) => {
   return (
-    <motion.button
-      className={`ds-button ds-button--${variant} ds-button--${size} ${className ?? ""}`}
-      whileHover={disabled ? undefined : { y: -1 }}
-      whileTap={disabled ? undefined : { scale: 0.97 }}
-      transition={{ duration: 0.12, ease: "easeOut" }}
-      disabled={disabled}
+    <ShadButton
+      variant={VARIANT_MAP[variant]}
+      size={size === "sm" ? "sm" : "default"}
+      className={cn(className)}
       {...rest}
     >
-      {icon ? <span className="ds-button__icon">{icon}</span> : null}
+      {icon}
       {children}
-    </motion.button>
+    </ShadButton>
   );
 };

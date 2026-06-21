@@ -1,10 +1,17 @@
-import React, { useEffect, useRef } from "react";
+"use client";
+
+import * as React from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
-import "../../styles/components/ContextMenu.css";
+import { cn } from "@/lib/utils";
 
 export type ContextMenuItem =
-  | { type: "item"; label: string; icon?: React.ReactNode; onClick: () => void; danger?: boolean }
+  | {
+      type: "item";
+      label: string;
+      icon?: React.ReactNode;
+      onClick: () => void;
+      danger?: boolean;
+    }
   | { type: "separator" };
 
 type Props = {
@@ -15,9 +22,7 @@ type Props = {
 };
 
 export const ContextMenu: React.FC<Props> = ({ items, x, y, onClose }) => {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
+  React.useEffect(() => {
     const close = (e: MouseEvent | KeyboardEvent) => {
       if (e instanceof KeyboardEvent && e.key !== "Escape") return;
       onClose();
@@ -30,41 +35,39 @@ export const ContextMenu: React.FC<Props> = ({ items, x, y, onClose }) => {
     };
   }, [onClose]);
 
-  // Prevent menu from going off-screen
-  const style: React.CSSProperties = {
-    position: "fixed",
-    top: y,
-    left: x,
-    zIndex: 9999,
-  };
-
   return createPortal(
-    <motion.div
-      ref={ref}
-      className="vt-ctx"
-      style={style}
-      initial={{ opacity: 0, scale: 0.95, y: -4 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95, y: -4 }}
-      transition={{ duration: 0.1 }}
+    <div
+      className="fixed z-[9999] min-w-[180px] overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+      style={{ top: y, left: x }}
       onMouseDown={(e) => e.stopPropagation()}
     >
       {items.map((item, i) =>
         item.type === "separator" ? (
-          <div key={i} className="vt-ctx__separator" />
+          <div key={i} className="my-1 h-px bg-border" />
         ) : (
           <button
             key={i}
-            className={["vt-ctx__item", item.danger ? "vt-ctx__item--danger" : ""].join(" ")}
-            onClick={() => { item.onClick(); onClose(); }}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground",
+              item.danger &&
+                "text-destructive hover:bg-destructive/10 hover:text-destructive",
+            )}
+            onClick={() => {
+              item.onClick();
+              onClose();
+            }}
           >
-            {item.icon && <span className="vt-ctx__icon">{item.icon}</span>}
+            {item.icon ? (
+              <span className="inline-flex size-4 items-center justify-center">
+                {item.icon}
+              </span>
+            ) : null}
             <span>{item.label}</span>
           </button>
-        )
+        ),
       )}
-    </motion.div>,
-    document.body
+    </div>,
+    document.body,
   );
 };
 

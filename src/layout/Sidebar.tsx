@@ -1,4 +1,8 @@
-import React from "react";
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -6,6 +10,7 @@ import {
   FolderOpen,
   HardDrive,
   Images,
+  type LucideIcon,
   LayoutGrid,
   LayoutTemplate,
   MonitorPlay,
@@ -13,121 +18,175 @@ import {
   Settings,
   Tv2,
 } from "lucide-react";
-import { useNavigationStore, type Page } from "../store/useNavigationStore";
-import "../styles/layout/Sidebar.css";
+import { cn } from "@/lib/utils";
 
-type NavItem = {
-  icon: React.ReactNode;
-  label: string;
-  page?: Page;
-  disabled?: boolean;
-};
+type NavItem = { icon: LucideIcon; label: string; href: string };
 
 const NAV_CONTENT: NavItem[] = [
-  { icon: <LayoutGrid size={16} />, label: "Dashboard", page: "dashboard" },
-  { icon: <FolderOpen size={16} />, label: "Projetos", page: "projects" },
-  { icon: <LayoutTemplate size={16} />, label: "Templates", page: "templates" },
-  { icon: <HardDrive size={16} />, label: "Media Hub", page: "media-hub" },
-  { icon: <Images size={16} />, label: "Produtos", page: "library" },
-  { icon: <Film size={16} />, label: "Vídeos", page: "renders" },
+  { icon: LayoutGrid, label: "Dashboard", href: "/" },
+  { icon: FolderOpen, label: "Projetos", href: "/projects" },
+  { icon: LayoutTemplate, label: "Templates", href: "/templates" },
+  { icon: HardDrive, label: "Media Hub", href: "/media-hub" },
+  { icon: Images, label: "Produtos", href: "/library" },
+  { icon: Film, label: "Vídeos", href: "/renders" },
 ];
 
 const NAV_PROGRAMMING: NavItem[] = [
-  { icon: <Tv2 size={16} />, label: "Canais", page: "channels" },
-  { icon: <MonitorPlay size={16} />, label: "Dispositivos", page: "devices" },
+  { icon: Tv2, label: "Canais", href: "/channels" },
+  { icon: MonitorPlay, label: "Dispositivos", href: "/devices" },
 ];
 
 const NAV_IPTV: NavItem[] = [
-  { icon: <Radio size={16} />, label: "Servidor IPTV", page: "iptv" },
+  { icon: Radio, label: "Servidor IPTV", href: "/iptv" },
 ];
 
 const NAV_BOTTOM: NavItem[] = [
-  { icon: <Settings size={16} />, label: "Configurações", page: "settings" },
+  { icon: Settings, label: "Configurações", href: "/settings" },
 ];
 
-export const Sidebar: React.FC = () => {
-  const page = useNavigationStore((s) => s.page);
-  const collapsed = useNavigationStore((s) => s.sidebarCollapsed);
-  const navigate = useNavigationStore((s) => s.navigate);
-  const toggleSidebar = useNavigationStore((s) => s.toggleSidebar);
+function useIsMac() {
+  const [isMac, setIsMac] = useState(false);
+  useEffect(() => {
+    setIsMac(window.adFrame?.platform === "darwin");
+  }, []);
+  return isMac;
+}
 
-  const isActive = (item: NavItem) => item.page === page;
+export function Sidebar() {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  const isMac = useIsMac();
 
-  const makeGroup = (items: NavItem[]) =>
-    items.map((item) => (
-      <NavButton
-        key={item.label}
-        item={item}
-        active={isActive(item)}
-        onClick={() => item.page && navigate(item.page)}
-      />
-    ));
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
-    <aside className={`vt-sidebar${collapsed ? " vt-sidebar--collapsed" : ""}`}>
-      <div className="vt-sidebar__brand">
-        <div className="vt-sidebar__brand-trafficzone" />
-        <div className="vt-sidebar__brand-content">
-          <span className="vt-sidebar__brand-icon">
-            <Radio size={16} strokeWidth={2.25} />
+    <aside
+      className={cn(
+        "relative flex h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200",
+        collapsed ? "w-[68px]" : "w-60",
+      )}
+    >
+      {/* Draggable window strip — leaves room for macOS traffic lights. */}
+      <div
+        className="h-7 w-full shrink-0"
+        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+      />
+
+      <div
+        className={cn(
+          "flex items-center gap-2.5 px-4 pb-3",
+          isMac && !collapsed && "pl-4",
+        )}
+        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+      >
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+          <Radio size={16} strokeWidth={2.25} />
+        </span>
+        {!collapsed && (
+          <span className="truncate text-[15px] font-bold tracking-tight">
+            Screenlet
           </span>
-          <span className="vt-sidebar__brand-name">Screenlet</span>
-        </div>
+        )}
       </div>
 
       <button
-        className="vt-sidebar__toggle"
-        onClick={toggleSidebar}
+        onClick={() => setCollapsed((c) => !c)}
         title={collapsed ? "Expandir menu" : "Recolher menu"}
+        className="absolute -right-3 top-9 z-10 flex size-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
       >
         {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
       </button>
 
-      <nav className="vt-sidebar__nav">
-        <div className="vt-sidebar__nav-group">
-          <span className="vt-sidebar__nav-section">Content Studio</span>
-          {makeGroup(NAV_CONTENT)}
-        </div>
-
-        <div className="vt-sidebar__nav-divider" />
-
-        <div className="vt-sidebar__nav-group">
-          <span className="vt-sidebar__nav-section">Broadcasting</span>
-          {makeGroup(NAV_PROGRAMMING)}
-        </div>
-
-        <div className="vt-sidebar__nav-divider" />
-
-        <div className="vt-sidebar__nav-group">
-          <span className="vt-sidebar__nav-section">IPTV Server</span>
-          {makeGroup(NAV_IPTV)}
-        </div>
+      <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-2">
+        <NavGroup
+          title="Content Studio"
+          items={NAV_CONTENT}
+          collapsed={collapsed}
+          isActive={isActive}
+        />
+        <NavGroup
+          title="Broadcasting"
+          items={NAV_PROGRAMMING}
+          collapsed={collapsed}
+          isActive={isActive}
+        />
+        <NavGroup
+          title="IPTV Server"
+          items={NAV_IPTV}
+          collapsed={collapsed}
+          isActive={isActive}
+        />
       </nav>
 
-      <div className="vt-sidebar__footer">
-        {makeGroup(NAV_BOTTOM)}
+      <div className="border-t border-sidebar-border px-3 py-3">
+        {NAV_BOTTOM.map((item) => (
+          <NavButton
+            key={item.href}
+            item={item}
+            active={isActive(item.href)}
+            collapsed={collapsed}
+          />
+        ))}
       </div>
     </aside>
   );
-};
+}
 
-const NavButton: React.FC<{
+function NavGroup({
+  title,
+  items,
+  collapsed,
+  isActive,
+}: {
+  title: string;
+  items: NavItem[];
+  collapsed: boolean;
+  isActive: (href: string) => boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      {!collapsed && (
+        <span className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+          {title}
+        </span>
+      )}
+      {items.map((item) => (
+        <NavButton
+          key={item.href}
+          item={item}
+          active={isActive(item.href)}
+          collapsed={collapsed}
+        />
+      ))}
+    </div>
+  );
+}
+
+function NavButton({
+  item,
+  active,
+  collapsed,
+}: {
   item: NavItem;
   active: boolean;
-  onClick: () => void;
-}> = ({ item, active, onClick }) => (
-  <button
-    className={[
-      "vt-sidebar__nav-item",
-      active ? "vt-sidebar__nav-item--active" : "",
-      item.disabled ? "vt-sidebar__nav-item--disabled" : "",
-    ]
-      .filter(Boolean)
-      .join(" ")}
-    onClick={onClick}
-    data-label={item.label}
-  >
-    <span className="vt-sidebar__nav-icon">{item.icon}</span>
-    <span className="vt-sidebar__nav-label">{item.label}</span>
-  </button>
-);
+  collapsed: boolean;
+}) {
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      title={collapsed ? item.label : undefined}
+      className={cn(
+        "flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
+        collapsed && "justify-center",
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+      )}
+    >
+      <Icon size={16} className="shrink-0" />
+      {!collapsed && <span className="truncate">{item.label}</span>}
+    </Link>
+  );
+}

@@ -5,16 +5,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Dev: Electron app (recommended — starts Vite then Electron)
+# Dev: Electron app (recommended — starts Next dev then Electron)
 npm run electron:dev
 
-# Dev: Vite only (browser at localhost:5173, without Electron APIs)
+# Dev: Next only (browser at localhost:3000, without Electron APIs)
 npm run dev
 
 # Type check only
 npx tsc --noEmit
 
-# Production build (tsc + vite build + remotion pre-bundle)
+# Lint
+npm run lint
+
+# Production build (next static export + remotion pre-bundle)
 npm run build
 
 # Package macOS installers (both arm64 and x64 DMGs)
@@ -35,13 +38,20 @@ npm run dist:linux
 
 ## Architecture
 
-Screenlet is an Electron desktop app for digital signage — creating, rendering and broadcasting MP4 video ads (TV, Instagram, Stories, TikTok) via a built-in IPTV server. It combines a Vite+React UI with Remotion for video rendering and export.
+Screenlet is an Electron desktop app for digital signage — creating, rendering and broadcasting MP4 video ads (TV, Instagram, Stories, TikTok) via a built-in IPTV server. It combines a **Next.js (App Router) + React + Tailwind v4 + shadcn/ui** front end with Remotion for video rendering and export.
+
+### UI stack (Next.js + shadcn)
+- **Next.js App Router** under `app/`, built as a **static export** (`output: "export"`, `distDir: "out"`, `trailingSlash: true` in `next.config.mjs`). There is no runtime Node server — the renderer is a fully client-side app inside the Next shell. Electron loads it from `http://localhost:3000` (dev) or via the `app://` protocol serving `out/` (prod).
+- **Routing** is real App Router routes (see Routing below) — there is no `useNavigationStore` anymore. Pages live in `src/views/*` (renamed from `src/views/` so Next doesn't treat them as a Pages Router) and are mounted by thin route files in `app/(app)/**/page.tsx`.
+- **Styling** is Tailwind v4 utility classes + shadcn/ui components. The single global stylesheet is `app/globals.css` (brand tokens mapped to shadcn CSS variables). **There are no per-component `.css` files and no `src/styles/` directory.**
+- **shadcn primitives** live in `src/components/ui/*` (added via `npx shadcn@latest add`), base `radix`, style `new-york`, alias `@/* → src/*` (see `components.json`). `cn()` helper is in `src/lib/utils.ts`.
+- **`@remotion/player`** must never render during the static-export prerender. Use the mount-gated `RemotionPlayer` wrapper (`src/components/RemotionPlayer.tsx`) for previews, or the raw `<Player>` behind a mount flag when a `PlayerRef` is needed (see `PreviewPanel`, `TemplateBuilder`).
 
 ### Process model
-- **`electron/main.cjs`** — Electron main process (CommonJS). Registers `app://` protocol (serves `dist/` and user uploads). All user data lives under `~/Documents/Screenlet/` (or a user-configured path). Runs Remotion `renderMedia()`/`renderStill()` for MP4 export and project-thumbnail generation with adaptive concurrency. Runs an HTTP IPTV server on port 7095. Manages a `Tray` icon + login-item (autostart) settings on Windows.
+- **`electron/main.cjs`** — Electron main process (CommonJS). Registers `app://` protocol (serves `out/` and user uploads). A dev-only static server (`startDevAssetServer`, port **7096**) serves `/uploads`, `/exports`, `/project-thumbs` so the Next dev server (:3000) can proxy them via `rewrites()` in `next.config.mjs`. All user data lives under `~/Documents/Screenlet/` (or a user-configured path). Runs Remotion `renderMedia()`/`renderStill()` for MP4 export and project-thumbnail generation with adaptive concurrency. Runs an HTTP IPTV server on port 7095. Manages a `Tray` icon + login-item (autostart) settings on Windows.
 - **`electron/preload.cjs`** — Exposes `window.adFrame` via `contextBridge`. Key groups: file utils (`selectImage`, `copyFile`, `selectVideo`), projects CRUD, templates CRUD, library CRUD, channels CRUD, Kodi devices CRUD + `kodiPing`/`kodiRestartAndOpen`/`kodiListChannels`/`kodiFetchConfig`, Screenlet Player devices (`playerDeviceList`/`playerDeviceScan`/`playerDeviceClaim`/`playerDeviceUnpair`/`playerDeviceDelete`), exports list/delete/reveal, IPTV start/stop/setIp, app settings (`appSettingsGet`/`appSettingsSetLaunchAtLogin`/`appSettingsSetAutoStartIptv`), `exportVideo`, `onExportProgress`, storage management (`storageGetDir`, `storageChooseDir`, `storageMigrate`, `storageOpenDir`), platform info (`platform: NodeJS.Platform`, `appGetVersion`, `setTitleBarTheme(isDark)`). See `src/global.d.ts` for the full typed surface.
-- **`src/main.tsx`** — Sets `document.documentElement.dataset.platform` from `window.adFrame.platform` at startup so CSS rules can branch per OS. Also sets `--win-controls-w: 152px` on Windows as a CSS fallback for the titlebar overlay width.
-- **`src/`** — React renderer process (ESM, Vite).
+- **`app/layout.tsx`** — root layout (server). **`app/providers.tsx`** (`"use client"`) is the renderer bootstrap (ported from the old `src/main.tsx`): sets `document.documentElement.dataset.platform` from `window.adFrame.platform`, sets `--win-controls-w: 152px` on Windows, mounts `TooltipProvider` + sonner `<Toaster>`, and calls `useThemeStore.initTheme()` (theme is applied in an effect, never at module scope, so it doesn't run during prerender).
+- **`src/`** — React renderer code (ESM). `app/` is the Next entry; `src/views`, `src/layout`, `src/components`, `src/store`, `src/remotion`, etc. hold the implementation.
 
 ### Storage architecture
 All user data is stored under `~/Documents/Screenlet/` by default (survives reinstalls, syncs via iCloud/OneDrive):
@@ -58,20 +68,22 @@ All user data is stored under `~/Documents/Screenlet/` by default (survives rein
 
 The location can be changed by the user in Settings → Armazenamento. The custom path is persisted in `userData/storage-config.json`. On change, the app relaunches so all module-level `*_DIR` constants pick up the new path.
 
-Vite dev server has a `serve-user-uploads` plugin (in `vite.config.ts`) that proxies `/uploads/*` requests to `UPLOADS_DIR` so the Remotion Player renders assets correctly in dev.
+In dev, asset paths (`/uploads`, `/exports`, `/project-thumbs`) are proxied by `next.config.mjs` `rewrites()` to the Electron dev static server on port 7096 so the Remotion Player renders assets correctly. In prod the `app://` protocol serves them. The `rewrites()` only run under `next dev` (they return `[]` in the export build).
 
 ### Routing
-Single-page with Zustand-driven navigation. `Page` type in `src/store/useNavigationStore.ts`:
-```ts
-"dashboard" | "wizard" | "editor"
-| "projects" | "library" | "media-hub" | "templates" | "template-builder" | "template-wizard"
-| "renders"
-| "channels" | "devices"
-| "iptv" | "settings"
+Real App Router routes under `app/(app)/`. Map:
 ```
-`navigateToBuilder(templateId?)` opens the template builder for a new or existing template.
+/                       → Dashboard      (app/(app)/page.tsx → src/views/Dashboard)
+/projects /library /media-hub /renders /channels /devices /iptv /settings /wizard /editor
+/templates              → Templates
+/templates/wizard       → TemplateWizard (fills a template instance; reads useTemplateInstanceStore)
+/templates/builder      → TemplateBuilder; edit target via ?id= query (useSearchParams) — a
+                          query param, NOT a path param, because static export + client-side nav
+                          can't resolve un-prerendered dynamic paths.
+```
+Navigate with `useRouter().push(...)` / `<Link>` / `usePathname()` (active state in `src/layout/Sidebar.tsx`). The **Studio** is not a route — it's a fullscreen overlay (`fixed inset-0 z-50`) rendered by `/channels` when a channel is opened. The editor's export flow (FPS dialog + progress) lives in the `Editor` view (`src/views/Editor.tsx`), ported from the old `App.tsx`.
 
-### Media Hub (`src/pages/MediaHub.tsx`)
+### Media Hub (`src/views/MediaHub.tsx`)
 Catalogs all uploaded assets (images + videos) in `UPLOADS_DIR`. The catalog is persisted at `UPLOADS_DIR/media-catalog.json`. Key behaviors:
 - **Auto-discovery**: `media-catalog` IPC scans `UPLOADS_DIR` on every call and adds un-cataloged files automatically — existing uploads from before Media Hub exist appear without any migration.
 - **SHA-256 dedup**: `media-import` computes a SHA-256 hash before copying; if the same file was already imported it returns the existing asset without duplicating.
@@ -79,7 +91,7 @@ Catalogs all uploaded assets (images + videos) in `UPLOADS_DIR`. The catalog is 
 - **`MediaPicker` component** (`src/components/media/MediaPicker.tsx`): shared picker used in `InspectorPanel` (ProductInspector image field). Opens a dialog showing the catalog grid + "Import file" button. Replaces `UploadZone` for choosing product images.
 - **Video thumbnails**: `VideoThumbnail` component in `MediaHub.tsx` captures a frame via a detached `<video>` + `<canvas>` + `toDataURL()` (no IPC/disk write — generated client-side on render).
 
-### Devices (`src/pages/Devices.tsx`)
+### Devices (`src/views/Devices.tsx`)
 Two unrelated device-management sections share this one page:
 - **Kodi devices** (`useDeviceStore`, `src/types/device.ts`) — SSH-managed Kodi/LibreELEC boxes. `device-save`/`device-list`/`device-delete` persist `KodiDevice` JSON (passwords encrypted at rest, never sent back to the renderer — only boolean flags). `kodi-ping` checks reachability, `kodi-restart-and-open` restarts Kodi and opens the IPTV M3U, `kodi-list-channels` previews channels from temporary form creds before saving, `kodi-fetch-config` reads `guisettings.xml` over SSH to auto-fill the HTTP API port/credentials fields.
 - **Screenlet Player devices** (`usePlayerDeviceStore`, `src/types/playerDevice.ts`) — sibling Go project (`screenlet-player`, lightweight Linux mpv-based signage player). `player-device-scan` sweeps the local network for unclaimed/unpaired players; `player-device-claim` pairs one to a channel (may reject if unreachable or already claimed by another Studio instance); `player-device-unpair`/`player-device-delete` release/remove it. Claimed players poll the Studio for their assigned channel's programming.
@@ -89,7 +101,7 @@ Two unrelated device-management sections share this one page:
 - **`useTemplateStore`** — Template CRUD. Merges built-in templates from `src/templates/` with user templates from `SCREENLET_DIR/templates/`.
 - **`useTemplateInstanceStore`** — Active template + filled values during TemplateWizard flow.
 - **`useWizardStore`** — Multi-step wizard state (store info, products, preset, export format).
-- **`useNavigationStore`** — Current page + `editingTemplateId` + sidebar collapsed state.
+- **`useThemeStore`** — `"dark" | "light" | "system"`; `initTheme()` (called once from `app/providers.tsx`) applies the persisted theme by toggling `.dark` on `<html>`. (Navigation is no longer a store — it uses Next App Router.)
 - **`useThemeStore`** — `"dark" | "light" | "system"`. System mode listens to `prefers-color-scheme` in real time. `applyTheme()` also calls `window.adFrame.setTitleBarTheme(isDark)` to sync the Windows titlebar overlay color.
 - **`useLibraryStore`** — Product library CRUD, synced with IPC.
 - **`useMediaStore`** — Media catalog CRUD. `refresh()` calls `media-catalog` IPC which scans `UPLOADS_DIR` for new files and returns `MediaAsset[]`. `importAsset(type)` opens a file dialog with SHA-256 dedup and adds to catalog. `removeAsset(id)` removes from catalog only (does NOT delete the physical file to preserve compatibility).
@@ -107,7 +119,7 @@ Channels live in `SCREENLET_DIR/channels/`. Each channel has `playlist: Playlist
 
 `PlaylistItem = { id, filename, name, transition: "cut" | "fade" }`.
 
-The Studio (`src/pages/Studio.tsx`) is a fixed full-screen overlay (`z-index: 200`). `type Tab = "playlist" | "preview" | "schedule"`:
+The Studio (`src/views/Studio.tsx`) is a fixed full-screen overlay (`z-index: 200`). `type Tab = "playlist" | "preview" | "schedule"`:
 - **Playlist** tab — library of rendered videos from `EXPORTS_DIR` (left, via `useRendersStore`) + playlist editor with move up/down, transition selector, remove (right)
 - **Pré-visualizar** tab — a real `<Player>` (Remotion) that plays through the current `playlist` in order, switching `src` per item and respecting each item's `transition`; shows an empty state pointing back to the Playlist tab if it has no items
 - **Horários** tab — `ProgrammingTimeline` component for managing `ProgrammingRule[]`
@@ -135,7 +147,7 @@ The Studio (`src/pages/Studio.tsx`) is a fixed full-screen overlay (`z-index: 20
 - Settings persisted to `APP_SETTINGS_FILE` (`userData/app-settings.json`), defaults in `DEFAULT_APP_SETTINGS`.
 
 ### Renders page
-`src/pages/Renders.tsx` lists all MP4 files in `EXPORTS_DIR` via `useRendersStore`. Each card has Play (opens a `Dialog` with a `<video>` preview), reveal-in-Finder, and delete actions.
+`src/views/Renders.tsx` lists all MP4 files in `EXPORTS_DIR` via `useRendersStore`. Each card has Play (opens a `Dialog` with a `<video>` preview), reveal-in-Finder, and delete actions.
 
 ### Render / export flow
 1. User clicks "Renderizar" → `openFpsDialog(payload, suggestedName)` in `App.tsx`
@@ -155,9 +167,10 @@ Both export and project-thumbnail generation share two helpers in `main.cjs`:
 **Chrome caching**: `warmRemotionBrowser()` runs at app startup. It chdirs to `userData/remotion-root/` (which has a `package.json` anchor) so Remotion stores Chrome at `userData/remotion-root/node_modules/.remotion/` — survives app updates. The path is cached in `cachedBrowserExecutable` and passed to every `renderMedia` / `selectComposition` call.
 
 ### Design system
-- **`src/styles/tokens.css`** — Single source of truth for all CSS custom properties.
-- **`src/styles/`** — All CSS under `components/`, `layout/`, `pages/`. **No CSS files alongside `.tsx`.**
-- **`src/design-system/components/`** — `Button`, `IconButton` (variants: `"default" | "danger"` — **NOT "ghost"**), `Field`/`TextField`/`SelectField`/`ColorField`/`Checkbox`, `Card`, `Dialog`, `ProgressBar`, `Tabs`, `Toast`, `Tooltip`, `UploadZone`, `ContextMenu`. All exported from `index.ts`.
+- **`app/globals.css`** — single source of truth for theme. Brand tokens are mapped to shadcn CSS variables (`--background`, `--foreground`, `--primary`, `--muted`, `--border`, `--card`, `--popover`, `--destructive`, `--ring`, `--sidebar-*`, plus `--success`/`--warning`). `:root` = light, `.dark` = dark (default). Tailwind utilities are generated from these via `@theme inline`. Brand primary is indigo/violet `#6e56f8`.
+- **Dark mode** uses the shadcn `.dark` class on `<html>`, toggled by `useThemeStore.applyTheme()` (which also calls `window.adFrame.setTitleBarTheme`). Tailwind classes use semantic tokens (`bg-card`, `text-muted-foreground`, …); for `--success`/`--warning` use `text-[color:var(--success)]` etc.
+- **`src/components/ui/`** — shadcn primitives (button, dialog, tabs, input, label, select, checkbox, card, progress, tooltip, dropdown-menu, separator, scroll-area, badge). Add more with `npx shadcn@latest add <name>`.
+- **`src/design-system/components/`** — thin wrappers over shadcn that preserve the app's existing API so the ~24 consumers didn't change: `Button` (variants `primary|secondary|ghost|danger`), `IconButton` (variants `"default" | "danger"` — **NOT "ghost"**), `Field`/`TextField`/`SelectField`/`ColorField`/`Checkbox`, `Card`, `Dialog`, `ProgressBar`, `Tabs` (render-prop API), `Tooltip`, `UploadZone`, `ContextMenu`. `ToastContainer` is a no-op; toasts go through sonner (the `toast` helper in `useToastStore` forwards to `sonner`). All exported from `index.ts`.
 - **`src/components/media/MediaPicker.tsx`** — shared media picker. Exports `MediaPicker` (inline preview + click-to-open) and `MediaPickerDialog` (standalone modal). Used in `InspectorPanel` (product image), `SceneListPanel` (video picker), `TemplateWizard` (image variables), `TemplateBuilder` (image layer props).
 - **`src/components/programming/`** — `ProgrammingTimeline`, `ProgrammingRuleBlock`, `ProgrammingRuleForm`. Used by Studio's "Horários" tab.
 - Never hardcode color values — always use semantic tokens (`--input-bg`, `--text-primary`, etc.).
@@ -196,17 +209,17 @@ Built-in templates live in `src/templates/` (generico, carnes, natal, pascoa) an
 ```
 npm run dist:mac
   └─ install-cross-compositors.mjs   → installs arm64 + x64 compositor binaries
-  └─ tsc -b
-  └─ vite build                      → dist/
-  └─ bundle-remotion.mjs             → dist/remotion-bundle/
+  └─ next build                      → out/   (static export; type-checks the tree)
+  └─ bundle-remotion.mjs             → out/remotion-bundle/
   └─ electron-builder                → release/Screenlet-arm64.dmg + Screenlet-x64.dmg
 ```
 
 **Key production decisions:**
+- The packaged UI is the Next **static export** in `out/` (`electron-builder.files` ships `out/**/*`; the `app://` protocol serves it). `next build` type-checks the whole tree (no `ignoreBuildErrors`); ESLint is run separately via `npm run lint` (`eslint.ignoreDuringBuilds: true`).
 - `"asar": false` — Remotion compositor binaries (`ffmpeg`, `ffprobe`) must be executable on disk; `.asar` archives break `chmod` and `spawn` for those files.
 - `optionalDependencies` in `package.json` lists all compositor packages so electron-builder includes them explicitly.
 - `scripts/install-cross-compositors.mjs` uses `npm pack` (bypasses npm's os/cpu platform filter) to install `compositor-darwin-x64` on an ARM64 build machine. Idempotent — skips if already present.
-- Production bundle path: `path.join(process.resourcesPath, "app", "dist", "remotion-bundle")`.
+- Production bundle path: `path.join(process.resourcesPath, "app", "out", "remotion-bundle")`.
 - Before rendering, uploads are synced from `UPLOADS_DIR` to `{bundleDir}/public/uploads/` because Remotion injects `window.remotion_staticBase = '/public/'`, making `staticFile('uploads/x')` resolve to `/public/uploads/x`.
 - `entitlements.plist` includes `cs.disable-library-validation` — required for ffmpeg's dylibs which use relative rpaths blocked by macOS hardened runtime.
 - `HOME` is set at startup via `os.userInfo().homedir` (not `os.homedir()`) because `os.homedir()` reads the `HOME` env var first, which may be empty in packaged Electron on macOS.
@@ -221,7 +234,7 @@ Routes matched on `pathname`:
 - `/uploads/` → `UPLOADS_DIR`
 - `/project-thumbs/` → `PROJECT_THUMBS_DIR`
 - `/exports/` → `EXPORTS_DIR` (only the `Range` header is forwarded to `net.fetch`, not the full `Headers` object — see gotcha below)
-- anything else falls through to the bundled `dist/` app files
+- anything else falls through to the bundled `out/` app files (Next static export; `trailingSlash: true` means routes resolve to `<route>/index.html`)
 
 **Critical gotcha — always use relative paths, never `app://host/...` absolute URLs**: in a `scheme://` URL, everything between `//` and the next `/` is the **host**, not the path. `app://exports/foo.mp4` makes `exports` the *host*, so `url.pathname` is `/foo.mp4` — it never matches `pathname.startsWith("/exports/")`. This is why the Studio preview player was stuck at `0:00`: it built `src` as `app://exports/${filename}`. The fix/convention used everywhere else in the codebase (`uploads/...`, `project-thumbs/...`) is to use a **relative** path with no scheme — it resolves against the page's own base URL (`app://index.html`), giving `pathname === "/exports/<file>"` as expected.
 

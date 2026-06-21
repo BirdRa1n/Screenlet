@@ -1,9 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Image, Plus, Search, Upload, Video } from "lucide-react";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { ImageIcon, Plus, Search, Upload, Video } from "lucide-react";
 import { Button, Dialog } from "../../design-system/components";
+import { cn } from "@/lib/utils";
+import { assetUrl } from "@/lib/assetUrl";
 import { useMediaStore } from "../../store/useMediaStore";
 import type { MediaAsset, MediaAssetType } from "../../types/media";
-import "../../styles/components/MediaPicker.css";
 
 type Props = {
   value: string;
@@ -21,30 +24,30 @@ export const MediaPicker: React.FC<Props> = ({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="vt-mpick">
+    <>
       <button
-        className="vt-mpick__preview"
+        className="group relative flex w-full items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/30 transition-colors hover:border-primary/60"
         style={{ height }}
         onClick={() => setOpen(true)}
         type="button"
       >
         {value ? (
           accept === "video" ? (
-            <div className="vt-mpick__video-thumb">
+            <div className="flex flex-col items-center gap-1 text-muted-foreground">
               <Video size={20} />
-              <span className="vt-mpick__video-name">{value.split("/").pop()}</span>
+              <span className="max-w-[90%] truncate text-xs">{value.split("/").pop()}</span>
             </div>
           ) : (
-            <img src={value} alt="" className="vt-mpick__img" />
+            <img src={assetUrl(value)} alt="" className="size-full object-contain p-1" />
           )
         ) : (
-          <div className="vt-mpick__empty">
-            {accept === "video" ? <Video size={20} /> : <Image size={20} />}
-            <span>Clique para selecionar</span>
+          <div className="flex flex-col items-center gap-1 text-muted-foreground">
+            {accept === "video" ? <Video size={20} /> : <ImageIcon size={20} />}
+            <span className="text-xs">Clique para selecionar</span>
           </div>
         )}
-        <div className="vt-mpick__overlay">
-          <span>Alterar</span>
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+          Alterar
         </div>
       </button>
 
@@ -52,10 +55,13 @@ export const MediaPicker: React.FC<Props> = ({
         open={open}
         accept={accept}
         currentValue={value}
-        onSelect={(path) => { onChange(path); setOpen(false); }}
+        onSelect={(path) => {
+          onChange(path);
+          setOpen(false);
+        }}
         onClose={() => setOpen(false)}
       />
-    </div>
+    </>
   );
 };
 
@@ -71,7 +77,10 @@ export const MediaPickerDialog: React.FC<{
   const [importing, setImporting] = useState(false);
 
   useEffect(() => {
-    if (open) { setSearch(""); refresh(); }
+    if (open) {
+      setSearch("");
+      refresh();
+    }
   }, [open, refresh]);
 
   const filtered = useMemo(() => {
@@ -98,47 +107,37 @@ export const MediaPickerDialog: React.FC<{
       title={accept === "video" ? "Selecionar vídeo" : "Selecionar imagem"}
       size="xl"
     >
-      <div className="vt-mpick-dialog">
-        <div className="vt-mpick-dialog__toolbar">
-          <div className="vt-mpick-dialog__search-wrap">
-            <Search size={14} className="vt-mpick-dialog__search-icon" />
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
-              className="vt-mpick-dialog__search"
+              className="h-9 w-full rounded-md border border-input bg-transparent pl-9 pr-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               placeholder="Buscar arquivo…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Upload size={13} />}
-            onClick={handleImport}
-            disabled={importing}
-          >
+          <Button variant="secondary" size="sm" icon={<Upload size={13} />} onClick={handleImport} disabled={importing}>
             {importing ? "Importando…" : "Importar arquivo"}
           </Button>
         </div>
 
         {loading ? (
-          <div className="vt-mpick-dialog__empty">Carregando…</div>
+          <div className="py-12 text-center text-sm text-muted-foreground">Carregando…</div>
         ) : filtered.length === 0 ? (
-          <div className="vt-mpick-dialog__empty">
-            <p>{assets.filter((a) => accept === "any" || a.type === accept).length === 0
-              ? "Nenhuma mídia importada ainda."
-              : "Nenhum resultado encontrado."}</p>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Plus size={13} />}
-              onClick={handleImport}
-              disabled={importing}
-            >
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              {assets.filter((a) => accept === "any" || a.type === accept).length === 0
+                ? "Nenhuma mídia importada ainda."
+                : "Nenhum resultado encontrado."}
+            </p>
+            <Button variant="primary" size="sm" icon={<Plus size={13} />} onClick={handleImport} disabled={importing}>
               Importar arquivo
             </Button>
           </div>
         ) : (
-          <div className="vt-mpick-dialog__grid">
+          <div className="grid max-h-[55vh] grid-cols-3 gap-3 overflow-y-auto sm:grid-cols-4 lg:grid-cols-5">
             {filtered.map((asset) => (
               <AssetCard
                 key={asset.id}
@@ -160,20 +159,21 @@ const AssetCard: React.FC<{
   onSelect: () => void;
 }> = ({ asset, selected, onSelect }) => (
   <button
-    className={`vt-mpick-card${selected ? " vt-mpick-card--selected" : ""}`}
+    className={cn(
+      "flex flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors hover:border-primary/50",
+      selected ? "border-primary ring-1 ring-primary" : "border-border",
+    )}
     onClick={onSelect}
     type="button"
   >
-    <div className="vt-mpick-card__thumb">
+    <div className="flex aspect-square items-center justify-center overflow-hidden bg-muted">
       {asset.type === "image" ? (
-        <img src={asset.filename} alt={asset.originalName} />
+        <img src={assetUrl(asset.filename)} alt={asset.originalName} className="size-full object-cover" />
       ) : (
-        <div className="vt-mpick-card__video-icon">
-          <Video size={18} />
-        </div>
+        <Video size={18} className="text-muted-foreground" />
       )}
     </div>
-    <div className="vt-mpick-card__name" title={asset.originalName}>
+    <div className="truncate p-1.5 text-[11px]" title={asset.originalName}>
       {asset.originalName}
     </div>
   </button>

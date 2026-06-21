@@ -1,4 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
 import { staticFile } from "remotion";
 import { Layers, ZoomIn, ZoomOut } from "lucide-react";
 import { IconButton } from "../../design-system/components";
@@ -12,12 +14,8 @@ import type {
   ShapeLayer,
   BadgeLayer,
 } from "../../remotion/template-types";
-import "../../styles/components/CanvasEditor.css";
 
-type ResizeHandle =
-  | "tl" | "tc" | "tr"
-  | "ml" | "mr"
-  | "bl" | "bc" | "br";
+type ResizeHandle = "tl" | "tc" | "tr" | "ml" | "mr" | "bl" | "bc" | "br";
 
 type DragState = {
   type: "move" | "resize";
@@ -41,6 +39,18 @@ type Props = {
 
 const HANDLES: ResizeHandle[] = ["tl", "tc", "tr", "ml", "mr", "bl", "bc", "br"];
 
+// Position (as % of layer box) and cursor for each resize handle.
+const HANDLE_POS: Record<ResizeHandle, { left: string; top: string; cursor: string }> = {
+  tl: { left: "0%", top: "0%", cursor: "nwse-resize" },
+  tc: { left: "50%", top: "0%", cursor: "ns-resize" },
+  tr: { left: "100%", top: "0%", cursor: "nesw-resize" },
+  ml: { left: "0%", top: "50%", cursor: "ew-resize" },
+  mr: { left: "100%", top: "50%", cursor: "ew-resize" },
+  bl: { left: "0%", top: "100%", cursor: "nesw-resize" },
+  bc: { left: "50%", top: "100%", cursor: "ns-resize" },
+  br: { left: "100%", top: "100%", cursor: "nwse-resize" },
+};
+
 export const CanvasEditor: React.FC<Props> = ({
   scene,
   values,
@@ -56,21 +66,17 @@ export const CanvasEditor: React.FC<Props> = ({
   const [stageSize, setStageSize] = useState({ w: 960, h: 540 });
   const [guides, setGuides] = useState<{ h: boolean; v: boolean }>({ h: false, v: false });
 
-  // Compute stage size from container (16:9, fit in container)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const obs = new ResizeObserver(() => {
       const { width, height } = el.getBoundingClientRect();
-      const padH = 80;
-      const padV = 60;
-      const availW = width - padH;
-      const availH = height - padV;
-      const byW = availW;
+      const availW = width - 80;
+      const availH = height - 60;
       const byH = availW * (9 / 16);
       let stageW: number, stageH: number;
       if (byH <= availH) {
-        stageW = byW;
+        stageW = availW;
         stageH = byH;
       } else {
         stageH = availH;
@@ -82,12 +88,8 @@ export const CanvasEditor: React.FC<Props> = ({
     return () => obs.disconnect();
   }, []);
 
-  // scale: canvas coords → stage coords
-  // template is always 1920×1080; stage is stageSize
   const scaleX = stageSize.w / 1920;
   const scaleY = stageSize.h / 1080;
-
-  /* ── Pointer events ──────────────────────────────────────────────────── */
 
   const startDrag = useCallback(
     (e: React.PointerEvent, layerId: string, type: "move" | "resize", handle?: ResizeHandle) => {
@@ -107,7 +109,7 @@ export const CanvasEditor: React.FC<Props> = ({
         startH: layer.height,
       };
     },
-    [scene.layers, onSelectLayer]
+    [scene.layers, onSelectLayer],
   );
 
   const onPointerMove = useCallback(
@@ -122,7 +124,6 @@ export const CanvasEditor: React.FC<Props> = ({
         const layer = scene.layers.find((l) => l.id === selectedLayerId);
         const newX = Math.round(drag.startX + dx);
         const newY = Math.round(drag.startY + dy);
-        // Snap guides: show when within 8px of center (1920×1080)
         const centerX = Math.round((1920 - (layer?.width ?? 0)) / 2);
         const centerY = Math.round((1080 - (layer?.height ?? 0)) / 2);
         const snapThreshold = 8;
@@ -136,7 +137,6 @@ export const CanvasEditor: React.FC<Props> = ({
         return;
       }
 
-      // resize
       const h = drag.handle!;
       let nx = drag.startX;
       let ny = drag.startY;
@@ -144,10 +144,15 @@ export const CanvasEditor: React.FC<Props> = ({
       let nh = drag.startH;
 
       if (h.includes("r")) nw = Math.max(20, drag.startW + dx);
-      if (h.includes("l")) { nw = Math.max(20, drag.startW - dx); nx = drag.startX + drag.startW - nw; }
+      if (h.includes("l")) {
+        nw = Math.max(20, drag.startW - dx);
+        nx = drag.startX + drag.startW - nw;
+      }
       if (h.includes("b")) nh = Math.max(20, drag.startH + dy);
-      if (h.includes("t")) { nh = Math.max(20, drag.startH - dy); ny = drag.startY + drag.startH - nh; }
-      // pure mid handles
+      if (h.includes("t")) {
+        nh = Math.max(20, drag.startH - dy);
+        ny = drag.startY + drag.startH - nh;
+      }
       if (h === "tc" || h === "bc") nx = drag.startX;
       if (h === "ml" || h === "mr") ny = drag.startY;
 
@@ -158,7 +163,7 @@ export const CanvasEditor: React.FC<Props> = ({
         height: Math.round(nh),
       });
     },
-    [selectedLayerId, scaleX, scaleY, onUpdateLayer]
+    [selectedLayerId, scaleX, scaleY, onUpdateLayer, scene.layers],
   );
 
   const onPointerUp = useCallback(() => {
@@ -177,21 +182,21 @@ export const CanvasEditor: React.FC<Props> = ({
   return (
     <div
       ref={containerRef}
-      className="vt-canvas"
+      className="relative flex size-full items-center justify-center overflow-hidden bg-muted/30"
       onClick={() => onSelectLayer(null)}
     >
       {/* Toolbar */}
-      <div className="vt-canvas__toolbar">
-        <IconButton label="Zoom out" variant="default" onClick={() => setZoom((z) => Math.max(0.25, z - 0.1))}>
+      <div className="absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-lg border border-border bg-card/90 px-2 py-1 backdrop-blur">
+        <IconButton label="Zoom out" onClick={() => setZoom((z) => Math.max(0.25, z - 0.1))}>
           <ZoomOut size={13} />
         </IconButton>
-        <span className="vt-canvas__zoom">{Math.round(zoom * 100)}%</span>
-        <IconButton label="Zoom in" variant="default" onClick={() => setZoom((z) => Math.min(4, z + 0.1))}>
+        <span className="w-10 text-center text-xs tabular-nums text-muted-foreground">{Math.round(zoom * 100)}%</span>
+        <IconButton label="Zoom in" onClick={() => setZoom((z) => Math.min(4, z + 0.1))}>
           <ZoomIn size={13} />
         </IconButton>
-        <div className="vt-canvas__toolbar-sep" />
-        <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-          <Layers size={11} style={{ display: "inline", marginRight: 3 }} />
+        <div className="mx-1 h-4 w-px bg-border" />
+        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Layers size={11} />
           {scene.layers.length} layers
         </span>
       </div>
@@ -199,7 +204,7 @@ export const CanvasEditor: React.FC<Props> = ({
       {/* Stage */}
       <div
         ref={stageRef}
-        className="vt-canvas__stage"
+        className="relative shadow-lg"
         style={{
           width: stageSize.w * zoom,
           height: stageSize.h * zoom,
@@ -209,65 +214,64 @@ export const CanvasEditor: React.FC<Props> = ({
         }}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onClick={(e) => { e.stopPropagation(); onSelectLayer(null); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelectLayer(null);
+        }}
       >
         {scene.layers.length === 0 && (
-          <div className="vt-canvas__empty">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-white/40">
             <Layers size={24} />
-            <span>Sem layers nesta cena</span>
-            <span style={{ fontSize: 11 }}>Adicione layers no painel esquerdo</span>
+            <span className="text-sm">Sem layers nesta cena</span>
+            <span className="text-xs">Adicione layers no painel esquerdo</span>
           </div>
         )}
 
-        {/* Center guides — shown during snap */}
-        {guides.v && (
-          <div className="vt-canvas__ruler-v" style={{ left: "50%" }} />
-        )}
-        {guides.h && (
-          <div className="vt-canvas__ruler-h" style={{ top: "50%" }} />
-        )}
-        {/* Always-visible faint center crosshair */}
-        <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgba(255,255,255,0.06)", pointerEvents: "none" }} />
-        <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "rgba(255,255,255,0.06)", pointerEvents: "none" }} />
+        {guides.v && <div className="pointer-events-none absolute bottom-0 top-0 z-20 w-px bg-primary" style={{ left: "50%" }} />}
+        {guides.h && <div className="pointer-events-none absolute left-0 right-0 z-20 h-px bg-primary" style={{ top: "50%" }} />}
+        <div className="pointer-events-none absolute bottom-0 top-0 w-px bg-white/5" style={{ left: "50%" }} />
+        <div className="pointer-events-none absolute left-0 right-0 h-px bg-white/5" style={{ top: "50%" }} />
 
         {sortedLayers.map((layer) => {
           if (!layer.visible) return null;
           const isSelected = layer.id === selectedLayerId;
-          const sx = layer.x * scaleX;
-          const sy = layer.y * scaleY;
-          const sw = layer.width * scaleX;
-          const sh = layer.height * scaleY;
-
           return (
             <div
               key={layer.id}
-              className={`vt-canvas__layer vt-canvas__layer--${layer.type}${isSelected ? " vt-canvas__layer--selected" : ""}`}
+              className="absolute"
               style={{
-                left: sx,
-                top: sy,
-                width: sw,
-                height: sh,
+                left: layer.x * scaleX,
+                top: layer.y * scaleY,
+                width: layer.width * scaleX,
+                height: layer.height * scaleY,
                 opacity: layer.opacity,
                 transform: layer.rotation ? `rotate(${layer.rotation}deg)` : undefined,
                 zIndex: layer.zIndex,
+                outline: isSelected ? "2px solid var(--primary)" : undefined,
+                cursor: "move",
               }}
               onPointerDown={(e) => startDrag(e, layer.id, "move")}
               onClick={(e) => e.stopPropagation()}
             >
               <LayerContent layer={layer} values={values} scale={scaleX} />
 
-              {/* Resize handles */}
-              {isSelected && (
-                <div className="vt-canvas__handles">
-                  {HANDLES.map((h) => (
+              {isSelected &&
+                HANDLES.map((h) => {
+                  const pos = HANDLE_POS[h];
+                  return (
                     <div
                       key={h}
-                      className={`vt-canvas__handle vt-canvas__handle--${h}`}
+                      className="absolute z-30 size-2.5 rounded-sm border border-primary bg-background"
+                      style={{
+                        left: pos.left,
+                        top: pos.top,
+                        transform: "translate(-50%, -50%)",
+                        cursor: pos.cursor,
+                      }}
                       onPointerDown={(e) => startDrag(e, layer.id, "resize", h)}
                     />
-                  ))}
-                </div>
-              )}
+                  );
+                })}
             </div>
           );
         })}
@@ -275,8 +279,6 @@ export const CanvasEditor: React.FC<Props> = ({
     </div>
   );
 };
-
-/* ── Layer content renderers ─────────────────────────────────────────────── */
 
 const LayerContent: React.FC<{
   layer: TemplateLayer;
@@ -306,13 +308,10 @@ const LayerContent: React.FC<{
 
   if (layer.type === "image" || layer.type === "logo") {
     const l = layer as ImageLayer;
-    const src = layer.type === "logo"
-      ? (values["LOGO"] ?? "")
-      : resolveString(l.src, values);
-    const displaySrc = src
-      ? src.startsWith("http") ? src : staticFile(src)
-      : "";
-    const flipTransform = [l.flipX ? "scaleX(-1)" : "", l.flipY ? "scaleY(-1)" : ""].filter(Boolean).join(" ") || undefined;
+    const src = layer.type === "logo" ? values["LOGO"] ?? "" : resolveString(l.src, values);
+    const displaySrc = src ? (src.startsWith("http") ? src : staticFile(src)) : "";
+    const flipTransform =
+      [l.flipX ? "scaleX(-1)" : "", l.flipY ? "scaleY(-1)" : ""].filter(Boolean).join(" ") || undefined;
     return displaySrc ? (
       <img
         src={displaySrc}
@@ -321,7 +320,18 @@ const LayerContent: React.FC<{
         draggable={false}
       />
     ) : (
-      <div style={{ width: "100%", height: "100%", background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 * scale, color: "rgba(255,255,255,0.3)" }}>
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          background: "rgba(255,255,255,0.08)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 11 * scale,
+          color: "rgba(255,255,255,0.3)",
+        }}
+      >
         {layer.type === "logo" ? "Logo" : "Imagem"}
       </div>
     );
@@ -367,7 +377,19 @@ const LayerContent: React.FC<{
 
   if (layer.type === "price") {
     return (
-      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", fontSize: 12 * scale, color: "#fff", flexDirection: "column" }}>
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          pointerEvents: "none",
+          fontSize: 12 * scale,
+          color: "#fff",
+          flexDirection: "column",
+        }}
+      >
         <span>Preço</span>
       </div>
     );

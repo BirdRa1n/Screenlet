@@ -1,6 +1,9 @@
-import React, { useState } from "react";
+"use client";
+
+import * as React from "react";
 import { UploadCloud } from "lucide-react";
-import "../../styles/components/UploadZone.css";
+import { cn } from "@/lib/utils";
+import { assetUrl } from "@/lib/assetUrl";
 
 type Props = {
   value?: string | null;
@@ -19,15 +22,15 @@ export const UploadZone: React.FC<Props> = ({
   height = 120,
   previewFit = "contain",
 }) => {
-  const [dragging, setDragging] = useState(false);
+  const [dragging, setDragging] = React.useState(false);
 
-  // Click → Electron native dialog (no hidden <input> intercepting)
+  // Click → Electron native dialog (no hidden <input> intercepting).
   const handleClick = async () => {
     const path = await window.adFrame.selectImage();
     if (path) onUpload(path);
   };
 
-  // Drop → get native path from Electron File object
+  // Drop → get native path from Electron File object.
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
@@ -40,56 +43,52 @@ export const UploadZone: React.FC<Props> = ({
     }
   };
 
-  const classes = [
-    "ds-upload",
-    dragging ? "ds-upload--dragging" : "",
-    value ? "ds-upload--has-file" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  // Preview src: works in both dev (Vite serves public/) and Electron prod (relative path)
-  const previewSrc = value ? value : null;
-
   return (
     <div
-      className={classes}
+      className={cn(
+        "relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/30 transition-colors hover:border-primary/60 hover:bg-muted/50",
+        dragging && "border-primary bg-primary/5",
+      )}
       style={{ height }}
       onClick={handleClick}
-      onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
-      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-      onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
+      onDragEnter={(e) => {
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        setDragging(false);
+      }}
       onDrop={handleDrop}
     >
-      {previewSrc ? (
+      {value ? (
         <img
-          src={previewSrc}
+          src={assetUrl(value)}
           alt=""
-          className="ds-upload__preview"
-          style={{ objectFit: previewFit }}
-          onError={(e) => {
-            // Fallback: try with leading slash (Vite dev)
-            const img = e.currentTarget;
-            if (!img.src.startsWith("/")) {
-              img.src = "/" + previewSrc;
-            }
-          }}
+          className={cn(
+            "size-full",
+            previewFit === "cover" ? "object-cover" : "object-contain",
+          )}
         />
       ) : (
-        <div className="ds-upload__empty">
-          <span className="ds-upload__icon">
-            <UploadCloud size={22} />
-          </span>
-          <span className="ds-upload__label">{label}</span>
-          <span className="ds-upload__hint">{hint}</span>
+        <div className="flex flex-col items-center gap-1 text-center">
+          <UploadCloud className="size-5 text-muted-foreground" />
+          <span className="text-sm text-foreground">{label}</span>
+          <span className="text-xs text-muted-foreground">{hint}</span>
         </div>
       )}
 
-      {dragging && (
-        <div className="ds-upload__overlay">
-          <span className="ds-upload__overlay-text">Soltar arquivo</span>
+      {dragging ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-primary/10 backdrop-blur-sm">
+          <span className="text-sm font-medium text-primary">
+            Soltar arquivo
+          </span>
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

@@ -1,24 +1,26 @@
-import React from "react";
-import { motion } from "framer-motion";
-import "../../styles/components/ProgressBar.css";
+"use client";
+
+import * as React from "react";
+import { Progress } from "@/components/ui/progress";
 
 export const ProgressBar: React.FC<{
   progress: number;
   label?: string;
 }> = ({ progress, label }) => {
+  const pct = Math.round(progress * 100);
   return (
-    <div className="ds-progress">
-      {label ? <span className="ds-progress__label">{label}</span> : null}
-      <div className="ds-progress__track">
-        <motion.div
-          className="ds-progress__fill"
-          animate={{ width: `${Math.round(progress * 100)}%` }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-        />
+    <div className="flex flex-col gap-1.5">
+      {label ? (
+        <span className="text-xs font-medium text-muted-foreground">
+          {label}
+        </span>
+      ) : null}
+      <div className="flex items-center gap-2">
+        <Progress value={pct} className="flex-1" />
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {pct}%
+        </span>
       </div>
-      <span className="ds-progress__value">
-        {Math.round(progress * 100)}%
-      </span>
     </div>
   );
 };

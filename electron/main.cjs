@@ -30,7 +30,7 @@ function getTrayIconPath() {
   const relative = path.join("assets", "icons", "windows", "32x32.png");
   return isDev
     ? path.join(__dirname, "..", "public", relative)
-    : path.join(process.resourcesPath, "app", "dist", relative);
+    : path.join(process.resourcesPath, "app", "out", relative);
 }
 
 let tray = null;
@@ -158,7 +158,7 @@ function createWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
+    mainWindow.loadURL("http://localhost:3000");
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     // Load via app:// so staticFile('/uploads/x') resolves correctly inside Remotion Player
@@ -176,6 +176,56 @@ function createWindow() {
       mainWindow.hide();
     });
   }
+}
+
+// ── Dev-only static asset server ──────────────────────────────────────────────
+// In production the app:// protocol serves user assets. In dev the renderer is
+// served by `next dev` on :3000, which proxies /uploads, /exports and
+// /project-thumbs to this server (see next.config.mjs rewrites).
+const DEV_ASSET_PORT = 7096;
+function startDevAssetServer() {
+  const DIRS = {
+    "/uploads/": UPLOADS_DIR,
+    "/exports/": EXPORTS_DIR,
+    "/project-thumbs/": PROJECT_THUMBS_DIR,
+  };
+  const MIME = {
+    mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime", mkv: "video/x-matroska",
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp",
+    gif: "image/gif", svg: "image/svg+xml", json: "application/json",
+  };
+  http.createServer((req, res) => {
+    try {
+      const { pathname } = new URL(req.url, "http://localhost");
+      const prefix = Object.keys(DIRS).find((p) => pathname.startsWith(p));
+      if (!prefix) { res.statusCode = 404; return res.end("Not found"); }
+      const filePath = path.join(DIRS[prefix], path.basename(decodeURIComponent(pathname)));
+      if (!fs.existsSync(filePath)) { res.statusCode = 404; return res.end("Not found"); }
+      const stat = fs.statSync(filePath);
+      const ext = path.extname(filePath).slice(1).toLowerCase();
+      res.setHeader("Content-Type", MIME[ext] || "application/octet-stream");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      const range = req.headers.range;
+      if (range) {
+        const m = /bytes=(\d+)-(\d*)/.exec(range);
+        const start = m ? parseInt(m[1], 10) : 0;
+        const end = m && m[2] ? parseInt(m[2], 10) : stat.size - 1;
+        res.statusCode = 206;
+        res.setHeader("Content-Range", `bytes ${start}-${end}/${stat.size}`);
+        res.setHeader("Accept-Ranges", "bytes");
+        res.setHeader("Content-Length", end - start + 1);
+        fs.createReadStream(filePath, { start, end }).pipe(res);
+      } else {
+        res.setHeader("Content-Length", stat.size);
+        fs.createReadStream(filePath).pipe(res);
+      }
+    } catch (err) {
+      res.statusCode = 500;
+      res.end(String(err));
+    }
+  }).listen(DEV_ASSET_PORT, "127.0.0.1", () => {
+    console.log(`[dev] asset server on http://127.0.0.1:${DEV_ASSET_PORT}`);
+  });
 }
 
 app.whenReady().then(() => {
@@ -220,9 +270,16 @@ app.whenReady().then(() => {
       return net.fetch(`file://${filePath}`, range ? { headers: { Range: range } } : undefined);
     }
 
-    // App bundle assets → dist/ (may be inside .asar — use fs.readFileSync)
-    const resolved = pathname === "/" ? "/index.html" : pathname;
-    const distPath = path.join(__dirname, "..", "dist", resolved);
+    // App bundle assets → out/ (Next static export; may be inside .asar — use fs.readFileSync).
+    // With `trailingSlash: true`, routes export as <route>/index.html, so map
+    // directory-style paths to their index.html.
+    let resolved = pathname === "/" ? "/index.html" : pathname;
+    if (resolved.endsWith("/")) resolved += "index.html";
+    let distPath = path.join(__dirname, "..", "out", resolved);
+    // Fallback: a route requested without a trailing slash (e.g. "/projects").
+    if (!fs.existsSync(distPath) && !path.extname(resolved)) {
+      distPath = path.join(__dirname, "..", "out", resolved, "index.html");
+    }
     const MIME = {
       html: "text/html; charset=utf-8",
       js:   "application/javascript",
@@ -247,6 +304,11 @@ app.whenReady().then(() => {
       return new Response("Not found", { status: 404 });
     }
   });
+
+  // Dev-only: serve user assets so the Next dev server (:3000) can proxy
+  // /uploads, /exports and /project-thumbs to them (see next.config.mjs).
+  // In production these paths are served by the app:// protocol above.
+  if (isDev) startDevAssetServer();
 
   createWindow();
   app.on("activate", () => {
@@ -1777,7 +1839,7 @@ async function prepareRenderBundle(onBundleProgress) {
   // there, so the image is missing from the bundle's public/uploads and
   // Remotion's render-time fetch 404s. Cache the static bundle in the
   // already user-writable SCREENLET_DIR instead and sync uploads into that copy.
-  const sourceBundleLocation = path.join(process.resourcesPath, "app", "dist", "remotion-bundle");
+  const sourceBundleLocation = path.join(process.resourcesPath, "app", "out", "remotion-bundle");
   const bundleLocation = ensureWritableRenderBundle(sourceBundleLocation);
 
   const bundleUploads = path.join(bundleLocation, "public", "uploads");

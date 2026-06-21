@@ -1,8 +1,10 @@
-import React, { useCallback, useRef, useState } from "react";
+"use client";
+
+import { Fragment, useCallback, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Timer } from "lucide-react";
 import { IconButton } from "../../design-system/components";
+import { cn } from "@/lib/utils";
 import type { Template, TemplateLayer, TemplateScene } from "../../remotion/template-types";
-import "../../styles/components/Timeline.css";
 
 const LAYER_COLORS: Record<string, string> = {
   text: "#6e56f8",
@@ -38,22 +40,20 @@ export const Timeline: React.FC<Props> = ({
 
   const totalFrames = currentScene.durationInFrames;
   const fps = template.fps;
-  const pxPerFrame = 2; // each frame = 2px
+  const pxPerFrame = 2;
 
   const frameToX = (f: number) => f * pxPerFrame;
   const xToFrame = (x: number) => Math.round(x / pxPerFrame);
 
-  /* Ruler click → seek */
   const handleRulerClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
       onSeekFrame(Math.max(0, Math.min(totalFrames - 1, xToFrame(x))));
     },
-    [totalFrames, onSeekFrame, xToFrame]
+    [totalFrames, onSeekFrame],
   );
 
-  /* Clip drag (start frame) */
   const clipDragRef = useRef<{
     layerId: string;
     startX: number;
@@ -62,11 +62,7 @@ export const Timeline: React.FC<Props> = ({
     mode: "move" | "resize-l" | "resize-r";
   } | null>(null);
 
-  const startClipDrag = (
-    e: React.PointerEvent,
-    layer: TemplateLayer,
-    mode: "move" | "resize-l" | "resize-r"
-  ) => {
+  const startClipDrag = (e: React.PointerEvent, layer: TemplateLayer, mode: "move" | "resize-l" | "resize-r") => {
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     clipDragRef.current = {
@@ -102,89 +98,86 @@ export const Timeline: React.FC<Props> = ({
     }
   };
 
-  const onClipPointerUp = () => { clipDragRef.current = null; };
+  const onClipPointerUp = () => {
+    clipDragRef.current = null;
+  };
 
-  /* Tick marks */
   const ticks: number[] = [];
-  const tickInterval = fps >= 24 ? fps : 15; // every second (or every 15 frames)
+  const tickInterval = fps >= 24 ? fps : 15;
   for (let f = 0; f <= totalFrames; f += tickInterval) ticks.push(f);
 
   const totalWidth = frameToX(totalFrames);
   const sortedLayers = [...currentScene.layers].sort((a, b) => a.zIndex - b.zIndex);
 
   return (
-    <div className="vt-timeline" style={{ minHeight: collapsed ? 36 : 120 }}>
-      <div className="vt-timeline__header">
+    <div className="flex flex-col border-t border-border bg-card/40">
+      <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
         <Timer size={12} />
-        Timeline — {currentScene.name}
-        <span style={{ marginLeft: 8 }}>
+        <span className="font-medium text-foreground">Timeline — {currentScene.name}</span>
+        <span>
           {(currentFrame / fps).toFixed(2)}s / {(totalFrames / fps).toFixed(1)}s
         </span>
-        <div className="vt-timeline__toggle">
-          <IconButton label={collapsed ? "Expandir" : "Recolher"} variant="default" onClick={() => setCollapsed((c) => !c)}>
+        <div className="ml-auto">
+          <IconButton label={collapsed ? "Expandir" : "Recolher"} onClick={() => setCollapsed((c) => !c)}>
             {collapsed ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           </IconButton>
         </div>
       </div>
 
       {!collapsed && (
-        <>
+        <div className="max-h-48 overflow-auto">
           {/* Ruler */}
-          <div className="vt-timeline__ruler-row">
-            <div className="vt-timeline__label-col" />
+          <div className="flex">
+            <div className="w-32 shrink-0 border-r border-border" />
             <div
               ref={rulerRef}
-              className="vt-timeline__ruler"
+              className="relative h-6 cursor-pointer border-b border-border"
               style={{ width: totalWidth, minWidth: "100%" }}
               onClick={handleRulerClick}
             >
               {ticks.map((f) => (
-                <React.Fragment key={f}>
-                  <div className="vt-timeline__tick" style={{ left: frameToX(f) }} />
-                  <span className="vt-timeline__tick-label" style={{ left: frameToX(f) }}>
+                <Fragment key={f}>
+                  <div className="absolute bottom-0 top-0 w-px bg-border" style={{ left: frameToX(f) }} />
+                  <span className="absolute top-0.5 text-[10px] text-muted-foreground" style={{ left: frameToX(f) + 2 }}>
                     {(f / fps).toFixed(1)}s
                   </span>
-                </React.Fragment>
+                </Fragment>
               ))}
-              {/* Playhead in ruler */}
-              <div className="vt-timeline__playhead" style={{ left: frameToX(currentFrame) }} />
+              <div className="absolute bottom-0 top-0 z-10 w-0.5 bg-primary" style={{ left: frameToX(currentFrame) }} />
             </div>
           </div>
 
           {/* Tracks */}
-          <div
-            className="vt-timeline__tracks"
-            onPointerMove={onClipPointerMove}
-            onPointerUp={onClipPointerUp}
-          >
+          <div onPointerMove={onClipPointerMove} onPointerUp={onClipPointerUp}>
             {sortedLayers.map((layer) => {
               const layerStart = (layer as unknown as { startFrame?: number }).startFrame ?? 0;
               const layerEnd = (layer as unknown as { endFrame?: number }).endFrame ?? totalFrames;
               const clipLeft = frameToX(layerStart);
               const clipWidth = Math.max(8, frameToX(layerEnd - layerStart));
               const isSelected = layer.id === selectedLayerId;
-              const color = LAYER_COLORS[layer.type] ?? "var(--accent)";
+              const color = LAYER_COLORS[layer.type] ?? "#6e56f8";
 
               return (
-                <div key={layer.id} className="vt-timeline__track">
-                  <div
-                    className={`vt-timeline__track-label${isSelected ? " vt-timeline__track-label--selected" : ""}`}
+                <div key={layer.id} className="flex border-b border-border/50">
+                  <button
+                    className={cn(
+                      "flex w-32 shrink-0 items-center gap-1.5 border-r border-border px-2 py-1.5 text-left text-xs transition-colors",
+                      isSelected ? "bg-accent/50" : "hover:bg-accent/30",
+                    )}
                     onClick={() => onSelectLayer(layer.id)}
                   >
                     <span
-                      className="vt-timeline__track-label-type"
+                      className="flex size-4 shrink-0 items-center justify-center rounded text-[10px] font-bold"
                       style={{ background: color + "33", color }}
                     >
                       {layer.type[0].toUpperCase()}
                     </span>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{layer.name}</span>
-                  </div>
-                  <div className="vt-timeline__track-area" style={{ minWidth: totalWidth }}>
-                    {/* Playhead */}
-                    <div className="vt-timeline__playhead" style={{ left: frameToX(currentFrame) }} />
-                    {/* Clip */}
+                    <span className="truncate">{layer.name}</span>
+                  </button>
+                  <div className="relative h-8 flex-1" style={{ minWidth: totalWidth }}>
+                    <div className="absolute bottom-0 top-0 z-10 w-0.5 bg-primary" style={{ left: frameToX(currentFrame) }} />
                     <div
-                      className={`vt-timeline__clip${isSelected ? " vt-timeline__clip--selected" : ""}`}
+                      className="absolute top-1 flex h-6 cursor-move items-center overflow-hidden rounded border px-1 text-[10px] text-white"
                       style={{
                         left: clipLeft,
                         width: clipWidth,
@@ -193,24 +186,16 @@ export const Timeline: React.FC<Props> = ({
                       }}
                       onPointerDown={(e) => startClipDrag(e, layer, "move")}
                     >
-                      <div
-                        className="vt-timeline__clip-resize-l"
-                        onPointerDown={(e) => startClipDrag(e, layer, "resize-l")}
-                      />
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
-                        {layer.name}
-                      </span>
-                      <div
-                        className="vt-timeline__clip-resize-r"
-                        onPointerDown={(e) => startClipDrag(e, layer, "resize-r")}
-                      />
+                      <div className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize" onPointerDown={(e) => startClipDrag(e, layer, "resize-l")} />
+                      <span className="truncate pointer-events-none px-1">{layer.name}</span>
+                      <div className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize" onPointerDown={(e) => startClipDrag(e, layer, "resize-r")} />
                     </div>
                   </div>
                 </div>
               );
             })}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
