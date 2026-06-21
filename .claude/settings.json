@@ -1,0 +1,7 @@
+{
+  "enabledPlugins": {
+    "tailwind-v4-shadcn@claude-skills": true,
+    "ai-sdk-core@claude-skills": true,
+    "cloudflare-d1@claude-skills": true
+  }
+}
