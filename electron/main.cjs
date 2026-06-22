@@ -228,6 +228,51 @@ function startDevAssetServer() {
   });
 }
 
+// Serves a local file (image/video) over the app:// protocol with Content-Type
+// and HTTP Range support, so <video>/<audio> elements can load metadata and seek.
+// Used for user assets in production (uploads / project-thumbs / exports).
+function serveLocalFile(filePath, request) {
+  try {
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+      return new Response("Not found", { status: 404 });
+    }
+    const { Readable } = require("node:stream");
+    const stat = fs.statSync(filePath);
+    const MIME = {
+      mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime", mkv: "video/x-matroska",
+      png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp",
+      gif: "image/gif", svg: "image/svg+xml", json: "application/json",
+    };
+    const ext = path.extname(filePath).slice(1).toLowerCase();
+    const type = MIME[ext] || "application/octet-stream";
+    const range = request.headers.get("range");
+    const m = range && /bytes=(\d+)-(\d*)/.exec(range);
+    if (m) {
+      const start = parseInt(m[1], 10);
+      const end = m[2] ? parseInt(m[2], 10) : stat.size - 1;
+      return new Response(Readable.toWeb(fs.createReadStream(filePath, { start, end })), {
+        status: 206,
+        headers: {
+          "Content-Type": type,
+          "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+          "Accept-Ranges": "bytes",
+          "Content-Length": String(end - start + 1),
+        },
+      });
+    }
+    return new Response(Readable.toWeb(fs.createReadStream(filePath)), {
+      status: 200,
+      headers: {
+        "Content-Type": type,
+        "Accept-Ranges": "bytes",
+        "Content-Length": String(stat.size),
+      },
+    });
+  } catch (err) {
+    return new Response(String(err), { status: 500 });
+  }
+}
+
 app.whenReady().then(() => {
   ensureDir(SCREENLET_DIR);
   ensureDir(UPLOADS_DIR);
@@ -247,27 +292,18 @@ app.whenReady().then(() => {
   protocol.handle("app", (request) => {
     const { pathname } = new URL(request.url);
 
-    // User-uploaded files → UPLOADS_DIR (outside .asar, safe to use net.fetch)
+    // User assets (uploads, project thumbnails, rendered exports) live outside the
+    // .asar in userData. Serve them with explicit Content-Type + HTTP Range support
+    // so <video>/<audio> can load metadata and seek — Electron's net.fetch on
+    // file:// doesn't honor Range reliably, which left preview players stuck at 0:00.
     if (pathname.startsWith("/uploads/")) {
-      const filePath = path.join(UPLOADS_DIR, path.basename(pathname));
-      return net.fetch(`file://${filePath}`);
+      return serveLocalFile(path.join(UPLOADS_DIR, path.basename(decodeURIComponent(pathname))), request);
     }
-
-    // Project thumbnails → PROJECT_THUMBS_DIR, generated best-effort on save.
     if (pathname.startsWith("/project-thumbs/")) {
-      const filePath = path.join(PROJECT_THUMBS_DIR, path.basename(pathname));
-      return net.fetch(`file://${filePath}`);
+      return serveLocalFile(path.join(PROJECT_THUMBS_DIR, path.basename(decodeURIComponent(pathname))), request);
     }
-
-    // Rendered exports → EXPORTS_DIR, used by the Studio playlist preview
-    // player. net.fetch on file:// supports Range requests, so seeking works.
     if (pathname.startsWith("/exports/")) {
-      const filePath = path.join(EXPORTS_DIR, path.basename(pathname));
-      // Forwarding the whole incoming Headers object can throw (some of its
-      // entries aren't valid to set on a fetch Request) and silently kills
-      // the load — only Range actually matters here, for seeking.
-      const range = request.headers.get("range");
-      return net.fetch(`file://${filePath}`, range ? { headers: { Range: range } } : undefined);
+      return serveLocalFile(path.join(EXPORTS_DIR, path.basename(decodeURIComponent(pathname))), request);
     }
 
     // App bundle assets → out/ (Next static export; may be inside .asar — use fs.readFileSync).
