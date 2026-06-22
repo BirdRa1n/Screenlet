@@ -165,6 +165,25 @@ function createWindow() {
     mainWindow.loadURL("app://index.html");
   }
 
+  // Keep everything in a single window. The renderer is an SPA — it should never
+  // spawn a second window. Deny all popups: internal app:// targets navigate the
+  // main window in place; real external links open in the system browser.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && url.startsWith("app://")) {
+      mainWindow.webContents.loadURL(url);
+    } else if (url && /^https?:\/\//.test(url)) {
+      shell.openExternal(url);
+    }
+    return { action: "deny" };
+  });
+  // External http(s) navigations leave the app shell → send them to the browser.
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (/^https?:\/\//.test(url)) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
   // Minimize-to-tray on Windows: closing the window hides it instead of
   // quitting, so the tray icon (and whatever's running — IPTV server,
   // playback) survives. "Sair" in the tray menu is the only thing that

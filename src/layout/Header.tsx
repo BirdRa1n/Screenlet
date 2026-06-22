@@ -130,7 +130,7 @@ export const EditorHeader: React.FC<{
     <>
       <header
         className="flex h-14 shrink-0 items-center gap-4 border-b border-border px-4"
-        style={{ paddingRight: "max(1rem, env(titlebar-area-width, 0px))" } as React.CSSProperties}
+        style={{ paddingRight: "max(1rem, var(--win-controls-w, 0px))" }}
       >
         <div className="flex items-center gap-2">
           <IconButton label="Voltar ao dashboard" onClick={() => router.push("/")}>

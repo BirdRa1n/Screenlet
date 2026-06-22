@@ -196,7 +196,10 @@ export const TemplateBuilder: React.FC<{ templateId?: string }> = ({ templateId 
   return (
     <div className="flex h-full flex-col">
       {/* Top bar */}
-      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+      <div
+        className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4"
+        style={{ paddingRight: "max(1rem, var(--win-controls-w, 0px))" }}
+      >
         <IconButton label="Voltar" onClick={() => router.push("/templates")}>
           <ArrowLeft size={15} />
         </IconButton>

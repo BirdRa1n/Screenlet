@@ -113,7 +113,10 @@ export const Studio: React.FC<Props> = ({ channel, onClose, onSave }) => {
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       {/* Header */}
-      <div className="flex h-14 shrink-0 items-center gap-4 border-b border-border px-4 pl-20" style={drag}>
+      <div
+        className="flex h-14 shrink-0 items-center gap-4 border-b border-border px-4 pl-20"
+        style={{ ...drag, paddingRight: "max(1rem, var(--win-controls-w, 0px))" }}
+      >
         <button
           className="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
           onClick={onClose}
