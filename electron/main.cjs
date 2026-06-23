@@ -578,7 +578,30 @@ ipcMain.handle("template-delete", (_event, id) => {
 /* ---- Channels ---- */
 
 const CHANNELS_DIR = path.join(SCREENLET_DIR, "channels");
-const DEVICES_FILE = path.join(SCREENLET_DIR, "devices.json");
+
+// Devices are machine-specific (each store has its own screens/players) and
+// their passwords are encrypted with safeStorage, whose key is bound to this
+// machine's OS keychain — a synced blob would be useless on another machine
+// anyway. So devices.json lives in userData (NOT in Documents/Screenlet), which
+// is never synced via iCloud/OneDrive. This prevents two stores sharing a cloud
+// folder from clobbering each other's device list.
+const DEVICES_FILE = path.join(app.getPath("userData"), "devices.json");
+
+// One-time migration: move any pre-existing devices.json out of the synced
+// Documents folder into userData. Only migrates when userData has no file yet,
+// so we never overwrite this machine's local devices with a synced copy.
+(function migrateDevicesFile() {
+  const legacy = path.join(SCREENLET_DIR, "devices.json");
+  try {
+    if (fs.existsSync(legacy) && !fs.existsSync(DEVICES_FILE)) {
+      fs.copyFileSync(legacy, DEVICES_FILE);
+      fs.rmSync(legacy, { force: true });
+    } else if (fs.existsSync(legacy)) {
+      // userData already has devices; just remove the stale synced copy.
+      fs.rmSync(legacy, { force: true });
+    }
+  } catch {}
+})();
 
 // ── Credential encryption (safeStorage → OS Keychain / DPAPI / Secret Service) ──
 //
@@ -639,7 +662,7 @@ function readDevicesForRenderer() {
 // Accepts the full device object (sshPassword / kodiHttpPassword) and
 // converts them to encrypted _enc blobs before persisting.
 function persistDevices(devices) {
-  ensureDir(SCREENLET_DIR);
+  ensureDir(path.dirname(DEVICES_FILE));
   const toStore = devices.map(({ sshPassword, kodiHttpPassword, hasSshPassword, hasKodiPassword, ...rest }) => {
     const raw = readRawDevices().find((d) => d.id === rest.id) || {};
     return {
