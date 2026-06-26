@@ -22,6 +22,16 @@ try {
 
 const isDev = !app.isPackaged;
 
+// Without this, clicking the desktop shortcut while the app is already
+// running in the tray (Windows minimize-to-tray) launches a second process
+// instead of surfacing the existing window. The first instance keeps the
+// lock; every later launch just notifies it (see "second-instance" below)
+// and exits immediately.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 // Set on the login-item's launch args (see app-settings-set-launch-at-login)
 // so a boot launch on a kiosk machine doesn't pop the window open every time.
 const startedHidden = process.argv.includes("--hidden");
@@ -291,6 +301,15 @@ function serveLocalFile(filePath, request) {
     return new Response(String(err), { status: 500 });
   }
 }
+
+// Fired on the first instance when a second launch attempt happens (desktop
+// shortcut, file open, etc.) while this instance still holds the lock.
+app.on("second-instance", () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!mainWindow.isVisible()) mainWindow.show();
+  mainWindow.focus();
+});
 
 app.whenReady().then(() => {
   ensureDir(SCREENLET_DIR);
@@ -1404,7 +1423,23 @@ function getLocalIPs() {
 
 // ── App settings (launch at login, auto-start IPTV) ──────────────────────────
 const APP_SETTINGS_FILE = path.join(app.getPath("userData"), "app-settings.json");
-const DEFAULT_APP_SETTINGS = { launchAtLogin: false, autoStartIptvOnLaunch: true };
+const DEFAULT_APP_SETTINGS = {
+  launchAtLogin: false,
+  autoStartIptvOnLaunch: true,
+  // Video export settings — see export-video's use of renderMedia below.
+  videoCodec: "h264",
+  videoQuality: "medium", // "high" | "medium" | "low" — mapped to a CRF value at render time
+  hardwareAcceleration: true,
+};
+
+// Lower CRF = higher quality / bigger file. Applied per codec since h265's
+// useful CRF range runs roughly 6 points higher than h264's for equivalent quality.
+// Limited to codecs that fit inside the .mp4 container exports already use —
+// vp8/vp9 need a .webm container and would silently break playback otherwise.
+const CRF_BY_QUALITY = {
+  h264: { high: 18, medium: 23, low: 28 },
+  h265: { high: 24, medium: 28, low: 33 },
+};
 
 function loadAppSettings() {
   try {
@@ -1443,6 +1478,91 @@ ipcMain.handle("app-settings-set-auto-start-iptv", (_event, value) => {
   appSettings.autoStartIptvOnLaunch = !!value;
   saveAppSettings(appSettings);
   return appSettings;
+});
+
+ipcMain.handle("app-settings-set-video-codec", (_event, value) => {
+  if (!CRF_BY_QUALITY[value]) return appSettings;
+  appSettings.videoCodec = value;
+  saveAppSettings(appSettings);
+  return appSettings;
+});
+
+ipcMain.handle("app-settings-set-video-quality", (_event, value) => {
+  if (!["high", "medium", "low"].includes(value)) return appSettings;
+  appSettings.videoQuality = value;
+  saveAppSettings(appSettings);
+  return appSettings;
+});
+
+ipcMain.handle("app-settings-set-hardware-acceleration", (_event, value) => {
+  appSettings.hardwareAcceleration = !!value;
+  saveAppSettings(appSettings);
+  return appSettings;
+});
+
+// ── Machine info (Settings → Informações da máquina) ─────────────────────────
+ipcMain.handle("system-info-get", () => {
+  const cpus = os.cpus();
+  return {
+    platform: process.platform,
+    arch: process.arch,
+    osRelease: os.release(),
+    hostname: os.hostname(),
+    cpuModel: cpus[0]?.model ?? "—",
+    cpuCores: cpus.length,
+    totalRamGb: Math.round((os.totalmem() / 1024 / 1024 / 1024) * 10) / 10,
+    freeRamGb: Math.round((os.freemem() / 1024 / 1024 / 1024) * 10) / 10,
+    renderConcurrency: computeConcurrency(),
+    appVersion: app.getVersion(),
+    electronVersion: process.versions.electron,
+    chromeVersion: process.versions.chrome,
+    nodeVersion: process.versions.node,
+    screenletDir: SCREENLET_DIR,
+  };
+});
+
+// ── Export all data (Settings → Dados) ───────────────────────────────────────
+// Zips every user-data directory plus the app/IPTV/device config files into
+// a single archive the user picks a destination for. Excludes rendered
+// exports (large, regenerable) and the Remotion render bundle/cache.
+ipcMain.handle("data-export-all", async () => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: "Exportar todos os dados",
+    defaultPath: `screenlet-backup-${new Date().toISOString().slice(0, 10)}.zip`,
+    filters: [{ name: "Arquivo ZIP", extensions: ["zip"] }],
+  });
+  if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+
+  const archiver = require("archiver");
+  const output = fs.createWriteStream(result.filePath);
+  const archive = archiver("zip", { zlib: { level: 9 } });
+
+  const done = new Promise((resolve, reject) => {
+    output.on("close", resolve);
+    archive.on("error", reject);
+  });
+  archive.pipe(output);
+
+  const DATA_DIRS = ["assets", "projects", "templates", "library", "channels", "schedules", "project-thumbs"];
+  for (const dir of DATA_DIRS) {
+    const full = path.join(SCREENLET_DIR, dir);
+    if (fs.existsSync(full)) archive.directory(full, dir);
+  }
+
+  const CONFIG_FILES = [
+    APP_SETTINGS_FILE,
+    IPTV_CONFIG_FILE,
+    DEVICES_FILE,
+    PLAYER_DEVICES_FILE,
+    path.join(app.getPath("userData"), "storage-config.json"),
+  ];
+  for (const file of CONFIG_FILES) {
+    if (fs.existsSync(file)) archive.file(file, { name: `config/${path.basename(file)}` });
+  }
+
+  archive.finalize();
+  await done;
+  return { ok: true, filePath: result.filePath };
 });
 
 // ── IPTV config (selected IP preference) ─────────────────────────────────────
@@ -2060,11 +2180,15 @@ ipcMain.handle("export-video", async (_event, payload, suggestedName, fps) => {
     ...browserOptions,
   });
 
+  const codec = appSettings.videoCodec || "h264";
+  const crf = CRF_BY_QUALITY[codec]?.[appSettings.videoQuality] ?? CRF_BY_QUALITY.h264.medium;
+
   await renderMedia({
     composition: { ...composition, durationInFrames, width, height, fps: renderFps },
     serveUrl: bundleLocation,
-    codec: "h264",
-    hardwareAcceleration: "if-possible",
+    codec,
+    crf,
+    hardwareAcceleration: appSettings.hardwareAcceleration ? "if-possible" : "disabled",
     outputLocation: outputPath,
     inputProps,
     concurrency,

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, FolderOpen, FolderSearch, Monitor, Moon, Sun } from "lucide-react";
-import { Button, Checkbox, Dialog } from "../design-system/components";
+import { Check, Download, FolderOpen, FolderSearch, Monitor, Moon, Sun } from "lucide-react";
+import { Button, Checkbox, Dialog, SelectField, Field } from "../design-system/components";
 import { PageContainer, PageHeader } from "../layout/PageShell";
 import { cn } from "@/lib/utils";
 import { useThemeStore, type Theme } from "../store/useThemeStore";
-import { useAppSettingsStore } from "../store/useAppSettingsStore";
+import { useAppSettingsStore, type VideoCodec, type VideoQuality } from "../store/useAppSettingsStore";
 import { toast } from "../store/useToastStore";
+import type { SystemInfo } from "../global";
 
 type ThemeOption = {
   value: Theme;
@@ -52,8 +53,17 @@ export const Settings: React.FC = () => {
   const [migrating, setMigrating] = useState(false);
   const [appVersion, setAppVersion] = useState("");
   const [isWindows, setIsWindows] = useState(false);
-  const { settings: appSettings, refresh: refreshAppSettings, setLaunchAtLogin, setAutoStartIptv } =
-    useAppSettingsStore();
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const {
+    settings: appSettings,
+    refresh: refreshAppSettings,
+    setLaunchAtLogin,
+    setAutoStartIptv,
+    setVideoCodec,
+    setVideoQuality,
+    setHardwareAcceleration,
+  } = useAppSettingsStore();
 
   useEffect(() => {
     if (!window.adFrame) return;
@@ -61,8 +71,23 @@ export const Settings: React.FC = () => {
     setIsWindows(win);
     window.adFrame.storageGetDir().then(setCurrentDir);
     window.adFrame.appGetVersion().then(setAppVersion);
-    if (win) refreshAppSettings();
+    window.adFrame.systemInfoGet().then(setSystemInfo);
+    refreshAppSettings();
   }, [refreshAppSettings]);
+
+  const handleExportAllData = async () => {
+    setExporting(true);
+    try {
+      const result = await window.adFrame.dataExportAll();
+      if (result.ok) {
+        toast.success(`Backup salvo em ${result.filePath}`);
+      } else if (!result.canceled) {
+        toast.error("Erro ao exportar dados.");
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleChooseDir = async () => {
     const chosen = await window.adFrame.storageChooseDir();
@@ -150,6 +175,38 @@ export const Settings: React.FC = () => {
       )}
 
       <Section
+        title="Vídeo e Renderização"
+        description="Codificação usada ao exportar vídeos. Mais qualidade gera arquivos maiores e renderiza mais lentamente."
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Codec de vídeo">
+            <SelectField
+              value={appSettings.videoCodec}
+              onChange={(e) => setVideoCodec(e.target.value as VideoCodec)}
+            >
+              <option value="h264">H.264 (compatibilidade)</option>
+              <option value="h265">H.265 / HEVC (arquivos menores)</option>
+            </SelectField>
+          </Field>
+          <Field label="Qualidade">
+            <SelectField
+              value={appSettings.videoQuality}
+              onChange={(e) => setVideoQuality(e.target.value as VideoQuality)}
+            >
+              <option value="high">Alta</option>
+              <option value="medium">Média</option>
+              <option value="low">Baixa (arquivo menor)</option>
+            </SelectField>
+          </Field>
+        </div>
+        <Checkbox
+          checked={appSettings.hardwareAcceleration}
+          onChange={setHardwareAcceleration}
+          label="Usar aceleração de hardware quando disponível"
+        />
+      </Section>
+
+      <Section
         title="Armazenamento"
         description="Pasta onde projetos, assets e configurações são salvos. Aponte para uma pasta sincronizada com iCloud Drive ou OneDrive para acesso em vários computadores."
       >
@@ -169,6 +226,44 @@ export const Settings: React.FC = () => {
             </Button>
           </div>
         </div>
+      </Section>
+
+      <Section
+        title="Dados"
+        description="Gera um arquivo .zip com projetos, assets, biblioteca de produtos, templates, canais e configurações — útil para backup ou migração para outro computador."
+      >
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Download size={13} />}
+          onClick={handleExportAllData}
+          disabled={exporting}
+        >
+          {exporting ? "Exportando…" : "Exportar todos os dados (.zip)"}
+        </Button>
+      </Section>
+
+      <Section title="Informações da máquina" description="Dados do computador onde o Screenlet está rodando.">
+        <dl className="flex flex-col divide-y divide-border text-sm">
+          <Row k="Sistema" v={systemInfo ? `${systemInfo.platform} ${systemInfo.osRelease}` : "—"} />
+          <Row k="Arquitetura" v={systemInfo?.arch ?? "—"} />
+          <Row k="Nome do computador" v={systemInfo?.hostname ?? "—"} />
+          <Row k="Processador" v={systemInfo ? `${systemInfo.cpuModel} (${systemInfo.cpuCores} núcleos)` : "—"} />
+          <Row
+            k="Memória"
+            v={systemInfo ? `${systemInfo.freeRamGb} GB livres de ${systemInfo.totalRamGb} GB` : "—"}
+          />
+          <Row k="Renderizações simultâneas" v={systemInfo ? String(systemInfo.renderConcurrency) : "—"} />
+          <Row
+            k="Versões"
+            v={
+              systemInfo
+                ? `Electron ${systemInfo.electronVersion} · Chrome ${systemInfo.chromeVersion} · Node ${systemInfo.nodeVersion}`
+                : "—"
+            }
+          />
+          <Row k="Pasta de dados" v={systemInfo?.screenletDir ?? "—"} />
+        </dl>
       </Section>
 
       <Section title="Sobre">

@@ -1,8 +1,14 @@
 import { create } from "zustand";
 
+export type VideoCodec = "h264" | "h265";
+export type VideoQuality = "high" | "medium" | "low";
+
 export type AppSettings = {
   launchAtLogin: boolean;
   autoStartIptvOnLaunch: boolean;
+  videoCodec: VideoCodec;
+  videoQuality: VideoQuality;
+  hardwareAcceleration: boolean;
 };
 
 type AppSettingsStore = {
@@ -11,9 +17,18 @@ type AppSettingsStore = {
   refresh: () => Promise<void>;
   setLaunchAtLogin: (value: boolean) => Promise<void>;
   setAutoStartIptv: (value: boolean) => Promise<void>;
+  setVideoCodec: (value: VideoCodec) => Promise<void>;
+  setVideoQuality: (value: VideoQuality) => Promise<void>;
+  setHardwareAcceleration: (value: boolean) => Promise<void>;
 };
 
-const DEFAULT_SETTINGS: AppSettings = { launchAtLogin: false, autoStartIptvOnLaunch: true };
+const DEFAULT_SETTINGS: AppSettings = {
+  launchAtLogin: false,
+  autoStartIptvOnLaunch: true,
+  videoCodec: "h264",
+  videoQuality: "medium",
+  hardwareAcceleration: true,
+};
 
 export const useAppSettingsStore = create<AppSettingsStore>((set) => ({
   settings: DEFAULT_SETTINGS,
@@ -31,6 +46,21 @@ export const useAppSettingsStore = create<AppSettingsStore>((set) => ({
 
   setAutoStartIptv: async (value) => {
     const settings = await window.adFrame.appSettingsSetAutoStartIptv(value);
+    set({ settings });
+  },
+
+  setVideoCodec: async (value) => {
+    const settings = await window.adFrame.appSettingsSetVideoCodec(value);
+    set({ settings });
+  },
+
+  setVideoQuality: async (value) => {
+    const settings = await window.adFrame.appSettingsSetVideoQuality(value);
+    set({ settings });
+  },
+
+  setHardwareAcceleration: async (value) => {
+    const settings = await window.adFrame.appSettingsSetHardwareAcceleration(value);
     set({ settings });
   },
 }));

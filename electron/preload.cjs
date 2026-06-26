@@ -44,6 +44,13 @@ contextBridge.exposeInMainWorld("adFrame", {
   appSettingsGet: () => ipcRenderer.invoke("app-settings-get"),
   appSettingsSetLaunchAtLogin: (value) => ipcRenderer.invoke("app-settings-set-launch-at-login", value),
   appSettingsSetAutoStartIptv: (value) => ipcRenderer.invoke("app-settings-set-auto-start-iptv", value),
+  appSettingsSetVideoCodec: (value) => ipcRenderer.invoke("app-settings-set-video-codec", value),
+  appSettingsSetVideoQuality: (value) => ipcRenderer.invoke("app-settings-set-video-quality", value),
+  appSettingsSetHardwareAcceleration: (value) => ipcRenderer.invoke("app-settings-set-hardware-acceleration", value),
+
+  // Machine info + full data export (Settings page)
+  systemInfoGet: () => ipcRenderer.invoke("system-info-get"),
+  dataExportAll: () => ipcRenderer.invoke("data-export-all"),
 
   // Export / render
   exportVideo: (config, suggestedName, fps) =>

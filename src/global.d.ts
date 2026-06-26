@@ -14,6 +14,23 @@ export type ExportedVideo = {
   createdAt: string;
 };
 
+export type SystemInfo = {
+  platform: NodeJS.Platform;
+  arch: string;
+  osRelease: string;
+  hostname: string;
+  cpuModel: string;
+  cpuCores: number;
+  totalRamGb: number;
+  freeRamGb: number;
+  renderConcurrency: number;
+  appVersion: string;
+  electronVersion: string;
+  chromeVersion: string;
+  nodeVersion: string;
+  screenletDir: string;
+};
+
 export type ProjectMeta = {
   id: string;
   name: string;
@@ -80,6 +97,19 @@ declare global {
       appSettingsGet: () => Promise<import("./store/useAppSettingsStore").AppSettings>;
       appSettingsSetLaunchAtLogin: (value: boolean) => Promise<import("./store/useAppSettingsStore").AppSettings>;
       appSettingsSetAutoStartIptv: (value: boolean) => Promise<import("./store/useAppSettingsStore").AppSettings>;
+      appSettingsSetVideoCodec: (
+        value: import("./store/useAppSettingsStore").VideoCodec,
+      ) => Promise<import("./store/useAppSettingsStore").AppSettings>;
+      appSettingsSetVideoQuality: (
+        value: import("./store/useAppSettingsStore").VideoQuality,
+      ) => Promise<import("./store/useAppSettingsStore").AppSettings>;
+      appSettingsSetHardwareAcceleration: (
+        value: boolean,
+      ) => Promise<import("./store/useAppSettingsStore").AppSettings>;
+
+      // Machine info + full data export (Settings page)
+      systemInfoGet: () => Promise<SystemInfo>;
+      dataExportAll: () => Promise<{ ok: true; filePath: string } | { ok: false; canceled?: boolean }>;
 
       // Kodi Devices — passwords never returned to renderer; only boolean flags.
       deviceList: () => Promise<import("./types/device").KodiDevice[]>;
