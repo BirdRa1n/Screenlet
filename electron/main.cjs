@@ -105,7 +105,12 @@ const SCREENLET_DIR = loadStorageDir();
 const UPLOADS_DIR  = path.join(SCREENLET_DIR, "assets");
 const PROJECTS_DIR = path.join(SCREENLET_DIR, "projects");
 const EXPORTS_DIR  = path.join(SCREENLET_DIR, "exports");
-const RENDER_BUNDLE_DIR = path.join(SCREENLET_DIR, "remotion-bundle");
+// Build artifact cache, not user data — kept out of SCREENLET_DIR because that
+// folder is often synced (iCloud Drive / OneDrive). A sync client can hold a
+// lock on a file inside it mid-upload, and fs.rmSync's recursive delete of the
+// whole directory (see ensureWritableRenderBundle) throws EPERM on Windows
+// when that happens. userData isn't synced, so it's always safely writable.
+const RENDER_BUNDLE_DIR = path.join(app.getPath("userData"), "remotion-bundle");
 
 // Register app:// BEFORE app is ready (Electron requirement)
 protocol.registerSchemesAsPrivileged([
