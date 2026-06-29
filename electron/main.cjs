@@ -572,6 +572,92 @@ ipcMain.handle("library-delete", (_event, id) => {
   if (fs.existsSync(file)) fs.unlinkSync(file);
 });
 
+/* ---- Integrations (external PDV/ERP product data) ---- */
+//
+// Lives in userData (NOT the synced Documents/Screenlet folder): the API key is
+// a secret, encrypted with safeStorage whose key is bound to this machine's OS
+// keychain — a synced copy would be useless elsewhere. The renderer only ever
+// sees a hasApiKey flag, never the key itself (same model as device passwords).
+
+const INTEGRATIONS_FILE = path.join(app.getPath("userData"), "integrations.json");
+const STOCKEASY_DEFAULT_BASE_URL = "https://stockeasy.birdra1n.com";
+
+function readRawIntegrations() {
+  try {
+    if (fs.existsSync(INTEGRATIONS_FILE)) {
+      return JSON.parse(fs.readFileSync(INTEGRATIONS_FILE, "utf8"));
+    }
+  } catch {}
+  return {};
+}
+
+function writeRawIntegrations(raw) {
+  ensureDir(path.dirname(INTEGRATIONS_FILE));
+  fs.writeFileSync(INTEGRATIONS_FILE, JSON.stringify(raw, null, 2));
+}
+
+// Sanitized view for the renderer: no API key, only a presence flag.
+function readIntegrationsForRenderer() {
+  const se = readRawIntegrations().stockeasy || {};
+  return {
+    stockeasy: {
+      enabled: !!se.enabled,
+      baseUrl: se.baseUrl || STOCKEASY_DEFAULT_BASE_URL,
+      selectedStore: se.selectedStore ?? null,
+      hasApiKey: !!se.apiKey_enc,
+    },
+  };
+}
+
+ipcMain.handle("integrations-get", () => readIntegrationsForRenderer());
+
+ipcMain.handle("integrations-set-stockeasy", (_event, payload = {}) => {
+  const raw = readRawIntegrations();
+  const se = { ...(raw.stockeasy || {}) };
+
+  if (typeof payload.enabled === "boolean") se.enabled = payload.enabled;
+  if (typeof payload.baseUrl === "string" && payload.baseUrl.trim()) {
+    se.baseUrl = payload.baseUrl.trim().replace(/\/+$/, "");
+  }
+  if (payload.selectedStore !== undefined) se.selectedStore = payload.selectedStore;
+
+  // apiKey: non-empty string sets/replaces, null clears, undefined keeps.
+  if (typeof payload.apiKey === "string" && payload.apiKey.trim()) {
+    se.apiKey_enc = encryptPwd(payload.apiKey.trim());
+  } else if (payload.apiKey === null) {
+    delete se.apiKey_enc;
+  }
+
+  raw.stockeasy = se;
+  writeRawIntegrations(raw);
+  return readIntegrationsForRenderer();
+});
+
+// Looks up a product on StockEasy by its reference code. Uses electron's net
+// module (handles HTTPS) and the stored, decrypted API key — kept in main so
+// the key never reaches the renderer.
+ipcMain.handle("stockeasy-lookup", async (_event, codigo) => {
+  const se = readRawIntegrations().stockeasy || {};
+  if (!se.enabled) return { ok: false, error: "Integração StockEasy desativada." };
+  const apiKey = decryptPwd(se.apiKey_enc);
+  if (!apiKey) return { ok: false, error: "Chave de API não configurada." };
+  const ref = String(codigo ?? "").trim();
+  if (!ref) return { ok: false, error: "Produto sem referência." };
+
+  const base = (se.baseUrl || STOCKEASY_DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const url = `${base}/api/v1/products?codigo=${encodeURIComponent(ref)}`;
+  try {
+    const resp = await net.fetch(url, { headers: { "x-api-key": apiKey } });
+    if (resp.status === 401) return { ok: false, error: "Chave de API inválida." };
+    if (resp.status === 404) return { ok: false, error: "Nenhum produto encontrado." };
+    if (!resp.ok) return { ok: false, error: `StockEasy respondeu ${resp.status}.` };
+    const product = await resp.json();
+    return { ok: true, product };
+  } catch (err) {
+    return { ok: false, error: `Falha ao contatar o StockEasy: ${err.message}` };
+  }
+});
+
 /* ---- Templates ---- */
 
 const TEMPLATES_DIR = path.join(SCREENLET_DIR, "templates");
@@ -781,16 +867,52 @@ ipcMain.handle("channel-list", () => {
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 });
 
-ipcMain.handle("channel-save", (_event, channel) => {
-  ensureDir(CHANNELS_DIR);
-  fs.writeFileSync(path.join(CHANNELS_DIR, `${channel.id}.json`), JSON.stringify(channel, null, 2));
-  // Fire-and-forget: restart Kodi on all devices assigned to this channel
-  const affected = readDevicesWithPasswords().filter((d) => d.defaultChannelId === channel.id);
+// Fire-and-forget: restart Kodi on every device assigned to this channel so it
+// reconnects and picks up the channel's current content immediately.
+function restartDevicesForChannel(channelId) {
+  const affected = readDevicesWithPasswords().filter((d) => d.defaultChannelId === channelId);
   for (const device of affected) {
     kodiRestartAndOpen(device).catch((err) =>
       console.error(`[kodi] Falha ao reiniciar ${device.name}:`, err.message)
     );
   }
+}
+
+// Returns true when a channel plays the given exported asset — either in its
+// playlist or in a time-based programming rule.
+function channelUsesAsset(channel, filename) {
+  return (
+    (channel.playlist || []).some((item) => item.filename === filename) ||
+    (channel.rules || []).some((rule) => rule.assetFilename === filename)
+  );
+}
+
+// After an exported video is overwritten, refresh every channel that references
+// it: the playlist/rules order (the position in the grid) is left untouched —
+// only updatedAt is bumped and the assigned screens are re-synced so they show
+// the new content without the user touching the IPTV settings. Returns the
+// affected channels so the renderer can notify the user.
+function resyncChannelsUsingAsset(filename) {
+  const now = new Date().toISOString();
+  const affected = [];
+  for (const channel of readAllChannels()) {
+    if (!channelUsesAsset(channel, filename)) continue;
+    channel.updatedAt = now;
+    try {
+      fs.writeFileSync(path.join(CHANNELS_DIR, `${channel.id}.json`), JSON.stringify(channel, null, 2));
+    } catch (err) {
+      console.error(`[channels] Falha ao atualizar ${channel.name}:`, err.message);
+    }
+    restartDevicesForChannel(channel.id);
+    affected.push({ id: channel.id, name: channel.name });
+  }
+  return affected;
+}
+
+ipcMain.handle("channel-save", (_event, channel) => {
+  ensureDir(CHANNELS_DIR);
+  fs.writeFileSync(path.join(CHANNELS_DIR, `${channel.id}.json`), JSON.stringify(channel, null, 2));
+  restartDevicesForChannel(channel.id);
 });
 
 ipcMain.handle("channel-delete", (_event, id) => {
@@ -2137,12 +2259,10 @@ ipcMain.handle("export-video", async (_event, payload, suggestedName, fps) => {
 
   const baseName = (suggestedName || `screenlet-${Date.now()}.mp4`)
     .replace(/[^a-zA-Z0-9.\-_]/g, "_");
-  let outputPath = path.join(EXPORTS_DIR, baseName);
-  if (fs.existsSync(outputPath)) {
-    const ext  = path.extname(baseName);
-    const base = path.basename(baseName, ext);
-    outputPath = path.join(EXPORTS_DIR, `${base}-${Date.now()}${ext}`);
-  }
+  // Overwrite an existing file of the same name on purpose: re-rendering a
+  // project replaces its video so any channel already using it serves the new
+  // content (see resyncChannelsUsingAsset below).
+  const outputPath = path.join(EXPORTS_DIR, baseName);
 
   const renderFps   = fps === 60 ? 60 : 30;
   const concurrency = computeConcurrency();
@@ -2204,7 +2324,11 @@ ipcMain.handle("export-video", async (_event, payload, suggestedName, fps) => {
     },
   });
 
-  return { ok: true, filename: path.basename(outputPath) };
+  const filename = path.basename(outputPath);
+  // Refresh any channels that already play this file so connected screens pick
+  // up the new content automatically, preserving each item's grid position.
+  const updatedChannels = resyncChannelsUsingAsset(filename);
+  return { ok: true, filename, updatedChannels };
 });
 
 ipcMain.handle("app-get-version", () => app.getVersion());

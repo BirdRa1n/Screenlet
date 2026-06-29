@@ -111,6 +111,11 @@ export const Wizard: React.FC = () => {
         toast.error(`Erro ao renderizar: ${result.error}`);
       } else {
         toast.success("Vídeo renderizado com sucesso!");
+        for (const channel of result.updatedChannels ?? []) {
+          toast.info(
+            `O conteúdo antigo do canal "${channel.name}" foi atualizado — as telas estão sendo sincronizadas.`,
+          );
+        }
         saveStoreProfile();
         loadConfig(wizardToAdConfig(w));
         w.reset();

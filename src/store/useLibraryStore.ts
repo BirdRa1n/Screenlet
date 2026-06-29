@@ -5,6 +5,9 @@ export type LibraryProduct = {
   id: string;
   name: string;
   category: string;
+  // Código de referência no sistema PDV/ERP externo — usado para sincronizar
+  // dados (ex.: preço) via integração. Opcional.
+  reference?: string;
   image: string;
   priceMode: "offer" | "single";
   oldPrice: string;

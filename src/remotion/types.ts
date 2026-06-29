@@ -9,9 +9,29 @@ export type LogoSceneConfig = {
   durationInFrames: number;
 };
 
+// Snapshot of a library product's data fields, taken when a product is imported
+// as a scene (or last synced). Used to detect when the library changed since
+// import without flagging the user's own scene edits. Keys mirror the matching
+// ProductSceneConfig field names.
+export type LibraryProductSnapshot = {
+  image: string;
+  productName: string;
+  priceMode: "offer" | "single";
+  oldPrice: string;
+  newPrice: string;
+  priceSuffix: string;
+  badgeText: string;
+};
+
 export type ProductSceneConfig = {
   type: "product";
   id: string;
+  // Set when this scene was imported from a library product — links it back so
+  // the editor can detect when the library product is updated. Undefined for
+  // scenes created manually or via the wizard.
+  libraryProductId?: string;
+  // Library data as it was at import/last-sync, for drift detection.
+  librarySnapshot?: LibraryProductSnapshot;
   image: string;
   productName: string;
   productNameColor: string;

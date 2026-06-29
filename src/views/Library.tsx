@@ -2,26 +2,117 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Pencil, Plus, Trash2 } from "lucide-react";
+import { BookOpen, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button, Dialog, Field, IconButton, TextField, SelectField, UploadZone } from "../design-system/components";
 import { ContextMenu, useContextMenu } from "../design-system/components/ContextMenu";
 import { PageContainer, PageHeader, EmptyState } from "../layout/PageShell";
 import { cn } from "@/lib/utils";
 import { assetUrl } from "@/lib/assetUrl";
 import { useLibraryStore, type LibraryProduct } from "../store/useLibraryStore";
+import { useIntegrationsStore } from "../store/useIntegrationsStore";
 import { useWizardStore } from "../store/useWizardStore";
 import { toast } from "../store/useToastStore";
+import type { StockEasyProduct } from "../types/integration";
+
+// StockEasy retorna preços numéricos (ex.: 8.5); a biblioteca guarda strings
+// no formato pt-BR usado nos anúncios (ex.: "8,50").
+const formatPrice = (value: number) => value.toFixed(2).replace(".", ",");
 
 export const Library: React.FC = () => {
-  const { products, refresh, remove } = useLibraryStore();
+  const { products, refresh, remove, save } = useLibraryStore();
+  const { config: integrations, refresh: refreshIntegrations, setStockEasy } = useIntegrationsStore();
   const router = useRouter();
   const [editProduct, setEditProduct] = useState<LibraryProduct | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>("Todos");
+  const [syncing, setSyncing] = useState(false);
+  // Pending sync waiting on the user to pick which loja to base prices on.
+  const [storePicker, setStorePicker] = useState<{ products: LibraryProduct[]; options: string[]; store: string } | null>(null);
+
+  const syncEnabled = integrations.stockeasy.enabled && integrations.stockeasy.hasApiKey;
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+    refreshIntegrations();
+  }, [refresh, refreshIntegrations]);
+
+  // Writes the chosen loja's price onto the product, keeping every other field.
+  const applyPrice = async (p: LibraryProduct, product: StockEasyProduct, store: string) => {
+    const entry = product.precos?.find((x) => x.loja === store);
+    if (!entry) return `"${p.name}": loja "${store}" sem preço.`;
+    await save(
+      {
+        name: p.name,
+        category: p.category,
+        reference: p.reference,
+        image: p.image,
+        priceMode: p.priceMode,
+        oldPrice: p.oldPrice,
+        newPrice: formatPrice(entry.preco),
+        priceSuffix: p.priceSuffix,
+        badgeText: p.badgeText,
+      },
+      p.id,
+    );
+    return null;
+  };
+
+  const syncList = async (list: LibraryProduct[], store: string) => {
+    setSyncing(true);
+    let ok = 0;
+    const errors: string[] = [];
+    try {
+      for (const p of list) {
+        const res = await window.adFrame.stockeasyLookup(p.reference!);
+        if (!res.ok) {
+          errors.push(`"${p.name}": ${res.error}`);
+          continue;
+        }
+        const err = await applyPrice(p, res.product, store);
+        if (err) errors.push(err);
+        else ok += 1;
+      }
+      await refresh();
+    } finally {
+      setSyncing(false);
+    }
+    if (ok > 0) toast.success(`${ok} produto(s) sincronizado(s) com a loja "${store}".`);
+    if (errors.length) toast.error(errors[0] + (errors.length > 1 ? ` (+${errors.length - 1})` : ""));
+  };
+
+  // Ensures a loja is selected (prompting on first sync) before syncing.
+  const ensureStoreThenSync = async (targets: LibraryProduct[]) => {
+    const withRef = targets.filter((p) => p.reference?.trim());
+    if (withRef.length === 0) {
+      toast.error("Nenhum produto com referência para sincronizar.");
+      return;
+    }
+    const store = integrations.stockeasy.selectedStore;
+    if (store) {
+      await syncList(withRef, store);
+      return;
+    }
+    // First sync: look up one product to discover the available lojas.
+    setSyncing(true);
+    let res;
+    try {
+      res = await window.adFrame.stockeasyLookup(withRef[0].reference!);
+    } finally {
+      setSyncing(false);
+    }
+    if (!res.ok) return toast.error(res.error);
+    const options = Array.from(new Set((res.product.precos ?? []).map((x) => x.loja).filter(Boolean)));
+    if (options.length === 0) return toast.error("Nenhuma loja disponível na resposta do StockEasy.");
+    setStorePicker({ products: withRef, options, store: options[0] });
+  };
+
+  const confirmStore = async () => {
+    if (!storePicker) return;
+    const { products: pending, store } = storePicker;
+    setStorePicker(null);
+    await setStockEasy({ selectedStore: store });
+    await syncList(pending, store);
+  };
 
   const categories = useMemo(() => {
     const cats = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
@@ -60,9 +151,21 @@ export const Library: React.FC = () => {
         title="Biblioteca de Produtos"
         subtitle="Produtos salvos para reutilizar nos seus anúncios."
         actions={
-          <Button variant="primary" icon={<Plus size={14} />} onClick={() => setAddOpen(true)}>
-            Adicionar produto
-          </Button>
+          <div className="flex gap-2">
+            {syncEnabled && products.length > 0 && (
+              <Button
+                variant="secondary"
+                icon={<RefreshCw size={14} className={syncing ? "animate-spin" : undefined} />}
+                onClick={() => ensureStoreThenSync(products)}
+                disabled={syncing}
+              >
+                {syncing ? "Sincronizando…" : "Sincronizar tudo"}
+              </Button>
+            )}
+            <Button variant="primary" icon={<Plus size={14} />} onClick={() => setAddOpen(true)}>
+              Adicionar produto
+            </Button>
+          </div>
         }
       />
 
@@ -104,6 +207,9 @@ export const Library: React.FC = () => {
             <ProductCard
               key={p.id}
               product={p}
+              canSync={syncEnabled && !!p.reference?.trim()}
+              syncing={syncing}
+              onSync={() => ensureStoreThenSync([p])}
               onEdit={() => setEditProduct(p)}
               onDelete={async () => {
                 await remove(p.id);
@@ -128,16 +234,56 @@ export const Library: React.FC = () => {
           refresh();
         }}
       />
+
+      <Dialog
+        open={!!storePicker}
+        onClose={() => setStorePicker(null)}
+        title="Escolha a loja"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setStorePicker(null)}>
+              Cancelar
+            </Button>
+            <Button variant="primary" onClick={confirmStore} disabled={!storePicker?.store}>
+              Confirmar e sincronizar
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Os preços têm valores diferentes por loja. Escolha qual loja servirá de base — essa escolha
+            fica salva e é reutilizada nas próximas sincronizações (você pode trocá-la em Configurações).
+          </p>
+          <Field label="Loja de referência">
+            <SelectField
+              value={storePicker?.store ?? ""}
+              onChange={(e) =>
+                setStorePicker((prev) => (prev ? { ...prev, store: e.target.value } : prev))
+              }
+            >
+              {(storePicker?.options ?? []).map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </SelectField>
+          </Field>
+        </div>
+      </Dialog>
     </PageContainer>
   );
 };
 
 const ProductCard: React.FC<{
   product: LibraryProduct;
+  canSync: boolean;
+  syncing: boolean;
+  onSync: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onUse: () => void;
-}> = ({ product, onEdit, onDelete, onUse }) => {
+}> = ({ product, canSync, syncing, onSync, onEdit, onDelete, onUse }) => {
   const { menuProps, handleContextMenu, close } = useContextMenu();
 
   return (
@@ -160,6 +306,9 @@ const ProductCard: React.FC<{
             </span>
           )}
           <div className="truncate text-sm font-medium">{product.name}</div>
+          {product.reference?.trim() && (
+            <span className="truncate text-[10px] text-muted-foreground">Ref: {product.reference}</span>
+          )}
           <div className="mt-auto flex items-baseline gap-1.5">
             {product.priceMode === "offer" && product.oldPrice && (
               <span className="text-xs text-muted-foreground line-through">R$ {product.oldPrice}</span>
@@ -177,6 +326,11 @@ const ProductCard: React.FC<{
           <Button variant="primary" size="sm" className="flex-1" onClick={onUse}>
             Usar
           </Button>
+          {canSync && (
+            <IconButton label="Sincronizar preço" onClick={onSync} disabled={syncing}>
+              <RefreshCw size={13} className={syncing ? "animate-spin" : undefined} />
+            </IconButton>
+          )}
           <IconButton label="Editar" onClick={onEdit}>
             <Pencil size={13} />
           </IconButton>
@@ -193,6 +347,9 @@ const ProductCard: React.FC<{
           onClose={close}
           items={[
             { type: "item", label: "Usar no wizard", icon: <Plus size={13} />, onClick: onUse },
+            ...(canSync
+              ? [{ type: "item" as const, label: "Sincronizar preço", icon: <RefreshCw size={13} />, onClick: onSync }]
+              : []),
             { type: "item", label: "Editar", icon: <Pencil size={13} />, onClick: onEdit },
             { type: "separator" },
             { type: "item", label: "Excluir", icon: <Trash2 size={13} />, onClick: onDelete, danger: true },
@@ -260,6 +417,7 @@ const ProductFormDialog: React.FC<{
   const { save } = useLibraryStore();
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
+  const [reference, setReference] = useState("");
   const [image, setImage] = useState("");
   const [priceMode, setPriceMode] = useState<"offer" | "single">("offer");
   const [oldPrice, setOldPrice] = useState("");
@@ -271,6 +429,7 @@ const ProductFormDialog: React.FC<{
     if (product) {
       setName(product.name);
       setCategory(product.category ?? "");
+      setReference(product.reference ?? "");
       setImage(product.image);
       setPriceMode(product.priceMode);
       setOldPrice(product.oldPrice);
@@ -280,6 +439,7 @@ const ProductFormDialog: React.FC<{
     } else {
       setName("");
       setCategory("");
+      setReference("");
       setImage("");
       setPriceMode("offer");
       setOldPrice("");
@@ -292,7 +452,7 @@ const ProductFormDialog: React.FC<{
   const handleSave = async () => {
     if (!name.trim()) return toast.error("Nome do produto é obrigatório.");
     await save(
-      { name: name.trim(), category: category.trim(), image, priceMode, oldPrice, newPrice, priceSuffix, badgeText },
+      { name: name.trim(), category: category.trim(), reference: reference.trim(), image, priceMode, oldPrice, newPrice, priceSuffix, badgeText },
       product?.id,
     );
     toast.success(`"${name.trim()}" salvo na biblioteca.`);
@@ -328,6 +488,12 @@ const ProductFormDialog: React.FC<{
             <CategoryCombobox value={category} onChange={setCategory} />
           </Field>
         </div>
+        <Field
+          label="Referência (opcional)"
+          hint="Código do produto no seu sistema PDV/ERP — usado para sincronizar o preço via integração."
+        >
+          <TextField value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Ex: 201" />
+        </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Modo de preço">
             <SelectField value={priceMode} onChange={(e) => setPriceMode(e.target.value as "offer" | "single")}>

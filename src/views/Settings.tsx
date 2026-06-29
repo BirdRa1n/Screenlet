@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Download, FolderOpen, FolderSearch, Monitor, Moon, Sun } from "lucide-react";
-import { Button, Checkbox, Dialog, SelectField, Field } from "../design-system/components";
+import { Check, Download, FolderOpen, FolderSearch, KeyRound, Monitor, Moon, Plug, Store, Sun } from "lucide-react";
+import { Button, Checkbox, Dialog, SelectField, Field, TextField } from "../design-system/components";
 import { PageContainer, PageHeader } from "../layout/PageShell";
 import { cn } from "@/lib/utils";
 import { useThemeStore, type Theme } from "../store/useThemeStore";
 import { useAppSettingsStore, type VideoCodec, type VideoQuality } from "../store/useAppSettingsStore";
+import { useIntegrationsStore } from "../store/useIntegrationsStore";
 import { toast } from "../store/useToastStore";
 import type { SystemInfo } from "../global";
 
@@ -243,6 +244,8 @@ export const Settings: React.FC = () => {
         </Button>
       </Section>
 
+      <IntegrationsSection />
+
       <Section title="Informações da máquina" description="Dados do computador onde o Screenlet está rodando.">
         <dl className="flex flex-col divide-y divide-border text-sm">
           <Row k="Sistema" v={systemInfo ? `${systemInfo.platform} ${systemInfo.osRelease}` : "—"} />
@@ -313,6 +316,114 @@ export const Settings: React.FC = () => {
     </PageContainer>
   );
 };
+
+function IntegrationsSection() {
+  const { config, refresh, setStockEasy } = useIntegrationsStore();
+  const se = config.stockeasy;
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const handleToggle = async (enabled: boolean) => {
+    await setStockEasy({ enabled });
+  };
+
+  const handleSaveKey = async () => {
+    const key = apiKeyInput.trim();
+    if (!key) return toast.error("Informe a chave de API.");
+    setSaving(true);
+    try {
+      await setStockEasy({ apiKey: key, enabled: true });
+      setApiKeyInput("");
+      toast.success("Chave de API salva.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClearKey = async () => {
+    await setStockEasy({ apiKey: null });
+    toast.info("Chave de API removida.");
+  };
+
+  const handleResetStore = async () => {
+    await setStockEasy({ selectedStore: null });
+    toast.info("Loja redefinida — você escolherá na próxima sincronização.");
+  };
+
+  return (
+    <Section
+      title="Integrações"
+      description="Conecte um sistema externo (PDV/ERP) para sincronizar dados dos produtos da sua biblioteca."
+    >
+      <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <Plug size={18} />
+          </span>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold">StockEasy</h3>
+              {se.hasApiKey && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                  <Check size={11} /> Conectado
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Busca preços e dados de produtos pela referência cadastrada.
+            </p>
+          </div>
+          <Checkbox checked={se.enabled} onChange={handleToggle} label="" />
+        </div>
+
+        {se.enabled && (
+          <div className="flex flex-col gap-3 border-t border-border pt-4">
+            <Field
+              label="Chave de API (x-api-key)"
+              hint={se.hasApiKey ? "Uma chave já está salva. Informe uma nova para substituí-la." : undefined}
+            >
+              <div className="flex gap-2">
+                <TextField
+                  type="password"
+                  autoComplete="off"
+                  placeholder={se.hasApiKey ? "••••••••••••" : "Cole a chave de API aqui"}
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                />
+                <Button variant="primary" size="sm" icon={<KeyRound size={13} />} onClick={handleSaveKey} disabled={saving}>
+                  {saving ? "Salvando…" : "Salvar"}
+                </Button>
+              </div>
+            </Field>
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                <Store size={14} />
+                Loja de referência:{" "}
+                <span className="font-medium text-foreground">{se.selectedStore || "ainda não escolhida"}</span>
+              </span>
+              {se.selectedStore && (
+                <button className="text-xs font-medium text-primary hover:underline" onClick={handleResetStore}>
+                  Trocar loja
+                </button>
+              )}
+            </div>
+
+            {se.hasApiKey && (
+              <button className="w-fit text-xs font-medium text-destructive hover:underline" onClick={handleClearKey}>
+                Remover chave de API
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
 
 function Row({ k, v }: { k: string; v: string }) {
   return (

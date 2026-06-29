@@ -4,7 +4,7 @@ export type ExportProgress = {
 };
 
 export type ExportResult =
-  | { ok: true; filename: string }
+  | { ok: true; filename: string; updatedChannels?: { id: string; name: string }[] }
   | { ok: false; error: string };
 
 export type ExportedVideo = {
@@ -67,6 +67,15 @@ declare global {
       libraryList: () => Promise<import("./store/useLibraryStore").LibraryProduct[]>;
       librarySave: (product: import("./store/useLibraryStore").LibraryProduct) => Promise<void>;
       libraryDelete: (id: string) => Promise<void>;
+
+      // Integrations (external PDV/ERP) — API key never crosses IPC.
+      integrationsGet: () => Promise<import("./types/integration").IntegrationsConfig>;
+      integrationsSetStockEasy: (
+        payload: import("./types/integration").StockEasySetPayload,
+      ) => Promise<import("./types/integration").IntegrationsConfig>;
+      stockeasyLookup: (
+        codigo: string,
+      ) => Promise<import("./types/integration").StockEasyLookupResult>;
 
       // Channels
       channelList: () => Promise<import("./types/channel").Channel[]>;

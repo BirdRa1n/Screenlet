@@ -24,6 +24,11 @@ contextBridge.exposeInMainWorld("adFrame", {
   librarySave: (product) => ipcRenderer.invoke("library-save", product),
   libraryDelete: (id) => ipcRenderer.invoke("library-delete", id),
 
+  // Integrations (external PDV/ERP product data) — API key stays in main process.
+  integrationsGet: () => ipcRenderer.invoke("integrations-get"),
+  integrationsSetStockEasy: (payload) => ipcRenderer.invoke("integrations-set-stockeasy", payload),
+  stockeasyLookup: (codigo) => ipcRenderer.invoke("stockeasy-lookup", codigo),
+
   // Channels
   channelList: () => ipcRenderer.invoke("channel-list"),
   channelSave: (channel) => ipcRenderer.invoke("channel-save", channel),

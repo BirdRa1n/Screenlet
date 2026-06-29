@@ -23,6 +23,7 @@ import { Button, Dialog, IconButton, UploadZone } from "../design-system/compone
 import { cn } from "@/lib/utils";
 import { assetUrl } from "@/lib/assetUrl";
 import { useLibraryStore, type LibraryProduct } from "../store/useLibraryStore";
+import { librarySnapshotOf } from "@/lib/libraryScene";
 import { MediaPickerDialog } from "../components/media/MediaPicker";
 import { toast } from "../store/useToastStore";
 
@@ -89,15 +90,14 @@ export const SceneListPanel: React.FC = () => {
       addProductScene();
       const newScene = useAdStore.getState().config.scenes.at(-1);
       if (newScene && newScene.type === "product") {
+        const snapshot = librarySnapshotOf(product);
         updateScene(newScene.id, {
           ...newScene,
-          image: product.image,
-          productName: product.name,
-          priceMode: product.priceMode,
-          oldPrice: product.oldPrice,
-          newPrice: product.newPrice,
-          priceSuffix: product.priceSuffix,
-          badgeText: product.badgeText,
+          ...snapshot,
+          // Link back to the library so the editor can flag/refresh this scene
+          // when the library product is later updated.
+          libraryProductId: product.id,
+          librarySnapshot: snapshot,
         });
       }
     });
