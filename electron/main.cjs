@@ -1233,11 +1233,19 @@ function getPlayerSyncResponse(deviceId) {
   const channel = readAllChannels().find((c) => c.id === device.channelId);
   if (!channel) return { paired: false };
   const host = getSelectedIp();
+  const { version, items } = buildChannelManifest(channel, host);
   return {
     paired: true,
     channelId: channel.id,
+    // Legacy live-stream URL, kept for online/Kodi consumers and as a fallback
+    // for players too old to understand the manifest below.
     playlistUrl: `http://${host}:${IPTV_PORT}/channel/${channel.id}`,
     updatedAt: channel.updatedAt,
+    // Offline manifest: the player downloads these once and keeps playing them
+    // locally even when this server is unreachable (e.g. after a reboot).
+    loop: channel.loop !== false,
+    version,
+    items,
   };
 }
 
@@ -1815,6 +1823,101 @@ function generateEpg() {
   return xml;
 }
 
+const ASSET_MIME = { ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime", ".mkv": "video/x-matroska" };
+
+// Serves a single rendered export over the IPTV HTTP server with Range
+// support. `name` must already be a bare filename (path.basename'd by the
+// caller); we additionally resolve and confirm the path stays inside
+// EXPORTS_DIR before opening it — defense in depth against traversal.
+function serveExportFile(req, res, name) {
+  if (!name || name === "." || name === "..") {
+    res.writeHead(400, { "Content-Type": "text/plain" }); res.end("bad request"); return;
+  }
+  const filePath = path.join(EXPORTS_DIR, name);
+  const rel = path.relative(EXPORTS_DIR, filePath);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    res.writeHead(403, { "Content-Type": "text/plain" }); res.end("forbidden"); return;
+  }
+  let stat;
+  try { stat = fs.statSync(filePath); } catch {
+    res.writeHead(404, { "Content-Type": "text/plain" }); res.end("not found"); return;
+  }
+  if (!stat.isFile()) { res.writeHead(404, { "Content-Type": "text/plain" }); res.end("not found"); return; }
+
+  const mime = ASSET_MIME[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+  if (req.method === "HEAD") {
+    res.writeHead(200, { "Content-Type": mime, "Content-Length": stat.size, "Accept-Ranges": "bytes" });
+    res.end();
+    return;
+  }
+
+  const range = req.headers.range;
+  if (range) {
+    const [startStr, endStr] = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(startStr, 10) || 0;
+    const end = endStr ? parseInt(endStr, 10) : stat.size - 1;
+    if (start >= stat.size || end >= stat.size || start > end) {
+      res.writeHead(416, { "Content-Range": `bytes */${stat.size}` }); res.end(); return;
+    }
+    res.writeHead(206, {
+      "Content-Type": mime,
+      "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+      "Accept-Ranges": "bytes",
+      "Content-Length": end - start + 1,
+    });
+    fs.createReadStream(filePath, { start, end }).pipe(res);
+    return;
+  }
+
+  res.writeHead(200, { "Content-Type": mime, "Content-Length": stat.size, "Accept-Ranges": "bytes" });
+  fs.createReadStream(filePath).pipe(res);
+}
+
+// Content hashes are cached per file and only recomputed when size/mtime
+// change, so hashing large videos doesn't run on every 15s player poll. The
+// hash also lets a device detect an in-place re-render (same filename, new
+// bytes) and re-download only what actually changed.
+const exportHashCache = new Map();
+function hashExport(filename) {
+  const filePath = path.join(EXPORTS_DIR, path.basename(filename));
+  let stat;
+  try { stat = fs.statSync(filePath); } catch { return null; }
+  if (!stat.isFile()) return null;
+  const key = `${stat.size}:${stat.mtimeMs}`;
+  const cached = exportHashCache.get(filename);
+  if (cached && cached.key === key) return cached;
+  const hash = crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+  const entry = { key, hash, size: stat.size };
+  exportHashCache.set(filename, entry);
+  return entry;
+}
+
+// Builds the offline playback manifest for a channel: every playlist item that
+// still exists on disk, with a stable download URL, byte size and content
+// hash. `version` is a short digest of the ordered (filename, hash) pairs so a
+// device can cheaply tell whether anything changed since its last sync.
+function buildChannelManifest(channel, host) {
+  const items = [];
+  for (const it of channel.playlist || []) {
+    if (!it.filename) continue;
+    const h = hashExport(it.filename);
+    if (!h) continue; // referenced file is gone — omit rather than advertise a 404
+    items.push({
+      filename: it.filename,
+      url: `http://${host}:${IPTV_PORT}/exports/${encodeURIComponent(it.filename)}`,
+      size: h.size,
+      hash: `sha256:${h.hash}`,
+      transition: it.transition || "cut",
+    });
+  }
+  const version = crypto
+    .createHash("sha256")
+    .update(items.map((i) => `${i.filename}:${i.hash}`).join("|"))
+    .digest("hex")
+    .slice(0, 16);
+  return { version, items };
+}
+
 function handleIptvRequest(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
 
@@ -1835,6 +1938,17 @@ function handleIptvRequest(req, res) {
     const result = getPlayerSyncResponse(deviceId);
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(result));
+    return;
+  }
+
+  // --- screenlet-player: download an individual exported asset so the device
+  // can cache it locally and keep playing after a reboot with no server (the
+  // manifest in /api/player/sync points here). Range-capable for resumable,
+  // large-file downloads. path.basename + the EXPORTS_DIR containment check
+  // below prevent path traversal out of the exports folder.
+  if (urlPath.startsWith("/exports/") && (req.method === "GET" || req.method === "HEAD")) {
+    const name = path.basename(decodeURIComponent(urlPath.slice("/exports/".length)));
+    serveExportFile(req, res, name);
     return;
   }
 
