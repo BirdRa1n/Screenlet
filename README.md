@@ -31,6 +31,8 @@ Crie anúncios com produtos, preços e logo da sua marca, exporte em **MP4**, or
 
 ### Renderização
 - Diálogo de renderização com nome do arquivo e seleção de FPS (30 ou 60)
+- Nome em branco usa o nome do projeto (ex.: `projeto.mp4`); se o arquivo já existir, é **sobrescrito**
+- Ao sobrescrever um vídeo já usado por um canal, a programação é atualizada **mantendo a posição na grade** e as telas atribuídas são re-sincronizadas — com aviso por toast informando qual canal foi atualizado
 - Aceleração por GPU quando disponível (NVENC/AMF/QSV), com fallback automático para CPU
 - Chrome Headless baixado uma vez e em cache permanente no diretório do usuário
 - Concorrência de renderização ajustada automaticamente de acordo com a RAM disponível
@@ -50,7 +52,7 @@ Crie anúncios com produtos, preços e logo da sua marca, exporte em **MP4**, or
 
 ### Dispositivos
 - **Kodi/LibreELEC** — cadastre boxes Kodi via SSH, teste conexão, liste canais e reinicie/abra o IPTV remotamente. Credenciais armazenadas com criptografia.
-- **Screenlet Player** — pareie players Linux dedicados (projeto irmão `screenlet-player`, baseado em mpv) varrendo a rede local, associe a um canal e acompanhe o status de cada dispositivo pareado.
+- **Screenlet Player** — pareie players Linux dedicados (projeto irmão `screenlet-player`, baseado em mpv) varrendo a rede local, associe a um canal e acompanhe o status de cada dispositivo pareado. O player baixa e cacheia o conteúdo do canal localmente (manifesto exposto em `/api/player/sync` + rota `/exports`), então continua reproduzindo a última programação mesmo após reiniciar sem o servidor disponível.
 
 ### Media Hub
 - Catálogo central de todas as imagens e vídeos importados, com miniaturas (inclusive para vídeos, geradas a partir de um frame do clipe)
@@ -58,9 +60,15 @@ Crie anúncios com produtos, preços e logo da sua marca, exporte em **MP4**, or
 - Seletor de mídia reutilizado no editor, no Template Builder e no Wizard
 
 ### Biblioteca de produtos
-- Cadastre produtos reutilizáveis com categorias
+- Cadastre produtos reutilizáveis com categorias e um campo opcional de **referência** (código no PDV/ERP)
 - Busca e filtro por categoria
 - Importe múltiplos produtos no editor com multi-seleção ordenada
+- **Sincronizar** preço a partir da integração StockEasy (por produto ou em lote); na primeira sincronização você escolhe a loja de referência
+- Ao abrir um projeto no editor, produtos importados da biblioteca que ficaram desatualizados (imagem, preço, descrição…) são detectados e podem ser atualizados sem reimportar tudo
+
+### Integrações
+- Seção **Integrações** nas configurações para conectar sistemas externos (PDV/ERP) aos dados dos produtos
+- **StockEasy** — informe a chave de API (armazenada criptografada via `safeStorage`, nunca exposta ao renderer) para buscar preços e dados pela referência do produto
 
 ### Wizard de criação
 - 5 passos guiados: loja → produtos → template → preview → renderização
