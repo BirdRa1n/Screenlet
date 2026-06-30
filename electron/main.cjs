@@ -6,6 +6,7 @@ const crypto = require("node:crypto");
 const http = require("node:http");
 const { spawn, execSync } = require("node:child_process");
 const { Client: SshClient } = require("ssh2");
+const { autoUpdater } = require("electron-updater");
 
 // Remotion needs HOME to create ~/.remotion cache.
 // os.userInfo().homedir reads /etc/passwd directly, bypassing the HOME env var.
@@ -436,7 +437,63 @@ app.whenReady().then(() => {
 
   // Pre-warm Chrome in the background so the first render doesn't trigger a download.
   warmRemotionBrowser();
+
+  // Check GitHub Releases for a newer version and offer to install it.
+  setupAutoUpdate();
 });
+
+// ── Auto-update (electron-updater → GitHub Releases) ─────────────────────────
+// On launch we check the repository's published releases. If a newer version
+// exists, we ASK the user before doing anything — nothing is ever downloaded or
+// installed silently. Skipped in dev (there's no packaged app / update metadata).
+let updateChecked = false;
+function setupAutoUpdate() {
+  if (isDev || updateChecked) return;
+  updateChecked = true;
+
+  autoUpdater.autoDownload = false;        // only after the user agrees
+  autoUpdater.autoInstallOnAppQuit = true; // if they defer, apply on next quit
+  // Beta phase: the running build is itself a prerelease, so accept prereleases.
+  autoUpdater.allowPrerelease = true;
+
+  autoUpdater.on("update-available", async (info) => {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      buttons: ["Instalar agora", "Agora não"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "Atualização disponível",
+      message: `Uma nova versão do Screenlet está disponível (${info.version}).`,
+      detail: "Deseja instalar agora? O download será feito e o app reiniciará para concluir a instalação.",
+    });
+    if (response === 0) {
+      autoUpdater.downloadUpdate().catch((err) => {
+        console.error("[updater] download failed:", err?.message || err);
+        dialog.showMessageBox(mainWindow, {
+          type: "error",
+          title: "Falha na atualização",
+          message: "Não foi possível baixar a atualização.",
+          detail: String(err?.message || err),
+        });
+      });
+    }
+  });
+
+  // The user already consented to install now, so apply as soon as it's ready.
+  autoUpdater.on("update-downloaded", () => {
+    isQuitting = true; // bypass minimize-to-tray so the app can actually relaunch
+    autoUpdater.quitAndInstall();
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("[updater] error:", err?.message || err);
+  });
+
+  // Network down, no releases yet, etc. — non-fatal, just log.
+  autoUpdater.checkForUpdates().catch((err) => {
+    console.error("[updater] check failed:", err?.message || err);
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

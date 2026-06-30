@@ -1,0 +1,45 @@
+name: Release
+
+# Publishes the desktop app to GitHub Releases on every version tag (including
+# prereleases like v1.0.0-beta.1). electron-builder uploads the installers plus
+# the update metadata (latest-mac.yml / latest.yml) that electron-updater reads,
+# so the in-app "Atualização disponível" check works against these releases.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            script: release:mac
+          - os: windows-latest
+            script: release:win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and publish
+        env:
+          # electron-builder reads GH_TOKEN to publish to this repo's releases.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No Apple/Windows signing certs in CI (beta): build unsigned rather
+          # than fail. macOS auto-update apply needs a signed build — see notes.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run ${{ matrix.script }}
