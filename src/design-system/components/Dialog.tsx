@@ -27,6 +27,8 @@ type Props = {
   size?: Size;
   children?: React.ReactNode;
   footer?: React.ReactNode;
+  /** Hide the top-right close (X). Use for modals that must be acknowledged. */
+  showCloseButton?: boolean;
 };
 
 export const Dialog: React.FC<Props> = ({
@@ -37,6 +39,7 @@ export const Dialog: React.FC<Props> = ({
   size = "default",
   children,
   footer,
+  showCloseButton = true,
 }) => (
   <ShadDialog
     open={open}
@@ -45,6 +48,7 @@ export const Dialog: React.FC<Props> = ({
     }}
   >
     <DialogContent
+      showCloseButton={showCloseButton}
       className={cn(SIZE_MAP[size], "max-h-[85vh] overflow-y-auto")}
     >
       <DialogHeader>

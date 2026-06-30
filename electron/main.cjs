@@ -1565,6 +1565,9 @@ const DEFAULT_APP_SETTINGS = {
   videoCodec: "h264",
   videoQuality: "medium", // "high" | "medium" | "low" — mapped to a CRF value at render time
   hardwareAcceleration: true,
+  // Flips to true once the user acknowledges the Terms of Service shown on the
+  // very first launch (see the first-run gate in the renderer).
+  termsAcknowledged: false,
 };
 
 // Lower CRF = higher quality / bigger file. Applied per codec since h265's
@@ -1633,6 +1636,22 @@ ipcMain.handle("app-settings-set-hardware-acceleration", (_event, value) => {
   appSettings.hardwareAcceleration = !!value;
   saveAppSettings(appSettings);
   return appSettings;
+});
+
+ipcMain.handle("app-settings-set-terms-acknowledged", (_event, value) => {
+  appSettings.termsAcknowledged = !!value;
+  saveAppSettings(appSettings);
+  return appSettings;
+});
+
+// Opens an external URL in the user's default browser. Restricted to http(s)
+// so the renderer can't ask the OS to open arbitrary file:// or custom schemes.
+ipcMain.handle("open-external", (_event, url) => {
+  if (typeof url === "string" && /^https?:\/\//i.test(url)) {
+    shell.openExternal(url);
+    return true;
+  }
+  return false;
 });
 
 // ── Machine info (Settings → Informações da máquina) ─────────────────────────

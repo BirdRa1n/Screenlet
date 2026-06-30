@@ -52,6 +52,10 @@ contextBridge.exposeInMainWorld("adFrame", {
   appSettingsSetVideoCodec: (value) => ipcRenderer.invoke("app-settings-set-video-codec", value),
   appSettingsSetVideoQuality: (value) => ipcRenderer.invoke("app-settings-set-video-quality", value),
   appSettingsSetHardwareAcceleration: (value) => ipcRenderer.invoke("app-settings-set-hardware-acceleration", value),
+  appSettingsSetTermsAcknowledged: (value) => ipcRenderer.invoke("app-settings-set-terms-acknowledged", value),
+
+  // Open an external URL (https only) in the system browser.
+  openExternal: (url) => ipcRenderer.invoke("open-external", url),
 
   // Machine info + full data export (Settings page)
   systemInfoGet: () => ipcRenderer.invoke("system-info-get"),

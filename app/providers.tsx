@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { FirstRunTerms } from "@/components/FirstRunTerms";
 import { useThemeStore } from "@/store/useThemeStore";
 
 /**
@@ -28,6 +29,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <TooltipProvider delayDuration={200}>
       {children}
+      <FirstRunTerms />
       <Toaster richColors position="bottom-right" />
     </TooltipProvider>
   );

@@ -9,6 +9,8 @@ export type AppSettings = {
   videoCodec: VideoCodec;
   videoQuality: VideoQuality;
   hardwareAcceleration: boolean;
+  // Set true once the user acknowledges the Terms of Service on first launch.
+  termsAcknowledged: boolean;
 };
 
 type AppSettingsStore = {
@@ -20,6 +22,7 @@ type AppSettingsStore = {
   setVideoCodec: (value: VideoCodec) => Promise<void>;
   setVideoQuality: (value: VideoQuality) => Promise<void>;
   setHardwareAcceleration: (value: boolean) => Promise<void>;
+  acknowledgeTerms: () => Promise<void>;
 };
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -28,6 +31,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   videoCodec: "h264",
   videoQuality: "medium",
   hardwareAcceleration: true,
+  termsAcknowledged: false,
 };
 
 export const useAppSettingsStore = create<AppSettingsStore>((set) => ({
@@ -61,6 +65,11 @@ export const useAppSettingsStore = create<AppSettingsStore>((set) => ({
 
   setHardwareAcceleration: async (value) => {
     const settings = await window.adFrame.appSettingsSetHardwareAcceleration(value);
+    set({ settings });
+  },
+
+  acknowledgeTerms: async () => {
+    const settings = await window.adFrame.appSettingsSetTermsAcknowledged(true);
     set({ settings });
   },
 }));

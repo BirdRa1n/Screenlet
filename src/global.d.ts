@@ -115,6 +115,12 @@ declare global {
       appSettingsSetHardwareAcceleration: (
         value: boolean,
       ) => Promise<import("./store/useAppSettingsStore").AppSettings>;
+      appSettingsSetTermsAcknowledged: (
+        value: boolean,
+      ) => Promise<import("./store/useAppSettingsStore").AppSettings>;
+
+      // Open an external URL (https only) in the system browser.
+      openExternal: (url: string) => Promise<boolean>;
 
       // Machine info + full data export (Settings page)
       systemInfoGet: () => Promise<SystemInfo>;
