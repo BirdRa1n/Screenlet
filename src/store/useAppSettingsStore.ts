@@ -11,6 +11,8 @@ export type AppSettings = {
   hardwareAcceleration: boolean;
   // Set true once the user acknowledges the Terms of Service on first launch.
   termsAcknowledged: boolean;
+  // Folder where backups are written; empty = default. Managed via the backup-* IPCs.
+  backupDir?: string;
 };
 
 type AppSettingsStore = {

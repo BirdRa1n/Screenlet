@@ -57,9 +57,20 @@ contextBridge.exposeInMainWorld("adFrame", {
   // Open an external URL (https only) in the system browser.
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
 
-  // Machine info + full data export (Settings page)
+  // Machine info (Settings page)
   systemInfoGet: () => ipcRenderer.invoke("system-info-get"),
-  dataExportAll: () => ipcRenderer.invoke("data-export-all"),
+
+  // Backup / restore (selective export & import)
+  backupCategories: () => ipcRenderer.invoke("backup-categories"),
+  backupGetDir: () => ipcRenderer.invoke("backup-get-dir"),
+  backupChooseDir: () => ipcRenderer.invoke("backup-choose-dir"),
+  backupOpenDir: () => ipcRenderer.invoke("backup-open-dir"),
+  backupList: () => ipcRenderer.invoke("backup-list"),
+  backupCreate: (categories) => ipcRenderer.invoke("backup-create", categories),
+  backupDelete: (filename) => ipcRenderer.invoke("backup-delete", filename),
+  backupReveal: (filename) => ipcRenderer.invoke("backup-reveal", filename),
+  backupPick: () => ipcRenderer.invoke("backup-pick"),
+  backupRestore: (payload) => ipcRenderer.invoke("backup-restore", payload),
 
   // Export / render
   exportVideo: (config, suggestedName, fps) =>

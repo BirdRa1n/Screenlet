@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Download, FolderOpen, FolderSearch, KeyRound, Monitor, Moon, Plug, Store, Sun } from "lucide-react";
+import { Check, FolderOpen, FolderSearch, KeyRound, Monitor, Moon, Plug, Store, Sun } from "lucide-react";
 import { Button, Checkbox, Dialog, SelectField, Field, TextField } from "../design-system/components";
 import { PageContainer, PageHeader } from "../layout/PageShell";
 import { cn } from "@/lib/utils";
 import { useThemeStore, type Theme } from "../store/useThemeStore";
 import { useAppSettingsStore, type VideoCodec, type VideoQuality } from "../store/useAppSettingsStore";
 import { useIntegrationsStore } from "../store/useIntegrationsStore";
+import { BackupSettings } from "../components/BackupSettings";
 import { toast } from "../store/useToastStore";
 import type { SystemInfo } from "../global";
 
@@ -55,7 +56,6 @@ export const Settings: React.FC = () => {
   const [appVersion, setAppVersion] = useState("");
   const [isWindows, setIsWindows] = useState(false);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
-  const [exporting, setExporting] = useState(false);
   const {
     settings: appSettings,
     refresh: refreshAppSettings,
@@ -75,20 +75,6 @@ export const Settings: React.FC = () => {
     window.adFrame.systemInfoGet().then(setSystemInfo);
     refreshAppSettings();
   }, [refreshAppSettings]);
-
-  const handleExportAllData = async () => {
-    setExporting(true);
-    try {
-      const result = await window.adFrame.dataExportAll();
-      if (result.ok) {
-        toast.success(`Backup salvo em ${result.filePath}`);
-      } else if (!result.canceled) {
-        toast.error("Erro ao exportar dados.");
-      }
-    } finally {
-      setExporting(false);
-    }
-  };
 
   const handleChooseDir = async () => {
     const chosen = await window.adFrame.storageChooseDir();
@@ -229,20 +215,7 @@ export const Settings: React.FC = () => {
         </div>
       </Section>
 
-      <Section
-        title="Dados"
-        description="Gera um arquivo .zip com projetos, assets, biblioteca de produtos, templates, canais e configurações — útil para backup ou migração para outro computador."
-      >
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<Download size={13} />}
-          onClick={handleExportAllData}
-          disabled={exporting}
-        >
-          {exporting ? "Exportando…" : "Exportar todos os dados (.zip)"}
-        </Button>
-      </Section>
+      <BackupSettings />
 
       <IntegrationsSection />
 

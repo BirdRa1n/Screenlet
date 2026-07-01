@@ -153,10 +153,12 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 960,
-    // Launched at Windows login (see app-settings-set-launch-at-login) — stay
-    // hidden until the tray's "Abrir Screenlet" is clicked, instead of
-    // popping the window open on every boot of an unattended kiosk.
-    show: !startedHidden,
+    // Start hidden and reveal on 'ready-to-show' (below) once the first frame
+    // is painted — otherwise Electron shows a white window for a beat before
+    // the dark UI loads (the "flash of light mode" on launch). backgroundColor
+    // matches the resolved theme so even that first frame isn't white.
+    show: false,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#0a0b0e" : "#f7f8fa",
     // macOS: custom inset title bar with traffic lights over the sidebar header.
     // Windows/Linux: hidden title bar with a native overlay that keeps ─ □ ✕ controls.
     ...(isMac
@@ -180,6 +182,16 @@ function createWindow() {
     // Load via app:// so staticFile('/uploads/x') resolves correctly inside Remotion Player
     mainWindow.loadURL("app://index.html");
   }
+
+  // Reveal only once the renderer has painted its first (already dark) frame,
+  // unless we were launched hidden into the tray. Guard with a timeout so a
+  // missed 'ready-to-show' can never leave the window invisible forever.
+  mainWindow.once("ready-to-show", () => {
+    if (!startedHidden) mainWindow.show();
+  });
+  setTimeout(() => {
+    if (!startedHidden && mainWindow && !mainWindow.isVisible()) mainWindow.show();
+  }, 4000);
 
   // Keep everything in a single window. The renderer is an SPA — it should never
   // spawn a second window. Deny all popups: internal app:// targets navigate the
@@ -1625,6 +1637,8 @@ const DEFAULT_APP_SETTINGS = {
   // Flips to true once the user acknowledges the Terms of Service shown on the
   // very first launch (see the first-run gate in the renderer).
   termsAcknowledged: false,
+  // Folder where backups are written; empty = default (Documents/Screenlet/backups).
+  backupDir: "",
 };
 
 // Lower CRF = higher quality / bigger file. Applied per codec since h265's
@@ -1736,44 +1750,262 @@ ipcMain.handle("system-info-get", () => {
 // Zips every user-data directory plus the app/IPTV/device config files into
 // a single archive the user picks a destination for. Excludes rendered
 // exports (large, regenerable) and the Remotion render bundle/cache.
-ipcMain.handle("data-export-all", async () => {
-  const result = await dialog.showSaveDialog(mainWindow, {
-    title: "Exportar todos os dados",
-    defaultPath: `screenlet-backup-${new Date().toISOString().slice(0, 10)}.zip`,
-    filters: [{ name: "Arquivo ZIP", extensions: ["zip"] }],
+// ── Backup / restore (selective export & import) ─────────────────────────────
+//
+// A backup is a .zip holding a manifest.json plus the selected data
+// categories. The same category→sources map drives both export and the
+// selective restore, so the two never drift.
+
+const DEFAULT_BACKUP_DIR = path.join(SCREENLET_DIR, "backups");
+
+// The configured backup directory (created on access), falling back to the
+// default when unset or unusable — a stale path from a restored settings file
+// must not brick the feature.
+function getBackupDir() {
+  let dir = appSettings.backupDir;
+  if (!dir || typeof dir !== "string") dir = DEFAULT_BACKUP_DIR;
+  try { ensureDir(dir); } catch { dir = DEFAULT_BACKUP_DIR; ensureDir(dir); }
+  return dir;
+}
+
+// category → { label, items }. Each item is a dir or single file plus where it
+// lives on disk, so restore puts it back under the right base (Documents vs
+// userData). Order here is the display order in the UI.
+function backupCategories() {
+  const ud = app.getPath("userData");
+  const D = (name) => ({ kind: "dir", src: path.join(SCREENLET_DIR, name), zip: name, dest: path.join(SCREENLET_DIR, name) });
+  const Fud = (name) => ({ kind: "file", src: path.join(ud, name), zip: `_config/${name}`, dest: path.join(ud, name) });
+  const Fsc = (name) => ({ kind: "file", src: path.join(SCREENLET_DIR, name), zip: `_config/${name}`, dest: path.join(SCREENLET_DIR, name) });
+  return {
+    projects:  { label: "Projetos", items: [D("projects"), D("project-thumbs")] },
+    media:     { label: "Mídia (imagens)", items: [D("assets")] },
+    videos:    { label: "Vídeos renderizados", items: [D("exports")] },
+    templates: { label: "Templates", items: [D("templates")] },
+    library:   { label: "Biblioteca de produtos", items: [D("library")] },
+    channels:  { label: "Canais e programação", items: [D("channels"), D("schedules")] },
+    devices:   { label: "Dispositivos (credenciais)", items: [Fud("devices.json"), Fsc("player-devices.json")] },
+    settings:  { label: "Configurações e integrações", items: [Fud("app-settings.json"), Fud("iptv-config.json"), Fud("integrations.json")] },
+  };
+}
+
+ipcMain.handle("backup-categories", () => {
+  const cats = backupCategories();
+  return Object.keys(cats).map((key) => ({ key, label: cats[key].label }));
+});
+
+ipcMain.handle("backup-get-dir", () => getBackupDir());
+
+ipcMain.handle("backup-choose-dir", async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: "Escolher pasta de backups",
+    defaultPath: getBackupDir(),
+    properties: ["openDirectory", "createDirectory"],
+    buttonLabel: "Selecionar",
   });
-  if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+  if (result.canceled || !result.filePaths.length) return getBackupDir();
+  appSettings.backupDir = result.filePaths[0];
+  saveAppSettings(appSettings);
+  return getBackupDir();
+});
+
+ipcMain.handle("backup-open-dir", () => { shell.openPath(getBackupDir()); });
+
+// Streams just the manifest.json out of a backup zip (safe for multi-GB files).
+function readBackupManifest(zipPath) {
+  return new Promise((resolve) => {
+    const yauzl = require("yauzl");
+    yauzl.open(zipPath, { lazyEntries: true }, (err, zip) => {
+      if (err) return resolve(null);
+      zip.on("entry", (entry) => {
+        if (entry.fileName !== "manifest.json") { zip.readEntry(); return; }
+        zip.openReadStream(entry, (e, rs) => {
+          if (e) { zip.close(); return resolve(null); }
+          let data = "";
+          rs.on("data", (c) => { data += c; });
+          rs.on("end", () => { zip.close(); try { resolve(JSON.parse(data)); } catch { resolve(null); } });
+          rs.on("error", () => { zip.close(); resolve(null); });
+        });
+      });
+      zip.on("end", () => resolve(null));
+      zip.on("error", () => resolve(null));
+      zip.readEntry();
+    });
+  });
+}
+
+ipcMain.handle("backup-list", async () => {
+  const dir = getBackupDir();
+  let files = [];
+  try { files = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".zip")); } catch { return []; }
+  const out = [];
+  for (const filename of files) {
+    const full = path.join(dir, filename);
+    let stat;
+    try { stat = fs.statSync(full); } catch { continue; }
+    const manifest = await readBackupManifest(full);
+    out.push({
+      filename,
+      path: full,
+      size: stat.size,
+      createdAt: manifest?.createdAt || stat.mtime.toISOString(),
+      categories: manifest?.categories || null,
+    });
+  }
+  out.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  return out;
+});
+
+ipcMain.handle("backup-create", async (_event, categories) => {
+  const cats = backupCategories();
+  const selected = (Array.isArray(categories) ? categories : []).filter((k) => cats[k]);
+  if (selected.length === 0) return { ok: false, error: "Nenhuma categoria selecionada." };
+
+  const dir = getBackupDir();
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const filename = `screenlet-backup-${stamp}.zip`;
+  const filePath = path.join(dir, filename);
 
   const archiver = require("archiver");
-  const output = fs.createWriteStream(result.filePath);
+  const output = fs.createWriteStream(filePath);
   const archive = archiver("zip", { zlib: { level: 9 } });
-
   const done = new Promise((resolve, reject) => {
     output.on("close", resolve);
+    output.on("error", reject);
     archive.on("error", reject);
+    archive.on("warning", (w) => { if (w.code !== "ENOENT") console.warn("[backup]", w.message); });
   });
   archive.pipe(output);
 
-  const DATA_DIRS = ["assets", "projects", "templates", "library", "channels", "schedules", "project-thumbs"];
-  for (const dir of DATA_DIRS) {
-    const full = path.join(SCREENLET_DIR, dir);
-    if (fs.existsSync(full)) archive.directory(full, dir);
+  archive.append(JSON.stringify({
+    formatVersion: 1,
+    createdAt: new Date().toISOString(),
+    appVersion: app.getVersion(),
+    categories: selected,
+  }, null, 2), { name: "manifest.json" });
+
+  for (const key of selected) {
+    for (const item of cats[key].items) {
+      if (!fs.existsSync(item.src)) continue;
+      if (item.kind === "dir") archive.directory(item.src, item.zip);
+      else archive.file(item.src, { name: item.zip });
+    }
   }
 
-  const CONFIG_FILES = [
-    APP_SETTINGS_FILE,
-    IPTV_CONFIG_FILE,
-    DEVICES_FILE,
-    PLAYER_DEVICES_FILE,
-    path.join(app.getPath("userData"), "storage-config.json"),
-  ];
-  for (const file of CONFIG_FILES) {
-    if (fs.existsSync(file)) archive.file(file, { name: `config/${path.basename(file)}` });
+  try {
+    await archive.finalize();
+    await done;
+  } catch (err) {
+    try { fs.rmSync(filePath, { force: true }); } catch {}
+    return { ok: false, error: String(err?.message || err) };
+  }
+  return { ok: true, filename };
+});
+
+ipcMain.handle("backup-delete", (_event, filename) => {
+  const full = path.join(getBackupDir(), path.basename(String(filename || "")));
+  if (fs.existsSync(full)) fs.rmSync(full, { force: true });
+});
+
+ipcMain.handle("backup-reveal", (_event, filename) => {
+  shell.showItemInFolder(path.join(getBackupDir(), path.basename(String(filename || ""))));
+});
+
+// Lets the user pick a backup zip from anywhere; returns its manifest so the
+// renderer can offer only the categories it actually contains.
+ipcMain.handle("backup-pick", async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: "Selecionar backup para importar",
+    properties: ["openFile"],
+    filters: [{ name: "Backup do Screenlet", extensions: ["zip"] }],
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  const filePath = result.filePaths[0];
+  const manifest = await readBackupManifest(filePath);
+  if (!manifest) return { ok: false, error: "Arquivo de backup inválido ou sem manifesto." };
+  return { ok: true, path: filePath, filename: path.basename(filePath), categories: manifest.categories || [] };
+});
+
+// Extracts only the entries of the selected categories into destDir, streaming
+// (memory-safe) and rejecting any entry that would escape destDir.
+function extractCategories(zipPath, prefixes, destDir) {
+  return new Promise((resolve, reject) => {
+    const yauzl = require("yauzl");
+    yauzl.open(zipPath, { lazyEntries: true }, (err, zip) => {
+      if (err) return reject(err);
+      zip.on("entry", (entry) => {
+        const name = entry.fileName;
+        const wanted = prefixes.some((p) => name === p || name.startsWith(p + "/"));
+        if (name.endsWith("/") || !wanted) { zip.readEntry(); return; }
+        const dest = path.join(destDir, name);
+        const rel = path.relative(destDir, dest);
+        if (rel.startsWith("..") || path.isAbsolute(rel)) { zip.readEntry(); return; }
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        zip.openReadStream(entry, (e, rs) => {
+          if (e) return reject(e);
+          const ws = fs.createWriteStream(dest);
+          rs.on("error", reject);
+          ws.on("error", reject);
+          ws.on("close", () => zip.readEntry());
+          rs.pipe(ws);
+        });
+      });
+      zip.on("end", resolve);
+      zip.on("error", reject);
+      zip.readEntry();
+    });
+  });
+}
+
+function copyRecursive(src, dest) {
+  const stat = fs.statSync(src);
+  if (stat.isDirectory()) {
+    ensureDir(dest);
+    for (const name of fs.readdirSync(src)) copyRecursive(path.join(src, name), path.join(dest, name));
+  } else {
+    ensureDir(path.dirname(dest));
+    fs.copyFileSync(src, dest);
+  }
+}
+
+// Restores the selected categories from a backup zip, then relaunches so every
+// store re-reads the restored data from disk.
+ipcMain.handle("backup-restore", async (_event, payload) => {
+  const { path: zipPath, categories } = payload || {};
+  const cats = backupCategories();
+  const selected = (Array.isArray(categories) ? categories : []).filter((k) => cats[k]);
+  if (!zipPath || !fs.existsSync(zipPath)) return { ok: false, error: "Backup não encontrado." };
+  if (selected.length === 0) return { ok: false, error: "Nenhuma categoria selecionada." };
+
+  const prefixes = [];
+  for (const key of selected) for (const item of cats[key].items) prefixes.push(item.zip);
+
+  const tmpDir = path.join(app.getPath("temp"), `screenlet-restore-${Date.now()}`);
+  ensureDir(tmpDir);
+  try {
+    await extractCategories(zipPath, prefixes, tmpDir);
+    for (const key of selected) {
+      for (const item of cats[key].items) {
+        const extracted = path.join(tmpDir, item.zip);
+        if (!fs.existsSync(extracted)) continue;
+        if (item.kind === "dir") {
+          // Replace the target dir wholesale so files removed since the backup
+          // don't linger after a restore.
+          try { fs.rmSync(item.dest, { recursive: true, force: true }); } catch {}
+          copyRecursive(extracted, item.dest);
+        } else {
+          ensureDir(path.dirname(item.dest));
+          fs.copyFileSync(extracted, item.dest);
+        }
+      }
+    }
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  } finally {
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
   }
 
-  archive.finalize();
-  await done;
-  return { ok: true, filePath: result.filePath };
+  setTimeout(() => { app.relaunch(); app.exit(0); }, 400);
+  return { ok: true };
 });
 
 // ── IPTV config (selected IP preference) ─────────────────────────────────────

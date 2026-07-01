@@ -31,6 +31,16 @@ export type SystemInfo = {
   screenletDir: string;
 };
 
+export type BackupCategory = { key: string; label: string };
+
+export type BackupEntry = {
+  filename: string;
+  path: string;
+  size: number;
+  createdAt: string;
+  categories: string[] | null;
+};
+
 export type ProjectMeta = {
   id: string;
   name: string;
@@ -122,9 +132,24 @@ declare global {
       // Open an external URL (https only) in the system browser.
       openExternal: (url: string) => Promise<boolean>;
 
-      // Machine info + full data export (Settings page)
+      // Machine info (Settings page)
       systemInfoGet: () => Promise<SystemInfo>;
-      dataExportAll: () => Promise<{ ok: true; filePath: string } | { ok: false; canceled?: boolean }>;
+
+      // Backup / restore (selective export & import)
+      backupCategories: () => Promise<BackupCategory[]>;
+      backupGetDir: () => Promise<string>;
+      backupChooseDir: () => Promise<string>;
+      backupOpenDir: () => Promise<void>;
+      backupList: () => Promise<BackupEntry[]>;
+      backupCreate: (categories: string[]) => Promise<{ ok: true; filename: string } | { ok: false; error: string }>;
+      backupDelete: (filename: string) => Promise<void>;
+      backupReveal: (filename: string) => Promise<void>;
+      backupPick: () => Promise<
+        | { ok: true; path: string; filename: string; categories: string[] }
+        | { ok: false; error: string }
+        | null
+      >;
+      backupRestore: (payload: { path: string; categories: string[] }) => Promise<{ ok: boolean; error?: string }>;
 
       // Kodi Devices — passwords never returned to renderer; only boolean flags.
       deviceList: () => Promise<import("./types/device").KodiDevice[]>;
