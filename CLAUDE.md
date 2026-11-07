@@ -1,266 +1,89 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guia para o Claude Code (claude.ai/code) trabalhar neste repositório.
 
-## Commands
+## Comandos
 
 ```bash
-# Dev: Electron app (recommended — starts Next dev then Electron)
-npm run electron:dev
+export PATH="$HOME/Qt/Tools/CMake/CMake.app/Contents/bin:$HOME/Qt/Tools/Ninja:$PATH"
 
-# Dev: Next only (browser at localhost:3000, without Electron APIs)
-npm run dev
+# Configurar + compilar (Debug)
+cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$HOME/Qt/6.12.0/macos
+cmake --build build/debug
+open build/debug/Screenlet.app
 
-# Type check only
-npx tsc --noEmit
+# Testes (ZIP AES-256 do backup)
+ctest --test-dir build/debug --output-on-failure
 
-# Lint
-npm run lint
-
-# Production build (next static export + remotion pre-bundle)
-npm run build
-
-# Package macOS installers (both arm64 and x64 DMGs)
-npm run dist:mac
-
-# Package macOS — Apple Silicon only
-npm run dist:mac:arm64
-
-# Package macOS — Intel only
-npm run dist:mac:intel
-
-# Package Windows installer
-npm run dist:win
-
-# Package Linux
-npm run dist:linux
+# .dmg universal (arm64 + x86_64), assinado com o certificado da máquina
+scripts/package-mac.sh            # → build/dist/Screenlet-<versão>-universal.dmg
 ```
 
-## Architecture
+O Qt fica em `~/Qt/6.12.0/macos`. O CMake e o Ninja estão em `~/Qt/Tools`. O Xcode completo (27) está em `/Applications/Xcode.app`, mas o `xcode-select` aponta para as Command Line Tools; o CMake encontra o `actool` sozinho. Commits e PRs são em **pt-BR**, sem coautoria.
 
-Screenlet is an Electron desktop app for digital signage — creating, rendering and broadcasting MP4 video ads (TV, Instagram, Stories, TikTok) via a built-in IPTV server. It combines a **Next.js (App Router) + React + Tailwind v4 + shadcn/ui** front end with Remotion for video rendering and export.
+## Arquitetura
 
-### UI stack (Next.js + shadcn)
-- **Next.js App Router** under `app/`, built as a **static export** (`output: "export"`, `distDir: "out"`, `trailingSlash: true` in `next.config.mjs`). There is no runtime Node server — the renderer is a fully client-side app inside the Next shell. Electron loads it from `http://localhost:3000` (dev) or via the `app://` protocol serving `out/` (prod).
-- **Routing** is real App Router routes (see Routing below) — there is no `useNavigationStore` anymore. Pages live in `src/views/*` (renamed from `src/views/` so Next doesn't treat them as a Pages Router) and are mounted by thin route files in `app/(app)/**/page.tsx`.
-- **Styling** is Tailwind v4 utility classes + shadcn/ui components. The single global stylesheet is `app/globals.css` (brand tokens mapped to shadcn CSS variables). **There are no per-component `.css` files and no `src/styles/` directory.**
-- **shadcn primitives** live in `src/components/ui/*` (added via `npx shadcn@latest add`), base `radix`, style `new-york`, alias `@/* → src/*` (see `components.json`). `cn()` helper is in `src/lib/utils.ts`.
-- **`@remotion/player`** must never render during the static-export prerender. Use the mount-gated `RemotionPlayer` wrapper (`src/components/RemotionPlayer.tsx`) for previews, or the raw `<Player>` behind a mount flag when a `PlayerRef` is needed (see `PreviewPanel`, `TemplateBuilder`).
+O Screenlet é um app desktop de sinalização digital: cria anúncios em vídeo, renderiza em MP4 e transmite por IPTV, Kodi ou Screenlet Player. É feito em **Qt 6.12, C++20 + QML**, com CMake (`qt_add_qml_module`, URI `Screenlet`).
 
-### Process model
-- **`electron/main.cjs`** — Electron main process (CommonJS). Registers `app://` protocol (serves `out/` and user uploads). A dev-only static server (`startDevAssetServer`, port **7096**) serves `/uploads`, `/exports`, `/project-thumbs` so the Next dev server (:3000) can proxy them via `rewrites()` in `next.config.mjs`. All user data lives under `~/Documents/Screenlet/` (or a user-configured path). Runs Remotion `renderMedia()`/`renderStill()` for MP4 export and project-thumbnail generation with adaptive concurrency. Runs an HTTP IPTV server on port 7095 (M3U/EPG + `/channel/{id}` live streams; `/api/player/{sync,heartbeat}` for Screenlet Player devices, where `/api/player/sync` returns the offline **manifest** — ordered items with download URL, size, `sha256` hash, `version` — and a Range-capable `/exports/<file>` route the player downloads/caches from). Manages a `Tray` icon + login-item (autostart) settings on Windows.
-- **`electron/preload.cjs`** — Exposes `window.adFrame` via `contextBridge`. Key groups: file utils (`selectImage`, `copyFile`, `selectVideo`), projects CRUD, templates CRUD, library CRUD, integrations (`integrationsGet`/`integrationsSetStockEasy`/`stockeasyLookup`), channels CRUD, Kodi devices CRUD + `kodiPing`/`kodiRestartAndOpen`/`kodiListChannels`/`kodiFetchConfig`, Screenlet Player devices (`playerDeviceList`/`playerDeviceScan`/`playerDeviceClaim`/`playerDeviceUnpair`/`playerDeviceDelete`), exports list/delete/reveal, IPTV start/stop/setIp, app settings (`appSettingsGet`/`appSettingsSetLaunchAtLogin`/`appSettingsSetAutoStartIptv`), `exportVideo`, `onExportProgress`, storage management (`storageGetDir`, `storageChooseDir`, `storageMigrate`, `storageOpenDir`), platform info (`platform: NodeJS.Platform`, `appGetVersion`, `setTitleBarTheme(isDark)`). See `src/global.d.ts` for the full typed surface.
-- **`app/layout.tsx`** — root layout (server). **`app/providers.tsx`** (`"use client"`) is the renderer bootstrap (ported from the old `src/main.tsx`): sets `document.documentElement.dataset.platform` from `window.adFrame.platform`, sets `--win-controls-w: 152px` on Windows, mounts `TooltipProvider` + sonner `<Toaster>`, and calls `useThemeStore.initTheme()` (theme is applied in an effect, never at module scope, so it doesn't run during prerender).
-- **`src/`** — React renderer code (ESM). `app/` is the Next entry; `src/views`, `src/layout`, `src/components`, `src/store`, `src/remotion`, etc. hold the implementation.
-
-### Storage architecture
-All user data is stored under `~/Documents/Screenlet/` by default (survives reinstalls, syncs via iCloud/OneDrive):
+Ele substituiu a versão Electron + Next.js + Remotion, que não existe mais na `main`. Os docs `docs/01`–`06` descrevem essa versão antiga e valem como especificação. O `docs/07-versao-qt.md` descreve o estado atual.
 
 ```
-~/Documents/Screenlet/
-  assets/     ← uploaded images and videos (UPLOADS_DIR)
-  projects/   ← project JSON files
-  templates/  ← user template JSON files
-  library/    ← product library JSON
-  channels/   ← channel JSON files
-  exports/    ← rendered MP4 videos (EXPORTS_DIR)
+src/main.cpp        instância única, bandeja, QQmlApplicationEngine, plugin estático de imagens
+src/core/           AppContext (cria os serviços), Paths, JsonIo (gravação atômica),
+                    SecretStore (Keychain/DPAPI), SecureZip (ZIP WinZip AE-2), Async
+src/services/       Settings, Storage, Projects, Templates, Library, Media, Exports, Channels,
+                    StoreProfiles, Backup, SystemInfo, Updater
+src/net/            HttpServer (QTcpServer), Iptv (porta 7095), Kodi (SSH + JSON-RPC), Players, StockEasy
+src/render/         Renderer (exportação MP4/miniaturas), AudioMix (áudio AAC)
+src/imageio/        plugin QImageIO via ImageIO do macOS (WebP/AVIF/HEIC)
+qml/Main.qml        janela, sidebar, StackView de páginas, ganchos de teste
+qml/singletons/     Theme, Motion, Nav, Doc (anúncio aberto), Insights, RenderQueue, Toasts, Fmt
+qml/components/     design system (Btn, Card, Segmented, Inspector, MediaPicker, QueueDock…)
+qml/scene/          motor de cenas: AdStage, ProductScene, LogoScene, TemplateScene, LayerItem,
+                    VideoScene, SceneMath.js
+qml/pages/          Painel, Anuncios, Editor, Wizard, Templates*, Produtos, Midia, Videos,
+                    Canais, Studio, Telas, IptvPage, Configuracoes
+resources/          templates embutidos (JSON), imagens de exemplo, AppIcon.icon, Info.plist.in
 ```
 
-The location can be changed by the user in Settings → Armazenamento. The custom path is persisted in `userData/storage-config.json`. On change, the app relaunches so all module-level `*_DIR` constants pick up the new path.
+### Pontos centrais
+- **Os serviços C++ são singletons QML com uma única instância.** O `AppContext` cria todos. A macro `SL_SINGLETON(T)` fornece `instance()` e `create()`. **Os construtores precisam exigir `parent`**: se existir um construtor padrão, o Qt o prefere ao `create()` e o QML passa a ter uma segunda cópia do serviço.
+- **I/O pesado roda fora da thread da interface** com `Async::run(this, cb, work)`, e o callback volta para a thread da GUI. No QML, o padrão é `Servico.metodo(args, function (r) { … })`.
+- **Prévia e exportação usam o mesmo `qml/scene/AdStage.qml`.** O `Renderer` instancia essa cena fora da tela (QQuickRenderControl + leitura de textura QRhi), envia os quadros para `QVideoFrameInput` e o áudio para `QAudioBufferInput`, e grava com `QMediaRecorder` (FFmpeg, H.264/H.265). Para mudar o visual, mude a cena e os dois caminhos acompanham.
+- **`SceneMath.js` porta o `spring`/`interpolate` do Remotion.** Com ζ ≥ 1, use a fórmula de amortecimento crítico; a superamortecida causava saltos na animação.
+- **Recursos QML ficam em `:/qt/qml/Screenlet/...`.** Não use `NO_RESOURCE_TARGET_PATH`, porque o app empacotado quebra.
 
-In dev, asset paths (`/uploads`, `/exports`, `/project-thumbs`) are proxied by `next.config.mjs` `rewrites()` to the Electron dev static server on port 7096 so the Remotion Player renders assets correctly. In prod the `app://` protocol serves them. The `rewrites()` only run under `next dev` (they return `[]` in the export build).
+### Dados
+- Os dados ficam em `~/Documents/Screenlet/` (ou na pasta escolhida em Configurações). As subpastas são `assets/`, `projects/`, `templates/`, `library/`, `channels/`, `exports/` e `project-thumbs/`. A configuração local da máquina fica em `Paths::userData()`.
+- **O JSON é compatível com a versão Electron.** Campos novos devem ser opcionais (ex.: `exports[]` nos projetos, com `filename`, `format`, `fps` e `at`).
+- **Caminhos de mídia ficam sem barra inicial e são relativos** (`"uploads/x.png"`, `"exports/x.mp4"`). Eles são resolvidos por `Paths::resolveMedia`.
+- **Segredos nunca ficam no JSON nem chegam ao QML.** O JSON guarda uma referência `kc:<uuid>` para o Keychain (serviço `com.screenlet.app.secrets`) ou para o DPAPI. O QML só recebe flags booleanas.
+- **Backup:** as categorias com credenciais (`devices`, `settings`) exigem senha de 8+ caracteres. Nesse caso o backup sai em ZIP AES-256 com `_secrets/secrets.json`, e o `manifest.json` fica legível sem senha.
+- **Sobrescrever um vídeo em `exports/` sincroniza os canais.** `resyncChannelsUsing` atualiza os canais que tocam aquele arquivo e reinicia os Kodis. O `RenderQueue` usa isso para re-renderizar os anúncios desatualizados.
 
-### Routing
-Real App Router routes under `app/(app)/`. Map:
-```
-/                       → Dashboard      (app/(app)/page.tsx → src/views/Dashboard)
-/projects /library /media-hub /renders /channels /devices /iptv /settings /wizard /editor
-/templates              → Templates
-/templates/wizard       → TemplateWizard (fills a template instance; reads useTemplateInstanceStore)
-/templates/builder      → TemplateBuilder; edit target via ?id= query (useSearchParams) — a
-                          query param, NOT a path param, because static export + client-side nav
-                          can't resolve un-prerendered dynamic paths.
-```
-Navigate with `useRouter().push(...)` / `<Link>` / `usePathname()` (active state in `src/layout/Sidebar.tsx`). The **Studio** is not a route — it's a fullscreen overlay (`fixed inset-0 z-50`) rendered by `/channels` when a channel is opened. The editor's export flow (FPS dialog + progress) lives in the `Editor` view (`src/views/Editor.tsx`), ported from the old `App.tsx`.
+### macOS
+- **Todo build é assinado após o link** com um certificado "Developer ID" ou "Apple Development", detectado automaticamente (`-DSCREENLET_SIGN_IDENTITY=` muda a identidade; `-` usa ad-hoc). Sem isso, o macOS pede acesso à pasta Documentos e ao Keychain a cada build.
+- **O ícone é o documento do Icon Composer `resources/AppIcon.icon`.** O `actool` o compila em `Assets.car` + `AppIcon.icns`. `icon.icns`, `icon.png` e `icon.ico` são versões pré-renderizadas com o `ictool` (para builds sem Xcode e para o Windows).
+- A versão mínima é o macOS 14.4 (`CMAKE_OSX_DEPLOYMENT_TARGET`). O `package-mac.sh` grava um `qt.conf` com caminhos relativos ao pacote.
 
-### Media Hub (`src/views/MediaHub.tsx`)
-Catalogs all uploaded assets (images + videos) in `UPLOADS_DIR`. The catalog is persisted at `UPLOADS_DIR/media-catalog.json`. Key behaviors:
-- **Auto-discovery**: `media-catalog` IPC scans `UPLOADS_DIR` on every call and adds un-cataloged files automatically — existing uploads from before Media Hub exist appear without any migration.
-- **SHA-256 dedup**: `media-import` computes a SHA-256 hash before copying; if the same file was already imported it returns the existing asset without duplicating.
-- **Non-destructive delete**: removing an asset from the catalog only removes the catalog entry; the physical file is preserved so existing `image: "uploads/xxx"` references in projects still work.
-- **`MediaPicker` component** (`src/components/media/MediaPicker.tsx`): shared picker used in `InspectorPanel` (ProductInspector image field). Opens a dialog showing the catalog grid + "Import file" button. Replaces `UploadZone` for choosing product images.
-- **Video thumbnails**: `VideoThumbnail` component in `MediaHub.tsx` captures a frame via a detached `<video>` + `<canvas>` + `toDataURL()` (no IPC/disk write — generated client-side on render).
+## Armadilhas de QML
+- **Não use `layer` como nome de propriedade ou id**, porque conflita com `Item.layer` (use `lyr`/`selLayer`). Não chame componentes de `Page`; o nosso é `ScrollPage`.
+- **Propriedades QML não podem começar com letra maiúscula.**
+- **Não coloque `;` depois de uma vinculação de objeto inline.** Tenha uma única `Component.onCompleted` por objeto.
+- Cartões com cantos arredondados que recortam conteúdo usam `Card { roundClip: true }` (máscara via MultiEffect).
 
-### Devices (`src/views/Devices.tsx`)
-Two unrelated device-management sections share this one page:
-- **Kodi devices** (`useDeviceStore`, `src/types/device.ts`) — SSH-managed Kodi/LibreELEC boxes. `device-save`/`device-list`/`device-delete` persist `KodiDevice` JSON (passwords encrypted at rest, never sent back to the renderer — only boolean flags). `kodi-ping` checks reachability, `kodi-restart-and-open` restarts Kodi and opens the IPTV M3U, `kodi-list-channels` previews channels from temporary form creds before saving, `kodi-fetch-config` reads `guisettings.xml` over SSH to auto-fill the HTTP API port/credentials fields.
-- **Screenlet Player devices** (`usePlayerDeviceStore`, `src/types/playerDevice.ts`) — sibling Go project (`screenlet-player`, lightweight Linux mpv-based signage player). `player-device-scan` sweeps the local network for unclaimed/unpaired players; `player-device-claim` pairs one to a channel (may reject if unreachable or already claimed by another Studio instance); `player-device-unpair`/`player-device-delete` release/remove it. Claimed players poll the Studio for their assigned channel's programming.
+## Testes e automação
+Use estas variáveis de ambiente, sempre com pastas isoladas, para não tocar nos dados reais:
 
-### State (Zustand stores)
-- **`useAdStore`** — Full ad config + selected scene ID + `seekFrame` + `currentProjectName`. Key actions: `addProductScene`, `addLogoScene`, `addTemplateScene`, `addVideoScene`, `updateScene`, `reorderScenes`, `seekToScene`, `loadConfig`, `setCurrentProjectName`.
-- **`useTemplateStore`** — Template CRUD. Merges built-in templates from `src/templates/` with user templates from `SCREENLET_DIR/templates/`.
-- **`useTemplateInstanceStore`** — Active template + filled values during TemplateWizard flow.
-- **`useWizardStore`** — Multi-step wizard state (store info, products, preset, export format).
-- **`useThemeStore`** — `"dark" | "light" | "system"`; `initTheme()` (called once from `app/providers.tsx`) applies the persisted theme by toggling `.dark` on `<html>`. (Navigation is no longer a store — it uses Next App Router.)
-- **`useThemeStore`** — `"dark" | "light" | "system"`. System mode listens to `prefers-color-scheme` in real time. `applyTheme()` also calls `window.adFrame.setTitleBarTheme(isDark)` to sync the Windows titlebar overlay color.
-- **`useLibraryStore`** — Product library CRUD, synced with IPC.
-- **`useMediaStore`** — Media catalog CRUD. `refresh()` calls `media-catalog` IPC which scans `UPLOADS_DIR` for new files and returns `MediaAsset[]`. `importAsset(type)` opens a file dialog with SHA-256 dedup and adds to catalog. `removeAsset(id)` removes from catalog only (does NOT delete the physical file to preserve compatibility).
-- **`useProjectsStore`** — Projects CRUD, synced with IPC.
-- **`useChannelStore`** — Channels CRUD, synced with IPC.
-- **`useIptvStore`** — IPTV server status (`running`, `port`, `ips[]`, `selectedIp`, `ffmpegAvailable`). `setIp(ip)` persists the preferred network interface to `userData/iptv-config.json`. `getLocalIPs()` in main sorts IPs: `192.168.x.x` → `10.x.x.x` → `172.16-31.x.x` → VPN/Tailscale last.
-- **`useToastStore`** — Toast notifications.
-- **`useRendersStore`** — Exported MP4 list (`{ videos, loading, refresh(), remove(filename), reveal(filename) }`), backed by `exportsList`/`exportsDelete`/`exportsReveal`. Replaces ad-hoc local state previously kept inside `Renders.tsx`.
-- **`useAppSettingsStore`** — Windows-only app settings: `launchAtLogin` (autostart, default off) and `autoStartIptv` (start the IPTV server on launch, default on). Synced with `appSettingsGet`/`appSettingsSetLaunchAtLogin`/`appSettingsSetAutoStartIptv`, persisted to `userData/app-settings.json`.
-- **`useDeviceStore`** — Kodi device CRUD, synced with `device-list`/`device-save`/`device-delete` IPC.
-- **`usePlayerDeviceStore`** — Screenlet Player device CRUD + pairing (`playerDeviceList`/`playerDeviceScan`/`playerDeviceClaim`/`playerDeviceUnpair`/`playerDeviceDelete`).
-- **`useIntegrationsStore`** — External PDV/ERP integrations (StockEasy). `setStockEasy({ enabled, apiKey, baseUrl, selectedStore })` synced via `integrationsGet`/`integrationsSetStockEasy`. The API key is encrypted with `safeStorage` in `userData/integrations.json` and never returned to the renderer (only a `hasApiKey` flag). `stockeasyLookup(reference)` fetches product data in main. Library product scenes carry `libraryProductId` + a `librarySnapshot` so the editor can flag/refresh imports that drifted from the library.
+| Variável | Efeito |
+|---|---|
+| `SCREENLET_DATA_DIR` / `SCREENLET_USERDATA_DIR` | Pastas de dados e de configuração isoladas |
+| `SCREENLET_PAGE=<página>` (+ `SCREENLET_PARAMS`) | Abre uma página |
+| `SCREENLET_SNAPSHOT=<png>` (+ `SCREENLET_SNAPSHOT_DELAY`) | Salva uma captura da janela e encerra |
+| `SCREENLET_TEST_EXPORT=<nome>` (+ `SCREENLET_TEST_CONFIG=<json>`) | Exporta e encerra |
+| `SCREENLET_TEST_QUEUE=1` | Roda a fila de anúncios desatualizados e encerra |
+| `SCREENLET_TEST_BACKUP=create` ou `"zip\|senha"` | Cria ou restaura um backup e encerra |
+| `SCREENLET_DEV_IPTV=1` | Inicia o servidor IPTV |
+| `SCREENLET_NO_RELAUNCH=1` | Encerra em vez de reiniciar após uma restauração |
 
-### Channel & Studio system
-Channels live in `SCREENLET_DIR/channels/`. Each channel has `playlist: PlaylistItem[]`, `loop: boolean`, and `rules?: ProgrammingRule[]` (see `src/types/channel.ts`). `rules` is optional for backward compatibility with existing channel JSON files.
-
-`PlaylistItem = { id, filename, name, transition: "cut" | "fade" }`.
-
-The Studio (`src/views/Studio.tsx`) is a fixed full-screen overlay (`z-index: 200`). `type Tab = "playlist" | "preview" | "schedule"`:
-- **Playlist** tab — library of rendered videos from `EXPORTS_DIR` (left, via `useRendersStore`) + playlist editor with move up/down, transition selector, remove (right)
-- **Pré-visualizar** tab — a real `<Player>` (Remotion) that plays through the current `playlist` in order, switching `src` per item and respecting each item's `transition`; shows an empty state pointing back to the Playlist tab if it has no items
-- **Horários** tab — `ProgrammingTimeline` component for managing `ProgrammingRule[]`
-- Footer: loop toggle + Save/Cancel (saves `{ ...channel, playlist, loop, rules }`)
-
-`ProgrammingRule = { id, assetFilename, assetName, schedule: ProgrammingSchedule, transition? }`.
-`ProgrammingSchedule` is a discriminated union: `{ type: "always" }` | `{ type: "time-range"; startTime; endTime }` | `{ type: "day-of-week"; days: ScheduleDay[] }`.
-
-**Programming Engine** (`src/lib/programmingEngine.ts`): pure function `getCurrentAsset(channel, now?)` evaluates rules against the current time and returns the filename to broadcast. Falls back to `channel.playlist[0].filename` if no rule matches. Handles overnight time ranges (e.g. 22:00–06:00). Used in `IptvServer.tsx` to display live programming status.
-
-**`ProgrammingTimeline`** (`src/components/programming/ProgrammingTimeline.tsx`): list of `ProgrammingRuleBlock` components + "Adicionar regra" button + `ProgrammingRuleForm` dialog for create/edit.
-
-**macOS traffic light fix**: Studio's header uses `padding-left: 80px` + `-webkit-app-region: drag` with `-webkit-app-region: no-drag` on interactive elements.
-
-**Windows titlebar**: `createWindow()` uses platform-conditional options. On Windows: `titleBarStyle: "hidden"` + `titleBarOverlay: { height: 36, color, symbolColor }` + `autoHideMenuBar: true`. The overlay color is set at startup via `nativeTheme.shouldUseDarkColors` (tokens `#0a0b0e` dark / `#f7f8fa` light) and updated via `ipcMain.handle("set-titlebar-theme")` + `nativeTheme.on("updated")`. The sidebar's `.vt-sidebar__brand-trafficzone` div is hidden on non-macOS via `html:not([data-platform="darwin"])` CSS selector. The editor header avoids the overlay buttons via `padding-right` using `env(titlebar-area-width)` (Electron CSS env var) with `--win-controls-w: 152px` as fallback.
-
-`Channels.tsx` opens Studio by setting `studioChannel` state; while set, it renders `<Studio>` instead of the channel list.
-
-### Windows tray & autostart
-- App can be launched with `--hidden` (checked via `startedHidden = process.argv.includes("--hidden")`), which creates the main `BrowserWindow` with `show: false` and skips the startup focus.
-- A `Tray` icon (`getTrayIconPath()`) is always created; its menu has "Abrir" and "Sair" (`isQuitting = true; app.quit()`).
-- The window's `close` event is intercepted: unless `isQuitting`, it calls `event.preventDefault()` and `window.hide()` instead of actually closing — true quit only happens from the tray's "Sair" or `before-quit`.
-- **Launch at login**: `useAppSettingsStore` (Settings page, Windows-only "Inicialização" section) toggles `appSettingsSetLaunchAtLogin`, which calls `app.setLoginItemSettings({ openAtLogin, args: ["--hidden"] })` — note `setLoginItemSettings` registers `electron.exe` itself in dev (wrong binary), so this only behaves correctly in packaged builds.
-- **Auto-start IPTV**: a second toggle (`autoStartIptv`, default **on**) starts the IPTV server automatically at app launch (`startIptvServer()`, extracted out of the `iptv-start` IPC handler so both the manual and automatic paths share the same code).
-- Settings persisted to `APP_SETTINGS_FILE` (`userData/app-settings.json`), defaults in `DEFAULT_APP_SETTINGS`.
-
-### Renders page
-`src/views/Renders.tsx` lists all MP4 files in `EXPORTS_DIR` via `useRendersStore`. Each card has Play (opens a `Dialog` with a `<video>` preview), reveal-in-Finder, and delete actions.
-
-### Render / export flow
-1. User clicks "Renderizar" → `openFpsDialog(payload, suggestedName)` in `App.tsx`
-2. FPS dialog shows filename input (blank by default; placeholder/fallback is the project name) + FPS choice (30/60)
-3. `confirmRender()` builds filename as `(customName || projectName) + ".mp4"` and calls `runExport`
-4. `runExport` calls `window.adFrame.exportVideo(payload, filename, fps)`
-5. Main process `export-video` handler: saves to `EXPORTS_DIR` **overwriting** any existing file of the same name, adaptive concurrency, Chrome from cache. Returns `{ ok, filename, updatedChannels }` — `resyncChannelsUsingAsset(filename)` finds channels whose playlist/rules reference that file, bumps their `updatedAt` (keeping grid position) and restarts assigned Kodi screens; the renderer toasts each updated channel.
-
-Both export and project-thumbnail generation share two helpers in `main.cjs`:
-- **`prepareRenderBundle(onBundleProgress?)`** — bundles (or reuses) the Remotion compositions and returns a writable bundle location via `ensureWritableRenderBundle()` (see gotcha below).
-- **`resolveAdComposition(payload)`** — picks the right composition id + duration/width/height for the given `AdConfig`.
-
-**Project thumbnails**: on `projects-save`, the main process best-effort calls `renderStill()` against `PROJECT_THUMBS_DIR` (`SCREENLET_DIR/project-thumbs/<id>.jpg`) using the same `prepareRenderBundle`/`resolveAdComposition` helpers, and `projects-list` reports `thumbnail: "project-thumbs/<id>.jpg"` (relative path, see protocol gotcha) when the file exists, else `null`. Failures are swallowed — a project without a thumbnail just falls back to a folder icon in `Projects.tsx`.
-
-**Adaptive concurrency** (`computeConcurrency()` in `main.cjs`): reserves 2 GB for OS + app, allocates ~600 MB per Remotion worker, capped at half the CPU count and max 8.
-
-**Chrome caching**: `warmRemotionBrowser()` runs at app startup. It chdirs to `userData/remotion-root/` (which has a `package.json` anchor) so Remotion stores Chrome at `userData/remotion-root/node_modules/.remotion/` — survives app updates. The path is cached in `cachedBrowserExecutable` and passed to every `renderMedia` / `selectComposition` call.
-
-### Design system
-- **`app/globals.css`** — single source of truth for theme. Brand tokens are mapped to shadcn CSS variables (`--background`, `--foreground`, `--primary`, `--muted`, `--border`, `--card`, `--popover`, `--destructive`, `--ring`, `--sidebar-*`, plus `--success`/`--warning`). `:root` = light, `.dark` = dark (default). Tailwind utilities are generated from these via `@theme inline`. Brand primary is indigo/violet `#6e56f8`.
-- **Dark mode** uses the shadcn `.dark` class on `<html>`, toggled by `useThemeStore.applyTheme()` (which also calls `window.adFrame.setTitleBarTheme`). Tailwind classes use semantic tokens (`bg-card`, `text-muted-foreground`, …); for `--success`/`--warning` use `text-[color:var(--success)]` etc.
-- **`src/components/ui/`** — shadcn primitives (button, dialog, tabs, input, label, select, checkbox, card, progress, tooltip, dropdown-menu, separator, scroll-area, badge). Add more with `npx shadcn@latest add <name>`.
-- **`src/design-system/components/`** — thin wrappers over shadcn that preserve the app's existing API so the ~24 consumers didn't change: `Button` (variants `primary|secondary|ghost|danger`), `IconButton` (variants `"default" | "danger"` — **NOT "ghost"**), `Field`/`TextField`/`SelectField`/`ColorField`/`Checkbox`, `Card`, `Dialog`, `ProgressBar`, `Tabs` (render-prop API), `Tooltip`, `UploadZone`, `ContextMenu`. `ToastContainer` is a no-op; toasts go through sonner (the `toast` helper in `useToastStore` forwards to `sonner`). All exported from `index.ts`.
-- **`src/components/media/MediaPicker.tsx`** — shared media picker. Exports `MediaPicker` (inline preview + click-to-open) and `MediaPickerDialog` (standalone modal). Used in `InspectorPanel` (product image), `SceneListPanel` (video picker), `TemplateWizard` (image variables), `TemplateBuilder` (image layer props).
-- **`src/components/programming/`** — `ProgrammingTimeline`, `ProgrammingRuleBlock`, `ProgrammingRuleForm`. Used by Studio's "Horários" tab.
-- Never hardcode color values — always use semantic tokens (`--input-bg`, `--text-primary`, etc.).
-
-### Layout (Editor)
-Three-panel layout when `page === "editor"`:
-- `SceneListPanel` (left) — logo upload, sortable scene list (dnd-kit), buttons: Produto / Logo/Texto / Biblioteca / Template / Vídeo
-- `PreviewPanel` (center) — Remotion `<Player>` with `seekTo` sync on scene select
-- `InspectorPanel` (right) — per-type inspectors: `LogoInspector`, `ProductInspector`, `TemplateInspector`, `VideoInspector`
-
-### Scene types (`src/remotion/types.ts`)
-```ts
-type SceneConfig = LogoSceneConfig | ProductSceneConfig | TemplateSceneConfig | VideoSceneConfig
-```
-Factory defaults: `defaultLogoScene()`, `defaultProductScene()`, `defaultTemplateScene(templateId?)`, `defaultVideoScene()`.
-
-At export time, when any scene is `type: "template"`, `AdConfig.templates[]` must be included in the payload so `DynamicAd` can look up the full Template object (Zustand store is not available in the Remotion render process).
-
-### Asset bundle (`public/assets/`)
-Static assets shipped with the app live in `public/assets/`. The naming convention is **English kebab-case** (e.g. `picanha-steak.png`, `milk-can.png`). The subfolder for sample product images is `products/`. Paths are referenced in templates and presets without a leading slash (`"assets/products/picanha-steak.png"`), resolved at render time via `staticFile()`.
-
-### Template system (`src/remotion/template-types.ts`)
-Layer types: `text`, `image`, `logo`, `shape`, `badge`, `price`, `video`. Image and logo layers support `flipX?: boolean` and `flipY?: boolean`.
-
-Built-in templates live in `src/templates/` (generico, carnes, natal, pascoa) and are merged with user templates at runtime.
-
-### Remotion / video
-- **`src/remotion/DynamicAd.tsx`** — Root ad composition. Renders scenes by type.
-- **`src/remotion/Root.tsx`** — Registers all compositions (`DynamicAd`, `TemplateAd`) for the Remotion bundle.
-- Asset paths stored **without leading slash** (e.g. `"uploads/123-file.png"`). Components call `staticFile(path)` at render time.
-- `<Player>` components always need `acknowledgeRemotionLicense` prop.
-- `initialFrame` on `<Player>` must be clamped: `Math.min(value, Math.max(totalFrames - 1, 0))` to avoid white-screen crash.
-
-### Production build & packaging
-
-```
-npm run dist:mac
-  └─ install-cross-compositors.mjs   → installs arm64 + x64 compositor binaries
-  └─ next build                      → out/   (static export; type-checks the tree)
-  └─ bundle-remotion.mjs             → out/remotion-bundle/
-  └─ electron-builder                → release/Screenlet-arm64.dmg + Screenlet-x64.dmg
-```
-
-**Key production decisions:**
-- The packaged UI is the Next **static export** in `out/` (`electron-builder.files` ships `out/**/*`; the `app://` protocol serves it). `next build` type-checks the whole tree (no `ignoreBuildErrors`); ESLint is run separately via `npm run lint` (`eslint.ignoreDuringBuilds: true`).
-- `"asar": false` — Remotion compositor binaries (`ffmpeg`, `ffprobe`) must be executable on disk; `.asar` archives break `chmod` and `spawn` for those files.
-- `optionalDependencies` in `package.json` lists all compositor packages so electron-builder includes them explicitly.
-- `scripts/install-cross-compositors.mjs` uses `npm pack` (bypasses npm's os/cpu platform filter) to install `compositor-darwin-x64` on an ARM64 build machine. Idempotent — skips if already present.
-- Production bundle path: `path.join(process.resourcesPath, "app", "out", "remotion-bundle")`.
-- Before rendering, uploads are synced from `UPLOADS_DIR` to `{bundleDir}/public/uploads/` because Remotion injects `window.remotion_staticBase = '/public/'`, making `staticFile('uploads/x')` resolve to `/public/uploads/x`.
-- `entitlements.plist` includes `cs.disable-library-validation` — required for ffmpeg's dylibs which use relative rpaths blocked by macOS hardened runtime.
-- `HOME` is set at startup via `os.userInfo().homedir` (not `os.homedir()`) because `os.homedir()` reads the `HOME` env var first, which may be empty in packaged Electron on macOS.
-- **DevTools shortcut**: `Cmd+Shift+I` opens DevTools in any build.
-- `"npmRebuild": false` in `package.json`'s `build` config — electron-builder's native-module rebuild step fails on `cpu-features` (an optional perf addon of `ssh2`, used for Kodi SSH) against newer Electron/V8 ABI; `ssh2` already wraps the `require` in `try/catch`, so skipping the rebuild is safe and avoids a hard packaging failure.
-- **Windows resourcesPath can be read-only**: when installed "for all users" into `Program Files`, `process.resourcesPath` is not writable. `export-video` and project-thumbnail rendering used to copy uploads directly into the resources-path Remotion bundle (`{bundleDir}/public/uploads/`) and silently swallow the copy error. Fixed by `ensureWritableRenderBundle(sourceBundleLocation)`, which caches a copy of the bundle under `RENDER_BUNDLE_DIR` (`SCREENLET_DIR/remotion-bundle/`, always writable) and only re-copies when a `.source-mtime` marker file is stale. The render/thumbnail code now always renders out of `RENDER_BUNDLE_DIR`, never out of `process.resourcesPath` directly.
-
-### `app://` protocol (production)
-Serves app bundle assets using `fs.readFileSync` (handles `.asar` if ever re-enabled) and user uploads via `net.fetch`. Registered before `app.whenReady()` with `registerSchemesAsPrivileged({ secure: true, standard: true, supportFetchAPI: true, corsEnabled: true })`.
-
-Routes matched on `pathname`:
-- `/uploads/` → `UPLOADS_DIR`
-- `/project-thumbs/` → `PROJECT_THUMBS_DIR`
-- `/exports/` → `EXPORTS_DIR` (only the `Range` header is forwarded to `net.fetch`, not the full `Headers` object — see gotcha below)
-- anything else falls through to the bundled `out/` app files (Next static export; `trailingSlash: true` means routes resolve to `<route>/index.html`)
-
-**Critical gotcha — always use relative paths, never `app://host/...` absolute URLs**: in a `scheme://` URL, everything between `//` and the next `/` is the **host**, not the path. `app://exports/foo.mp4` makes `exports` the *host*, so `url.pathname` is `/foo.mp4` — it never matches `pathname.startsWith("/exports/")`. This is why the Studio preview player was stuck at `0:00`: it built `src` as `app://exports/${filename}`. The fix/convention used everywhere else in the codebase (`uploads/...`, `project-thumbs/...`) is to use a **relative** path with no scheme — it resolves against the page's own base URL (`app://index.html`), giving `pathname === "/exports/<file>"` as expected.
-
-### Key gotchas
-- `electron/main.cjs` is CJS; everything under `src/` is ESM.
-- `protocol.registerSchemesAsPrivileged` must be called **before** `app.whenReady()`.
-- `TemplateSceneConfig.templateId` alone is not enough for export — always include `AdConfig.templates` when any scene is `type: "template"`.
-- `IconButton` variant only accepts `"default" | "danger"` — **NOT "ghost"**.
-- `useRef<T>()` requires an initial value in this TS config — use `useRef<T>(undefined as unknown as T)` for timer refs.
-- `interpolate()` from Remotion uses `extrapolateLeft/Right: "clamp"` — not `clamp: true`.
-- Framer Motion `ease` values must be cast: `ease: "easeOut" as const`.
-- `Channel` type uses `playlist: PlaylistItem[]` and `loop: boolean` — the old `loopSourceId / loopSourceType` fields no longer exist. `generateM3u()` in `main.cjs` checks `ch.loop` for the VLC repeat directive.
-- `window.adFrame.platform` is a string (`NodeJS.Platform`), set synchronously from `process.platform` in the preload — safe to read before React mounts.
-- `titleBarStyle: "hiddenInset"` and `trafficLightPosition` are macOS-only — always guard with `process.platform === "darwin"` in `main.cjs`.
-- `ExportResult` type is `{ ok: true; filename: string } | { ok: false; error: string }` — not `{ canceled: boolean }`.
-- `Page` type does NOT include `"schedules"` or `"schedule-builder"` — those pages were removed.
-- `media-delete` IPC removes the asset from the catalog only, not from disk — physical files must remain to avoid breaking existing project references (`image: "uploads/xxx"`).
-- `media-catalog` auto-syncs: it calls `syncMediaCatalog()` which scans `UPLOADS_DIR` on every call. Any file placed in uploads outside the IPC (e.g. via `copyFile` / `selectImage`) will appear in Media Hub automatically on next load.
-- `Channel.rules` is `optional` — existing channel JSONs without `rules` load fine; `getCurrentAsset` falls back to `channel.playlist[0]`.
-- `getCurrentAsset` is a pure function (no IPC, no side effects) — safe to call in the renderer at render time, e.g. inside a `useEffect` with a 1-minute interval tick.
-- `SceneListPanel` uses `VideoPickerButton` (wraps `MediaPickerDialog`) instead of a direct `window.adFrame.selectVideo()` call — video scenes are now picked from the media catalog.
-- `TemplateWizard` and `TemplateBuilder` image fields use `MediaPickerDialog` instead of `window.adFrame.selectImage()`.
-- `Dashboard` stat grid is 4 columns (projects, exports, templates, media catalog count). The 4th `StatCard` uses `iconClass="info"` which needs `.vt-dash__stat-icon--info` in `Dashboard.css`.
-- `IptvServer` shows a "Programação agora" panel using `getCurrentAsset` per channel, refreshed by a 1-minute `setInterval`.
-- **Any path handed to `app://` must be relative** (`"exports/x.mp4"`, never `"app://exports/x.mp4"`) — see the `app://` protocol section above for why the host/path parsing breaks otherwise.
-- `src/lib/exportFormats.tsx` centralizes the format-icon lookup (`formatIcon(format)`) used by `Templates.tsx`, `Wizard.tsx`, `TemplateWizard.tsx`, and `Header.tsx` — don't reintroduce per-component emoji/icon switch statements for export formats.
-- Kodi device passwords are encrypted at rest and never sent to the renderer; only boolean "has password" flags cross the IPC boundary. `kodi-ping`/`kodi-restart-and-open` take only a `deviceId` and decrypt internally in `main.cjs` — never pass plaintext credentials for an already-saved device.
-- `app.setLoginItemSettings()` (autostart) registers whatever binary is currently running — in `npm run electron:dev` that's the `electron` binary itself, not the packaged app, so autostart only works correctly from a packaged build.
+Os ganchos de captura e de exportação ignoram a instância única, então funcionam com o app aberto.

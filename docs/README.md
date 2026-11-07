@@ -1,6 +1,8 @@
 # Documentação do Screenlet
 
-Documentação técnica e funcional da versão atual do Screenlet (Electron + Next.js + Remotion, versão `1.0.0-beta.2`), escrita como base para a migração para Qt na branch `refactor/qt-migration`.
+Documentação técnica e funcional do Screenlet.
+
+> **Contexto:** os documentos 01 a 06 descrevem a versão Electron + Next.js + Remotion (`1.0.0-beta.2`), que foi substituída pela versão Qt e removida da `main`. Eles continuam valendo como especificação: modelo de dados, protocolos com TVs e players e o comportamento quadro a quadro das cenas são os mesmos na versão Qt. Onde o código mudou, o [07](07-versao-qt.md) descreve a implementação atual.
 
 O objetivo é que qualquer pessoa consiga reconstruir o app a partir destes documentos sem precisar ler o código antigo: o que cada tela faz, como os dados são guardados, quais protocolos o app fala com TVs e players, e exatamente como cada cena de vídeo é desenhada quadro a quadro.
 
@@ -25,7 +27,7 @@ O Screenlet é um app desktop de **digital signage** para varejo (supermercados,
 | [06 · Pontos de atenção](06-pontos-de-atencao.md) | Bugs, dívidas técnicas e decisões a tomar na migração para Qt |
 | [07 · Versão Qt](07-versao-qt.md) | O que já foi portado, onde está o código e limitações conhecidas |
 
-## Números do código atual
+## Números do código Electron (antes da migração)
 
 | Área | Linhas | Arquivos |
 |---|---|---|

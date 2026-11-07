@@ -1,6 +1,8 @@
-# Screenlet (Qt)
+# Screenlet
 
-Edição nativa do Screenlet em **Qt 6.12 (C++20 + QML)**, com o design "Vitrine" (proposta B). Ela substitui a versão Electron + Next.js + Remotion e lê **os mesmos arquivos de dados**, sem nenhuma conversão.
+App desktop de sinalização digital: cria anúncios em vídeo (TV, Instagram, Stories, TikTok), renderiza em MP4 e transmite para as TVs da loja por um servidor IPTV embutido, Kodi ou Screenlet Player.
+
+Feito em **Qt 6.12 (C++20 + QML)**. Substituiu a antiga versão Electron + Next.js + Remotion e lê **os mesmos arquivos de dados**, sem conversão. A documentação técnica está em [`docs/`](docs/README.md).
 
 ## Compilar e rodar
 
@@ -31,10 +33,10 @@ O script gera `build/dist/Screenlet-<versão>-universal.dmg`, um app universal (
 | Variável | Uso |
 |---|---|
 | `SIGN_IDENTITY` | Padrão: detecta automaticamente um certificado "Developer ID Application" ou "Apple Development" (hardened runtime + `resources/entitlements.plist`); sem certificado, usa `-` (ad-hoc). Para distribuir, use "Developer ID Application" e notarize o `.dmg` com `xcrun notarytool` + `xcrun stapler` |
-
-> **Por que assinar com certificado:** o macOS amarra a permissão de acesso à pasta Documentos (e ao Keychain) à assinatura do app. Com assinatura ad-hoc, cada build ou cópia do app tem outra assinatura e o macOS volta a perguntar. Os builds de desenvolvimento (Qt Creator / CMake) também são assinados automaticamente após o link; para forçar outra identidade, use `-DSCREENLET_SIGN_IDENTITY=<sha1>` (ou `-` para ad-hoc).
 | `ARCHS` | `arm64;x86_64` (padrão) ou só uma arquitetura |
 | `QT_DIR` | Kit Qt (padrão `~/Qt/6.12.0/macos`) |
+
+> **Por que assinar com certificado:** o macOS amarra a permissão de acesso à pasta Documentos (e ao Keychain) à assinatura do app. Com assinatura ad-hoc, cada build ou cópia do app tem outra assinatura e o macOS volta a perguntar. Os builds de desenvolvimento (Qt Creator / CMake) também são assinados automaticamente após o link; para forçar outra identidade, use `-DSCREENLET_SIGN_IDENTITY=<sha1>` (ou `-` para ad-hoc).
 
 Os avisos do `macdeployqt` sobre `libpq`, `libiodbc` e `libmimerapi` vêm de drivers SQL que o script remove em seguida; podem ser ignorados.
 
@@ -83,7 +85,7 @@ resources/                templates embutidos (JSON), imagens de exemplo, ícone
 
 ## Correções em relação à versão Electron
 
-Veja `docs/06-pontos-de-atencao.md` no repositório Screenlet:
+Os problemas da versão Electron estão descritos em [`docs/06-pontos-de-atencao.md`](docs/06-pontos-de-atencao.md). Na versão Qt:
 - editar um canal preserva as regras de horário;
 - o stream IPTV respeita as regras de horário;
 - o EPG usa as regras dos canais e o fuso correto;

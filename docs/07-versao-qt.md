@@ -1,6 +1,6 @@
 # 07 · Versão Qt (estado atual)
 
-O código da edição nativa está na pasta [`qt/`](../qt) deste repositório, um projeto CMake + Qt 6.12. O [README](../qt/README.md) dela descreve a estrutura e como compilar.
+O código fica na raiz deste repositório, um projeto CMake + Qt 6.12. O código Electron foi removido da `main`; ele continua no histórico do Git, até o merge do PR #8. O [README](../README.md) descreve a estrutura e como compilar.
 
 ## O que foi portado
 
@@ -10,7 +10,7 @@ O código da edição nativa está na pasta [`qt/`](../qt) deste repositório, u
 | Motor de cenas (logo, produto, template, vídeo) e animações de camada | ✅ Port das fórmulas do doc 05 (spring, interpolate, easing) |
 | Exportação MP4 (H.264/H.265, 30/60 fps) e miniaturas de projeto | ✅ Renderização nativa fora da tela, sem Chrome |
 | Áudio na exportação (cenas de vídeo e camadas de vídeo dos templates) | ✅ Mixado em AAC 48 kHz estéreo, com o volume de cada clipe |
-| Ícone do app | ✅ Documento do Icon Composer (`qt/resources/AppIcon.icon`, camadas com Liquid Glass no macOS 26+), compilado pelo `actool` em `Assets.car`; `.icns`, `.png` e `.ico` pré-renderizados para macOS antigo, Windows e builds sem Xcode |
+| Ícone do app | ✅ Documento do Icon Composer (`resources/AppIcon.icon`, camadas com Liquid Glass no macOS 26+), compilado pelo `actool` em `Assets.car`; `.icns`, `.png` e `.ico` pré-renderizados para macOS antigo, Windows e builds sem Xcode |
 | Templates: galeria, assistente de variáveis, construtor (canvas, linha do tempo, animações, variáveis) | ✅ |
 | Produtos + sincronização de preço com o StockEasy | ✅ |
 | Mídia (deduplicação SHA-256, arrastar e soltar), Vídeos prontos | ✅ |
