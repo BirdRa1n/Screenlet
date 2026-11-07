@@ -39,10 +39,14 @@ struct Status {
     QString requested;   // setting value
     QString active;      // value really in use ("auto" → resolved name)
     QString note;        // fallback reason, empty when all went as asked
+    bool lowEnd = false; // old GPU (D3D feature level < 11_1): lighter UI effects
     QString gpuPreference; // values read at startup (restart detection)
     QString videoEncoder;
 };
 const Status &status();
+
+// WARP, llvmpipe, GDI Generic…: the "GPU" is the processor.
+bool isSoftwareRenderer(const QString &deviceName);
 
 // Human name of the API in use (from the main window, once it renders).
 QString apiLabel(const QString &value);

@@ -1,5 +1,6 @@
 pragma Singleton
 import QtQuick
+import Screenlet
 
 // Motion language of proposal B: elastic springs for interaction, short
 // fades for content, stamps for prices. Durations in ms.
@@ -15,5 +16,9 @@ QtObject {
     readonly property real springOvershoot: 1.6
     readonly property int easeOut: Easing.OutCubic
 
-    readonly property bool reduced: false
+    // Lighter UI for old GPUs (Intel HD 2000–4000…) or software rendering: no
+    // continuous animations and no MultiEffect masks. Every running animation
+    // makes Qt Quick redraw the whole window at each vsync.
+    readonly property bool reduced: Settings.uiEffects === "reduced"
+                                    || (Settings.uiEffects === "auto" && SystemInfo.lowEndGpu)
 }

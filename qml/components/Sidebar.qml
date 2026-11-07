@@ -123,8 +123,11 @@ Rectangle {
                 color: Theme.accent
                 Layout.alignment: root.compact ? Qt.AlignHCenter : Qt.AlignLeft
                 Icon { anchors.centerIn: parent; name: "tag"; size: 19; stroke: 2.2; color: Theme.accentInk }
+                // A few wiggles, then idle: a looping animation would redraw
+                // the whole window at every vsync forever.
                 SequentialAnimation on rotation {
-                    loops: Animation.Infinite
+                    running: !Motion.reduced
+                    loops: 3
                     PauseAnimation { duration: 3600 }
                     NumberAnimation { to: -6; duration: 110 }
                     NumberAnimation { to: 5; duration: 110 }

@@ -44,7 +44,7 @@ Item {
                     color: Iptv.running ? Theme.accent : Theme.sunken
                     Icon { anchors.centerIn: parent; name: "radio"; size: 30; color: Iptv.running ? Theme.accentInk : Theme.muted }
                     SequentialAnimation on scale {
-                        running: Iptv.running
+                        running: Iptv.running && !Motion.reduced
                         loops: Animation.Infinite
                         NumberAnimation { to: 1.06; duration: 900; easing.type: Easing.InOutSine }
                         NumberAnimation { to: 1; duration: 900; easing.type: Easing.InOutSine }

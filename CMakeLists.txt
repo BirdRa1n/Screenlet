@@ -5,7 +5,7 @@ if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)  # also repairs caches created empty
     set(CMAKE_OSX_DEPLOYMENT_TARGET "14.4" CACHE STRING "Minimum macOS version" FORCE)
 endif()
 
-project(Screenlet VERSION 2.0.0 LANGUAGES CXX)
+project(Screenlet VERSION 2.0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -140,6 +140,10 @@ if(APPLE)
     set_source_files_properties(${APP_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
     target_sources(Screenlet PRIVATE ${APP_ICON})
 elseif(WIN32)
+    # Ícone e versão do .exe (Explorer, atalhos, barra de tarefas).
+    set(SCREENLET_ICO ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.ico)
+    configure_file(resources/Screenlet.rc.in ${CMAKE_CURRENT_BINARY_DIR}/Screenlet.rc @ONLY)
+    target_sources(Screenlet PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/Screenlet.rc)
     # Media Foundation (GPU encoder) + DXGI/D3D11 (GPU selection).
     target_link_libraries(Screenlet PRIVATE crypt32 bcrypt advapi32 ole32 oleaut32
         mfplat mfreadwrite mfuuid d3d11 dxgi)

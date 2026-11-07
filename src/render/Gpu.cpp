@@ -20,6 +20,7 @@
 
 #if defined(Q_OS_WIN)
 #include <windows.h>
+#include <d3d11.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 using Microsoft::WRL::ComPtr;
@@ -70,7 +71,7 @@ QSGRendererInterface::GraphicsApi toQsg(const QString &v)
 
 // Creates (and drops) a QRhi of the requested backend: the cheapest way to
 // know the API will start before Qt Quick commits to it.
-bool probe(const QString &v, QString *why)
+bool probe(const QString &v, QString *why, QString *device = nullptr)
 {
     // The fallback surface must outlive the QRhi (its destructor uses it).
     std::unique_ptr<QOffscreenSurface> surface;
@@ -119,8 +120,38 @@ bool probe(const QString &v, QString *why)
             *why = QStringLiteral("%1 não pôde ser iniciado nesta placa de vídeo.").arg(Gpu::apiLabel(v));
         return false;
     }
+    if (device)
+        *device = QString::fromUtf8(rhi->driverInfo().deviceName);
     return true;
 }
+
+#if defined(Q_OS_WIN)
+// Highest Direct3D 11 feature level of the hardware adapter Qt will use
+// (QT_D3D_ADAPTER_INDEX or the default one); 0 when there is none.
+// Qt Quick needs 11_0: below that (Intel HD 2000/3000, Sandy Bridge) it falls
+// back to WARP, Microsoft's software rasterizer.
+int d3d11MaxFeatureLevel()
+{
+    // Test hook: pretend an old GPU, e.g. 0xa100 = 10_1 (Intel HD 3000).
+    if (qEnvironmentVariableIsSet("SCREENLET_D3D_FEATURE_LEVEL"))
+        return QByteArray(qgetenv("SCREENLET_D3D_FEATURE_LEVEL")).toInt(nullptr, 0);
+    ComPtr<IDXGIAdapter1> adapter;
+    if (qEnvironmentVariableIsSet("QT_D3D_ADAPTER_INDEX")) {
+        ComPtr<IDXGIFactory1> f;
+        if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&f))))
+            f->EnumAdapters1(UINT(qEnvironmentVariableIntValue("QT_D3D_ADAPTER_INDEX")), &adapter);
+    }
+    const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
+                                        D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_9_3};
+    D3D_FEATURE_LEVEL got{};
+    HRESULT h = D3D11CreateDevice(adapter.Get(), adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
+                                  levels, UINT(std::size(levels)), D3D11_SDK_VERSION, nullptr, &got, nullptr);
+    if (h == E_INVALIDARG) // pre-11.1 runtime rejects 11_1 in the list
+        h = D3D11CreateDevice(adapter.Get(), adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
+                              levels + 1, UINT(std::size(levels) - 1), D3D11_SDK_VERSION, nullptr, &got, nullptr);
+    return SUCCEEDED(h) ? int(got) : 0;
+}
+#endif
 
 #if defined(Q_OS_WIN)
 bool sameLuid(const LUID &a, const LUID &b) { return a.LowPart == b.LowPart && a.HighPart == b.HighPart; }
@@ -304,7 +335,35 @@ void applyAtStartup()
             chosen = QStringLiteral("auto");
         }
     }
+#if defined(Q_OS_WIN)
+    // Old GPUs (Intel HD 2000–4000, Sandy/Ivy Bridge, and cards of that era)
+    // top out below feature level 11_1: run the UI with lighter effects.
+    const int fl = d3d11MaxFeatureLevel();
+    g_status.lowEnd = fl < D3D_FEATURE_LEVEL_11_1;
+    // Without 11_0, "auto" would mean D3D11 on WARP (software). Hardware
+    // OpenGL is far faster on those Intel chips (GL 3.1+ drivers).
+    if (chosen == QLatin1String("auto") && fl < D3D_FEATURE_LEVEL_11_0) {
+        QString why, device;
+        if (probe(QStringLiteral("opengl"), &why, &device) && !isSoftwareRenderer(device)) {
+            QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+            chosen = QStringLiteral("opengl");
+            g_status.note = QStringLiteral("A placa de vídeo não tem Direct3D 11 completo: usando OpenGL (%1).").arg(device);
+        } else {
+            g_status.note = QStringLiteral("A placa de vídeo não tem Direct3D 11 completo nem OpenGL por hardware: "
+                                           "a interface é desenhada pelo processador e fica mais lenta. "
+                                           "Atualize o driver de vídeo, se houver.");
+        }
+    }
+#endif
     g_status.active = chosen == QLatin1String("auto") ? platformDefault() : chosen;
+}
+
+bool isSoftwareRenderer(const QString &deviceName)
+{
+    const QString n = deviceName.toLower();
+    return n.contains(QLatin1String("basic render")) || n.contains(QLatin1String("llvmpipe"))
+           || n.contains(QLatin1String("softpipe")) || n.contains(QLatin1String("gdi generic"))
+           || n.contains(QLatin1String("warp"));
 }
 
 const Status &status() { return g_status; }

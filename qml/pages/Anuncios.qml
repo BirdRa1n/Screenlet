@@ -157,6 +157,7 @@ Item {
                                     Text { text: "Desatualizado"; color: Theme.accentInk; font.family: Theme.bodyFont; font.pixelSize: 12; font.weight: Font.Bold }
                                 }
                                 SequentialAnimation on scale {
+                                    running: !Motion.reduced
                                     loops: Animation.Infinite
                                     NumberAnimation { to: 1.08; duration: 700; easing.type: Easing.InOutSine }
                                     NumberAnimation { to: 1; duration: 700; easing.type: Easing.InOutSine }

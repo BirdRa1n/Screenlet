@@ -23,6 +23,9 @@ class SystemInfo : public QObject
     Q_PROPERTY(QString graphicsApiInUse READ graphicsApiInUse NOTIFY graphicsChanged)
     Q_PROPERTY(QString gpuName READ gpuName NOTIFY graphicsChanged)
     Q_PROPERTY(QString graphicsNote READ graphicsNote NOTIFY graphicsChanged)
+    // Old GPU or software rendering: the UI drops continuous animations and
+    // masks (Motion.reduced) unless the user forces full effects.
+    Q_PROPERTY(bool lowEndGpu READ lowEndGpu NOTIFY graphicsChanged)
     // Settings as read at launch: {graphicsApi, gpuPreference, videoEncoder}.
     Q_PROPERTY(QVariantMap startupGraphics READ startupGraphics CONSTANT)
 
@@ -37,6 +40,7 @@ public:
     QString graphicsApiInUse() const { return m_api; }
     QString gpuName() const { return m_gpu; }
     QString graphicsNote() const;
+    bool lowEndGpu() const;
     QVariantMap startupGraphics() const;
     void setGraphicsInfo(const QString &api, const QString &gpu) { m_api = api; m_gpu = gpu; emit graphicsChanged(); }
 

@@ -62,7 +62,7 @@ Item {
                     x: parent.width - 14; y: 8
                 }
                 SequentialAnimation on rotation {
-                    running: page.drift.length > 0
+                    running: page.drift.length > 0 && !Motion.reduced
                     loops: Animation.Infinite
                     PauseAnimation { duration: 2800 }
                     NumberAnimation { to: -12; duration: 90 }

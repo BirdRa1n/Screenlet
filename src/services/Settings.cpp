@@ -20,6 +20,7 @@ QJsonObject defaults()
         {QStringLiteral("hardwareAcceleration"), true},
         {QStringLiteral("graphicsApi"), QStringLiteral("auto")},
         {QStringLiteral("gpuPreference"), QStringLiteral("auto")},
+        {QStringLiteral("uiEffects"), QStringLiteral("auto")},
         {QStringLiteral("termsAcknowledged"), false},
         {QStringLiteral("backupDir"), QString()},
         {QStringLiteral("theme"), QStringLiteral("light")},
@@ -47,6 +48,7 @@ QString Settings::videoQuality() const { return m_data.value(QStringLiteral("vid
 bool Settings::hardwareAcceleration() const { return m_data.value(QStringLiteral("hardwareAcceleration")).toBool(); }
 QString Settings::graphicsApi() const { return m_data.value(QStringLiteral("graphicsApi")).toString(); }
 QString Settings::gpuPreference() const { return m_data.value(QStringLiteral("gpuPreference")).toString(); }
+QString Settings::uiEffects() const { return m_data.value(QStringLiteral("uiEffects")).toString(); }
 QString Settings::videoEncoder() const { return m_data.value(QStringLiteral("videoEncoder")).toString(); }
 bool Settings::termsAcknowledged() const { return m_data.value(QStringLiteral("termsAcknowledged")).toBool(); }
 QString Settings::backupDir() const { return m_data.value(QStringLiteral("backupDir")).toString(); }
@@ -93,6 +95,11 @@ void Settings::setGpuPreference(const QString &v)
     if (v == QLatin1String("auto") && gpuPreference() != v)
         Gpu::writeWindowsGpuPreference(v);
     set(QStringLiteral("gpuPreference"), v);
+}
+void Settings::setUiEffects(const QString &v)
+{
+    if (v == QLatin1String("auto") || v == QLatin1String("full") || v == QLatin1String("reduced"))
+        set(QStringLiteral("uiEffects"), v);
 }
 void Settings::setVideoEncoder(const QString &v)
 {

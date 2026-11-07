@@ -17,14 +17,14 @@ Item {
         height: root.size
         radius: width / 2
         color: root.color
-        visible: root.active
+        visible: root.active && !Motion.reduced
         SequentialAnimation on scale {
-            running: root.active && root.visible
+            running: root.active && root.visible && !Motion.reduced
             loops: Animation.Infinite
             NumberAnimation { from: 1; to: 2.6; duration: 1600; easing.type: Easing.OutCubic }
         }
         SequentialAnimation on opacity {
-            running: root.active && root.visible
+            running: root.active && root.visible && !Motion.reduced
             loops: Animation.Infinite
             NumberAnimation { from: 0.7; to: 0; duration: 1600; easing.type: Easing.OutCubic }
         }

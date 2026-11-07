@@ -26,7 +26,11 @@ Rectangle {
 
     HoverHandler { id: hover }
 
-    layer.enabled: roundClip
+    // The mask costs an offscreen layer + an effect pass per card: on old GPUs
+    // a plain (square) clip is used instead.
+    readonly property bool maskCorners: roundClip && !Motion.reduced
+    clip: roundClip && Motion.reduced
+    layer.enabled: maskCorners
     layer.smooth: true
     layer.effect: MultiEffect {
         maskEnabled: true
@@ -40,7 +44,7 @@ Rectangle {
         id: mask
         anchors.fill: parent
         visible: false
-        layer.enabled: root.roundClip
+        layer.enabled: root.maskCorners
         Rectangle {
             anchors.fill: parent
             radius: root.radius

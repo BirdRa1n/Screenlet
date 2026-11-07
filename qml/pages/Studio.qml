@@ -349,7 +349,7 @@ Item {
                             height: grid.height + 12
                             radius: 2
                             color: Theme.red
-                            SequentialAnimation on opacity { loops: Animation.Infinite; NumberAnimation { to: 0.45; duration: 900 } NumberAnimation { to: 1; duration: 900 } }
+                            SequentialAnimation on opacity { running: !Motion.reduced; loops: Animation.Infinite; NumberAnimation { to: 0.45; duration: 900 } NumberAnimation { to: 1; duration: 900 } }
                         }
                     }
                 }

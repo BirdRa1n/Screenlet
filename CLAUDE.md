@@ -96,5 +96,7 @@ Use estas variáveis de ambiente, sempre com pastas isoladas, para não tocar no
 | `SCREENLET_TEST_BACKUP=create` ou `"zip\|senha"` | Cria ou restaura um backup e encerra |
 | `SCREENLET_DEV_IPTV=1` | Inicia o servidor IPTV |
 | `SCREENLET_NO_RELAUNCH=1` | Encerra em vez de reiniciar após uma restauração |
+| `SCREENLET_D3D_FEATURE_LEVEL=0xa100` | Finge uma GPU antiga no Windows (`0xa100` = D3D 10.1, Intel HD 3000; `0xb000` = 11.0, HD 4000) |
+| `QSG_RHI_PREFER_SOFTWARE_RENDERER=1` | Força o WARP (renderização por software), útil para simular máquina fraca |
 
 Os ganchos de captura e de exportação ignoram a instância única, então funcionam com o app aberto.

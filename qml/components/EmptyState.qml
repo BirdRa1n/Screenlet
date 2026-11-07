@@ -24,7 +24,8 @@ Card {
             color: Theme.accentSoft
             Icon { anchors.centerIn: parent; name: root.iconName; size: 24; color: Theme.ink }
             SequentialAnimation on rotation {
-                loops: Animation.Infinite
+                running: !Motion.reduced
+                loops: 3
                 PauseAnimation { duration: 2200 }
                 NumberAnimation { to: -8; duration: 120 }
                 NumberAnimation { to: 6; duration: 120 }

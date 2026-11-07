@@ -26,6 +26,8 @@ class Settings : public QObject
     // "auto" (GPU encoder when there is one) | "cpu" — replaces the
     // hardwareAcceleration switch, which is migrated and kept in sync.
     Q_PROPERTY(QString videoEncoder READ videoEncoder WRITE setVideoEncoder NOTIFY changed)
+    // "auto" | "full" | "reduced" — interface animations/effects (auto = reduced on old GPUs).
+    Q_PROPERTY(QString uiEffects READ uiEffects WRITE setUiEffects NOTIFY changed)
     Q_PROPERTY(bool termsAcknowledged READ termsAcknowledged WRITE setTermsAcknowledged NOTIFY changed)
     Q_PROPERTY(QString backupDir READ backupDir WRITE setBackupDir NOTIFY changed)
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY changed)
@@ -41,6 +43,7 @@ public:
     QString graphicsApi() const;
     QString gpuPreference() const;
     QString videoEncoder() const;
+    QString uiEffects() const;
     bool termsAcknowledged() const;
     QString backupDir() const;
     QString theme() const;
@@ -53,6 +56,7 @@ public:
     void setGraphicsApi(const QString &v);
     void setGpuPreference(const QString &v);
     void setVideoEncoder(const QString &v);
+    void setUiEffects(const QString &v);
     void setTermsAcknowledged(bool v);
     void setBackupDir(const QString &v);
     void setTheme(const QString &v);

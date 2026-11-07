@@ -196,6 +196,19 @@ Item {
                     }
                 }
             }
+            Field {
+                Layout.fillWidth: true
+                label: "Animações e efeitos da interface"
+                hint: Settings.uiEffects === "auto"
+                      ? (SystemInfo.lowEndGpu ? "Placa de vídeo antiga detectada: efeitos reduzidos para a interface não travar."
+                                              : "Reduz sozinho em placas de vídeo antigas (Intel HD 2000–4000 e similares).")
+                      : (Settings.uiEffects === "reduced" ? "Sem animações contínuas nem cantos recortados: menos uso da placa e do processador." : "")
+                Select {
+                    options: [{ value: "auto", text: "Automático" }, { value: "full", text: "Completos" }, { value: "reduced", text: "Reduzidos (computadores antigos)" }]
+                    value: Settings.uiEffects
+                    onPicked: (v) => Settings.uiEffects = v
+                }
+            }
             T {
                 Layout.fillWidth: true
                 size: 12

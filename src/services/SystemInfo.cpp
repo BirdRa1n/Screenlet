@@ -186,6 +186,7 @@ void SystemInfo::relaunch(int delayMs)
 }
 
 QString SystemInfo::graphicsNote() const { return Gpu::status().note; }
+bool SystemInfo::lowEndGpu() const { return Gpu::status().lowEnd || Gpu::isSoftwareRenderer(m_gpu); }
 QVariantMap SystemInfo::startupGraphics() const
 {
     const Gpu::Status &s = Gpu::status();
