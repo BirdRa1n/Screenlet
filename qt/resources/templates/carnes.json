@@ -1,0 +1,337 @@
+{
+  "id": "builtin-carnes",
+  "name": "Açougue",
+  "description": "Visual com tons escuros e âmbar para destacar promoções de carnes.",
+  "category": "Açougue",
+  "tags": [
+    "Açougue",
+    "Varejo"
+  ],
+  "thumbnail": "",
+  "version": "1.0.0",
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "builtin": true,
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "variables": [
+    {
+      "key": "STORE_NAME",
+      "label": "Nome da loja",
+      "type": "text",
+      "defaultValue": "Açougue Central",
+      "required": true
+    },
+    {
+      "key": "LOGO",
+      "label": "Logo",
+      "type": "image",
+      "defaultValue": ""
+    },
+    {
+      "key": "PRODUCT_NAME",
+      "label": "Nome do produto",
+      "type": "text",
+      "defaultValue": "Picanha Bovina",
+      "required": true
+    },
+    {
+      "key": "PRODUCT_IMAGE",
+      "label": "Imagem do produto",
+      "type": "image",
+      "defaultValue": "assets/products/picanha-steak.png"
+    },
+    {
+      "key": "OLD_PRICE",
+      "label": "Preço anterior",
+      "type": "text",
+      "defaultValue": "79,90"
+    },
+    {
+      "key": "NEW_PRICE",
+      "label": "Preço atual",
+      "type": "text",
+      "defaultValue": "69,90",
+      "required": true
+    },
+    {
+      "key": "PRICE_SUFFIX",
+      "label": "Sufixo",
+      "type": "text",
+      "defaultValue": "/kg"
+    },
+    {
+      "key": "BADGE_TEXT",
+      "label": "Texto do badge",
+      "type": "text",
+      "defaultValue": "Oferta por tempo limitado"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "scene-open",
+      "name": "Abertura",
+      "durationInFrames": 60,
+      "backgroundColor": "#0B5E1F",
+      "layers": [
+        {
+          "id": "l1",
+          "name": "Fundo",
+          "type": "shape",
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "fill": "#0B5E1F",
+          "opacity": 1,
+          "zIndex": 0,
+          "rotation": 0,
+          "visible": true,
+          "animations": []
+        },
+        {
+          "id": "l2",
+          "name": "Nome loja",
+          "type": "text",
+          "text": "{{STORE_NAME}}",
+          "fontSize": 80,
+          "fontWeight": 700,
+          "color": "#ffffff",
+          "align": "center",
+          "x": 160,
+          "y": 420,
+          "width": 1600,
+          "height": 120,
+          "opacity": 1,
+          "zIndex": 2,
+          "rotation": 0,
+          "visible": true,
+          "animations": [
+            {
+              "type": "slideUp",
+              "startFrame": 0,
+              "durationInFrames": 25,
+              "easing": "easeOut"
+            }
+          ]
+        },
+        {
+          "id": "l3",
+          "name": "Tagline",
+          "type": "text",
+          "text": "Semana do Churrasco! Carnes selecionadas.",
+          "fontSize": 44,
+          "fontWeight": 400,
+          "color": "rgba(255,255,255,0.85)",
+          "align": "center",
+          "x": 160,
+          "y": 560,
+          "width": 1600,
+          "height": 80,
+          "opacity": 1,
+          "zIndex": 2,
+          "rotation": 0,
+          "visible": true,
+          "animations": [
+            {
+              "type": "fadeIn",
+              "startFrame": 12,
+              "durationInFrames": 20,
+              "easing": "easeOut"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "scene-product",
+      "name": "Produto",
+      "durationInFrames": 150,
+      "backgroundColor": "#241312",
+      "layers": [
+        {
+          "id": "l4",
+          "name": "Faixa lateral",
+          "type": "shape",
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "width": 900,
+          "height": 1080,
+          "fill": "#1c0f0f",
+          "opacity": 1,
+          "zIndex": 0,
+          "rotation": 0,
+          "visible": true,
+          "animations": []
+        },
+        {
+          "id": "l5",
+          "name": "Imagem produto",
+          "type": "image",
+          "src": "{{PRODUCT_IMAGE}}",
+          "fit": "contain",
+          "x": 40,
+          "y": 60,
+          "width": 820,
+          "height": 960,
+          "opacity": 1,
+          "zIndex": 1,
+          "rotation": 0,
+          "visible": true,
+          "animations": [
+            {
+              "type": "slideRight",
+              "startFrame": 0,
+              "durationInFrames": 30,
+              "easing": "easeOut"
+            }
+          ]
+        },
+        {
+          "id": "l6",
+          "name": "Nome produto",
+          "type": "text",
+          "text": "{{PRODUCT_NAME}}",
+          "fontSize": 72,
+          "fontWeight": 800,
+          "color": "#ffffff",
+          "align": "left",
+          "x": 980,
+          "y": 180,
+          "width": 860,
+          "height": 220,
+          "opacity": 1,
+          "zIndex": 2,
+          "rotation": 0,
+          "visible": true,
+          "animations": [
+            {
+              "type": "slideLeft",
+              "startFrame": 8,
+              "durationInFrames": 28,
+              "easing": "easeOut"
+            }
+          ]
+        },
+        {
+          "id": "l7",
+          "name": "Preço",
+          "type": "price",
+          "priceMode": "offer",
+          "oldPrice": "{{OLD_PRICE}}",
+          "newPrice": "{{NEW_PRICE}}",
+          "suffix": "{{PRICE_SUFFIX}}",
+          "accentColor": "#FF8A00",
+          "textColor": "#ffffff",
+          "oldPriceColor": "#888888",
+          "fontSize": 120,
+          "x": 980,
+          "y": 440,
+          "width": 860,
+          "height": 260,
+          "opacity": 1,
+          "zIndex": 2,
+          "rotation": 0,
+          "visible": true,
+          "animations": [
+            {
+              "type": "zoomIn",
+              "startFrame": 15,
+              "durationInFrames": 25,
+              "easing": "easeOut"
+            }
+          ]
+        },
+        {
+          "id": "l8",
+          "name": "Badge",
+          "type": "badge",
+          "text": "{{BADGE_TEXT}}",
+          "bg": "#C81F1F",
+          "textColor": "#ffffff",
+          "borderRadius": 8,
+          "fontSize": 30,
+          "x": 980,
+          "y": 740,
+          "width": 620,
+          "height": 70,
+          "opacity": 1,
+          "zIndex": 3,
+          "rotation": 0,
+          "visible": true,
+          "animations": [
+            {
+              "type": "fadeIn",
+              "startFrame": 22,
+              "durationInFrames": 18,
+              "easing": "easeOut"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "scene-close",
+      "name": "Encerramento",
+      "durationInFrames": 60,
+      "backgroundColor": "#0B5E1F",
+      "layers": [
+        {
+          "id": "l9",
+          "name": "Nome loja",
+          "type": "text",
+          "text": "{{STORE_NAME}}",
+          "fontSize": 80,
+          "fontWeight": 700,
+          "color": "#ffffff",
+          "align": "center",
+          "x": 160,
+          "y": 420,
+          "width": 1600,
+          "height": 120,
+          "opacity": 1,
+          "zIndex": 2,
+          "rotation": 0,
+          "visible": true,
+          "animations": [
+            {
+              "type": "fadeIn",
+              "startFrame": 0,
+              "durationInFrames": 20,
+              "easing": "easeOut"
+            }
+          ]
+        },
+        {
+          "id": "l10",
+          "name": "CTA",
+          "type": "text",
+          "text": "Garanta já a sua carne para o fim de semana!",
+          "fontSize": 42,
+          "fontWeight": 400,
+          "color": "rgba(255,255,255,0.85)",
+          "align": "center",
+          "x": 160,
+          "y": 560,
+          "width": 1600,
+          "height": 80,
+          "opacity": 1,
+          "zIndex": 2,
+          "rotation": 0,
+          "visible": true,
+          "animations": [
+            {
+              "type": "slideUp",
+              "startFrame": 10,
+              "durationInFrames": 20,
+              "easing": "easeOut"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
