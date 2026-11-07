@@ -1,6 +1,7 @@
 #include "core/AppContext.h"
 #include "core/Async.h"
 #include "core/Paths.h"
+#include "render/Gpu.h"
 #include "render/Renderer.h"
 #include "services/Settings.h"
 #include "services/SystemInfo.h"
@@ -16,9 +17,12 @@
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSGRendererInterface>
 #include <QTimer>
 #include <QSystemTrayIcon>
 #include <QtPlugin>
+
+#include <rhi/qrhi.h>
 
 #ifdef SCREENLET_SYSTEM_IMAGEIO
 Q_IMPORT_PLUGIN(SystemImageIOPlugin)
@@ -76,9 +80,8 @@ int main(int argc, char *argv[])
     const bool startedHidden = app.arguments().contains(QStringLiteral("--hidden"));
     SystemInfo::instance()->setStartedHidden(startedHidden);
 
-    // Hardware encoding off → keep the FFmpeg backend on software encoders.
-    if (!Settings::instance()->hardwareAcceleration())
-        qputenv("QT_FFMPEG_ENCODING_HW_DEVICE_TYPES", ",");
+    // Graphics API / GPU / encoder from Configurações — before any window.
+    Gpu::applyAtStartup();
 
     QQmlApplicationEngine engine;
     Async::engine() = &engine;
@@ -114,6 +117,36 @@ int main(int argc, char *argv[])
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
                      [] { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
     engine.loadFromModule("Screenlet", "Main");
+
+    // Report the API and GPU really in use (Configurações → Vídeo).
+    if (auto *w = engine.rootObjects().isEmpty() ? nullptr : qobject_cast<QQuickWindow *>(engine.rootObjects().first())) {
+        QObject::connect(w, &QQuickWindow::sceneGraphInitialized, w, [w] {
+            static const QHash<int, QString> names = {
+                {QSGRendererInterface::Direct3D11, QStringLiteral("Direct3D 11")},
+                {QSGRendererInterface::Direct3D12, QStringLiteral("Direct3D 12")},
+                {QSGRendererInterface::Vulkan, QStringLiteral("Vulkan")},
+                {QSGRendererInterface::Metal, QStringLiteral("Metal")},
+                {QSGRendererInterface::OpenGL, QStringLiteral("OpenGL")},
+                {QSGRendererInterface::Software, QStringLiteral("Software")},
+            };
+            const QString api = names.value(w->rendererInterface()->graphicsApi(), QStringLiteral("?"));
+            const QString gpu = w->rhi() ? QString::fromUtf8(w->rhi()->driverInfo().deviceName) : QString();
+            QMetaObject::invokeMethod(SystemInfo::instance(), [api, gpu] {
+                qInfo().noquote() << "Graphics:" << api << "·" << gpu;
+                SystemInfo::instance()->setGraphicsInfo(api, gpu);
+            },
+                                      Qt::QueuedConnection);
+        }, Qt::DirectConnection);
+        // The chosen API passed the probe but the window still can't render
+        // with it: go back to the platform default instead of a dead window.
+        QObject::connect(w, &QQuickWindow::sceneGraphError, &app, [](QQuickWindow::SceneGraphError, const QString &msg) {
+            qWarning().noquote() << "Scene graph error:" << msg;
+            if (Settings::instance()->graphicsApi() != QLatin1String("auto")) {
+                Settings::instance()->setGraphicsApi(QStringLiteral("auto"));
+                SystemInfo::instance()->relaunch();
+            }
+        });
+    }
 
     context->startBackground(startedHidden);
 

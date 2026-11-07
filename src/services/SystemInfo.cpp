@@ -1,6 +1,8 @@
 #include "SystemInfo.h"
 
 #include "core/Paths.h"
+#include "render/Gpu.h"
+#include "render/MfEncoder.h"
 
 #include <QClipboard>
 #include <QCoreApplication>
@@ -182,6 +184,18 @@ void SystemInfo::relaunch(int delayMs)
         QCoreApplication::exit(0);
     });
 }
+
+QString SystemInfo::graphicsNote() const { return Gpu::status().note; }
+QVariantMap SystemInfo::startupGraphics() const
+{
+    const Gpu::Status &s = Gpu::status();
+    return {{QStringLiteral("graphicsApi"), s.requested},
+            {QStringLiteral("gpuPreference"), s.gpuPreference},
+            {QStringLiteral("videoEncoder"), s.videoEncoder}};
+}
+QVariantList SystemInfo::graphicsApis() const { return Gpu::apis(); }
+QVariantList SystemInfo::gpus() const { return Gpu::adapters(); }
+QStringList SystemInfo::hardwareEncoders(bool h265) const { return MfEncoder::hardwareEncoders(h265); }
 
 void SystemInfo::quitApp()
 {

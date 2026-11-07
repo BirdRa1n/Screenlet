@@ -19,6 +19,12 @@ class SystemInfo : public QObject
     Q_PROPERTY(bool trayAvailable READ trayAvailable NOTIFY trayChanged)
     Q_PROPERTY(bool quitting READ quitting NOTIFY quittingChanged)
     Q_PROPERTY(bool startedHidden READ startedHidden CONSTANT)
+    // What the main window really renders with (filled once it first renders).
+    Q_PROPERTY(QString graphicsApiInUse READ graphicsApiInUse NOTIFY graphicsChanged)
+    Q_PROPERTY(QString gpuName READ gpuName NOTIFY graphicsChanged)
+    Q_PROPERTY(QString graphicsNote READ graphicsNote NOTIFY graphicsChanged)
+    // Settings as read at launch: {graphicsApi, gpuPreference, videoEncoder}.
+    Q_PROPERTY(QVariantMap startupGraphics READ startupGraphics CONSTANT)
 
 public:
     bool trayAvailable() const { return m_tray; }
@@ -28,16 +34,28 @@ public:
     void setStartedHidden(bool v) { m_hidden = v; }
     Q_INVOKABLE void quitApp();
     void requestShowWindow() { emit showWindowRequested(); }
+    QString graphicsApiInUse() const { return m_api; }
+    QString gpuName() const { return m_gpu; }
+    QString graphicsNote() const;
+    QVariantMap startupGraphics() const;
+    void setGraphicsInfo(const QString &api, const QString &gpu) { m_api = api; m_gpu = gpu; emit graphicsChanged(); }
+
+    Q_INVOKABLE QVariantList graphicsApis() const;      // [{value, text, hint}]
+    Q_INVOKABLE QVariantList gpus() const;              // [{name, vendor, vramMb, integrated}]
+    Q_INVOKABLE QStringList hardwareEncoders(bool h265) const;
 
 signals:
     void trayChanged();
     void quittingChanged();
     void showWindowRequested();
+    void graphicsChanged();
 
 private:
     bool m_tray = false;
     bool m_quitting = false;
     bool m_hidden = false;
+    QString m_api;
+    QString m_gpu;
 
 public:
     explicit SystemInfo(QObject *parent);

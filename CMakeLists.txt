@@ -51,6 +51,8 @@ set(CPP_SOURCES
     src/net/StockEasy.h          src/net/StockEasy.cpp
     src/render/Renderer.h        src/render/Renderer.cpp
     src/render/AudioMix.h        src/render/AudioMix.cpp
+    src/render/Gpu.h             src/render/Gpu.cpp
+    src/render/MfEncoder.h       src/render/MfEncoder.cpp
 )
 if(APPLE)
     list(APPEND CPP_SOURCES src/core/SecretStore_mac.mm)
@@ -138,7 +140,9 @@ if(APPLE)
     set_source_files_properties(${APP_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
     target_sources(Screenlet PRIVATE ${APP_ICON})
 elseif(WIN32)
-    target_link_libraries(Screenlet PRIVATE crypt32 bcrypt)
+    # Media Foundation (GPU encoder) + DXGI/D3D11 (GPU selection).
+    target_link_libraries(Screenlet PRIVATE crypt32 bcrypt advapi32 ole32 oleaut32
+        mfplat mfreadwrite mfuuid d3d11 dxgi)
 endif()
 
 set_target_properties(Screenlet PROPERTIES

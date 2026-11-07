@@ -20,6 +20,12 @@ class Settings : public QObject
     Q_PROPERTY(QString videoCodec READ videoCodec WRITE setVideoCodec NOTIFY changed)
     Q_PROPERTY(QString videoQuality READ videoQuality WRITE setVideoQuality NOTIFY changed)
     Q_PROPERTY(bool hardwareAcceleration READ hardwareAcceleration WRITE setHardwareAcceleration NOTIFY changed)
+    // Graphics API (QRhi) and GPU — read once at startup (restart to apply).
+    Q_PROPERTY(QString graphicsApi READ graphicsApi WRITE setGraphicsApi NOTIFY changed)
+    Q_PROPERTY(QString gpuPreference READ gpuPreference WRITE setGpuPreference NOTIFY changed)
+    // "auto" (GPU encoder when there is one) | "cpu" — replaces the
+    // hardwareAcceleration switch, which is migrated and kept in sync.
+    Q_PROPERTY(QString videoEncoder READ videoEncoder WRITE setVideoEncoder NOTIFY changed)
     Q_PROPERTY(bool termsAcknowledged READ termsAcknowledged WRITE setTermsAcknowledged NOTIFY changed)
     Q_PROPERTY(QString backupDir READ backupDir WRITE setBackupDir NOTIFY changed)
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY changed)
@@ -32,6 +38,9 @@ public:
     QString videoCodec() const;
     QString videoQuality() const;
     bool hardwareAcceleration() const;
+    QString graphicsApi() const;
+    QString gpuPreference() const;
+    QString videoEncoder() const;
     bool termsAcknowledged() const;
     QString backupDir() const;
     QString theme() const;
@@ -41,6 +50,9 @@ public:
     void setVideoCodec(const QString &v);
     void setVideoQuality(const QString &v);
     void setHardwareAcceleration(bool v);
+    void setGraphicsApi(const QString &v);
+    void setGpuPreference(const QString &v);
+    void setVideoEncoder(const QString &v);
     void setTermsAcknowledged(bool v);
     void setBackupDir(const QString &v);
     void setTheme(const QString &v);

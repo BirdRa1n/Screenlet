@@ -105,7 +105,8 @@ AppDialog {
                 Behavior on width { NumberAnimation { duration: Motion.base } }
             }
         }
-        T { tone: "muted"; size: 12; text: Settings.videoCodec.toUpperCase() + " · qualidade " + ({ high: "alta", medium: "média", low: "baixa" })[Settings.videoQuality] + " · " + root.fps + " fps" }
+        T { tone: "muted"; size: 12; text: Settings.videoCodec.toUpperCase() + " · qualidade " + ({ high: "alta", medium: "média", low: "baixa" })[Settings.videoQuality] + " · " + root.fps + " fps"
+                                    + (Renderer.busy && Renderer.encoderName ? " · " + Renderer.encoderName : "") }
     }
 
     actions: [

@@ -15,6 +15,12 @@ Item {
     property var importKeys: []
     readonly property bool mustLock: Backup.needsPassword(exportKeys)
     property string pendingDir: ""
+    readonly property var graphicsApis: SystemInfo.graphicsApis()
+    readonly property var gpus: SystemInfo.gpus()
+    readonly property var hwEncoders: SystemInfo.hardwareEncoders(Settings.videoCodec === "h265")
+    readonly property bool graphicsRestart: Settings.graphicsApi !== SystemInfo.startupGraphics.graphicsApi
+                                            || Settings.gpuPreference !== SystemInfo.startupGraphics.gpuPreference
+                                            || (SystemInfo.isMac && Settings.videoEncoder !== SystemInfo.startupGraphics.videoEncoder)
 
     Component.onCompleted: refreshBackups()
     function refreshBackups() { Backup.list(function (l) { page.backups = l }) }
@@ -148,7 +154,73 @@ Item {
                     Select { options: [{ value: "high", text: "Alta" }, { value: "medium", text: "Média" }, { value: "low", text: "Baixa (arquivo menor)" }]; value: Settings.videoQuality; onPicked: (v) => Settings.videoQuality = v }
                 }
             }
-            Toggle { Layout.fillWidth: true; text: "Usar aceleração de hardware quando disponível (vale após reiniciar)"; checked: Settings.hardwareAcceleration; onToggled: Settings.hardwareAcceleration = checked }
+            Field {
+                Layout.fillWidth: true
+                label: "Codificação do vídeo"
+                hint: Settings.videoEncoder === "cpu"
+                      ? "Usa só o processador: mais lento, mas funciona em qualquer computador."
+                      : (page.hwEncoders.length > 0
+                         ? "Encoder da placa de vídeo: " + page.hwEncoders.join(", ") + "."
+                         : (SystemInfo.isWindows ? "Nenhum encoder de hardware encontrado: o processador será usado." : "VideoToolbox no Mac (Apple Silicon e Intel)."))
+                Select {
+                    options: [{ value: "auto", text: "Placa de vídeo (NVENC, AMD, Intel Quick Sync, VideoToolbox)" }, { value: "cpu", text: "Somente processador (software)" }]
+                    value: Settings.videoEncoder
+                    onPicked: (v) => Settings.videoEncoder = v
+                }
+            }
+        }
+
+        Section {
+            title: "Placa de vídeo"
+            description: "Como o Screenlet desenha a prévia e os quadros dos vídeos. As mudanças valem depois de reiniciar."
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                Field {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    label: "API gráfica"
+                    hint: (page.graphicsApis.find(a => a.value === Settings.graphicsApi) || {}).hint || ""
+                    Select { options: page.graphicsApis; value: Settings.graphicsApi; onPicked: (v) => Settings.graphicsApi = v }
+                }
+                Field {
+                    visible: SystemInfo.isWindows
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    label: "GPU usada"
+                    hint: page.gpus.length > 1 ? "Em notebooks, escolha entre a placa dedicada e a integrada." : "Só faz diferença em computadores com mais de uma placa."
+                    Select {
+                        options: [{ value: "auto", text: "Automática (o Windows decide)" }, { value: "high", text: "Alto desempenho (placa dedicada)" }, { value: "low", text: "Economia de energia (integrada)" }]
+                        value: Settings.gpuPreference
+                        onPicked: (v) => Settings.gpuPreference = v
+                    }
+                }
+            }
+            T {
+                Layout.fillWidth: true
+                size: 12
+                tone: "muted"
+                wrapMode: Text.WordWrap
+                text: "Em uso agora: " + (SystemInfo.graphicsApiInUse || "—") + (SystemInfo.gpuName ? " · " + SystemInfo.gpuName : "")
+                      + (page.gpus.length > 0 ? "\nPlacas detectadas: " + page.gpus.map(g => g.name + (g.integrated ? " (integrada)" : "")).join(", ") : "")
+            }
+            Rectangle {
+                visible: SystemInfo.graphicsNote !== ""
+                Layout.fillWidth: true
+                implicitHeight: noteText.implicitHeight + 20
+                radius: 12
+                color: Theme.amberSoft
+                border.color: Theme.amberLine
+                T { id: noteText; anchors.fill: parent; anchors.margins: 10; size: 12; wrapMode: Text.WordWrap; color: Theme.amberInk; text: SystemInfo.graphicsNote }
+            }
+            RowLayout {
+                visible: page.graphicsRestart
+                Layout.fillWidth: true
+                spacing: 12
+                Pill { kind: "warn"; text: "Reinicie para aplicar" }
+                Item { Layout.fillWidth: true }
+                Btn { text: "Reiniciar agora"; iconName: "refresh"; small: true; onClicked: SystemInfo.relaunch(150) }
+            }
         }
 
         Section {

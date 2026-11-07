@@ -1,6 +1,8 @@
 #include "Renderer.h"
 
 #include "AudioMix.h"
+#include "Gpu.h"
+#include "MfEncoder.h"
 #include "core/Async.h"
 #include "core/Paths.h"
 #include "services/Channels.h"
@@ -34,6 +36,7 @@
 
 #include <rhi/qrhi.h>
 
+
 namespace {
 int totalFrames(const QVariantMap &config)
 {
@@ -51,6 +54,15 @@ QMediaRecorder::Quality qualityFor(int crf, bool h265)
     if (crf <= 23 + base)
         return QMediaRecorder::HighQuality;
     return QMediaRecorder::NormalQuality;
+}
+
+// VBR target for the Media Foundation path (it has no CRF): 1080p30 H.264
+// at 16/10/6 Mbit/s, scaled sub-linearly with pixels × fps.
+int bitrateFor(const QSize &size, int fps, bool h265, const QString &quality)
+{
+    const double base = quality == QLatin1String("high") ? 16e6 : quality == QLatin1String("low") ? 6e6 : 10e6;
+    const double scale = std::pow(double(size.width()) * size.height() * fps / (1920.0 * 1080 * 30), 0.75);
+    return int(std::max(1.5e6, base * scale * (h265 ? 0.6 : 1.0)));
 }
 } // namespace
 
@@ -102,6 +114,7 @@ struct Renderer::Job {
     QMediaCaptureSession session;
     QMediaRecorder recorder;
     QVideoFrameInput *input = nullptr;
+    std::unique_ptr<MfEncoder> mf;   // native path; null → QMediaRecorder
     QAudioBufferInput *audio = nullptr;
     QVector<float> pcm;          // interleaved stereo float, whole ad
     qint64 audioSent = 0;        // sample frames already handed to the encoder
@@ -150,6 +163,11 @@ bool Renderer::ensureOffscreen(const QSize &size, QString *error)
         off->rc = new QQuickRenderControl();
         off->window = new QQuickWindow(off->rc);
         off->window->setColor(Qt::black);
+#if QT_CONFIG(vulkan)
+        // Offscreen windows don't get Qt Quick's default instance by themselves.
+        if (QQuickWindow::graphicsApi() == QSGRendererInterface::Vulkan)
+            off->window->setVulkanInstance(Gpu::vulkanInstance());
+#endif
         QQmlComponent component(m_engine);
         component.loadFromModule("Screenlet", "AdStage");
         QObject *obj = component.create();
@@ -282,6 +300,41 @@ void Renderer::exportVideo(const QVariantMap &payload, const QString &filename, 
     }
 
     const bool h265 = Settings::instance()->videoCodec() == QLatin1String("h265");
+    QFile::remove(job->tmpPath);
+
+#if defined(Q_OS_WIN)
+    // GPU encoder through Media Foundation unless the user asked for CPU.
+    if (Settings::instance()->videoEncoder() != QLatin1String("cpu")) {
+        MfEncoder::Options o;
+        o.size = size;
+        o.fps = job->renderFps;
+        o.h265 = h265;
+        o.bitrate = bitrateFor(size, job->renderFps, h265, Settings::instance()->videoQuality());
+        o.audio = !job->pcm.isEmpty();
+        o.adapterIndex = Gpu::adapterIndexFor(Settings::instance()->gpuPreference());
+        auto enc = std::make_unique<MfEncoder>();
+        QString mfError;
+        if (enc->open(job->tmpPath, o, &mfError)) {
+            job->mf = std::move(enc);
+        } else {
+            qWarning().noquote() << "MfEncoder indisponível, usando FFmpeg:" << mfError;
+            enc.reset();
+            QFile::remove(job->tmpPath);
+        }
+    }
+#endif
+    if (job->mf) {
+        m_encoderName = job->mf->encoderName() + (job->mf->isHardware() ? QStringLiteral(" (GPU)") : QStringLiteral(" (CPU)"));
+        m_job = std::move(job);
+        m_off->stage->setProperty("config", payload);
+        m_progress = 0;
+        emit progressChanged();
+        setPhase(QStringLiteral("rendering"));
+        QTimer::singleShot(0, this, &Renderer::stepNative);
+        return;
+    }
+    m_encoderName = QStringLiteral("FFmpeg (Qt Multimedia)");
+
     QMediaFormat mf(QMediaFormat::MPEG4);
     mf.setVideoCodec(h265 ? QMediaFormat::VideoCodec::H265 : QMediaFormat::VideoCodec::H264);
     mf.setAudioCodec(job->pcm.isEmpty() ? QMediaFormat::AudioCodec::Unspecified : QMediaFormat::AudioCodec::AAC);
@@ -289,7 +342,6 @@ void Renderer::exportVideo(const QVariantMap &payload, const QString &filename, 
     job->recorder.setQuality(qualityFor(Settings::instance()->crf(), h265));
     job->recorder.setVideoResolution(size);
     job->recorder.setVideoFrameRate(job->renderFps);
-    QFile::remove(job->tmpPath);
     job->recorder.setOutputLocation(QUrl::fromLocalFile(job->tmpPath));
 
     QVideoFrameFormat vf(size, QVideoFrameFormat::Format_RGBA8888);
@@ -320,28 +372,8 @@ void Renderer::exportVideo(const QVariantMap &payload, const QString &filename, 
         raw->error = msg;
     });
     connect(&job->recorder, &QMediaRecorder::recorderStateChanged, this, [this, raw](QMediaRecorder::RecorderState s) {
-        if (s != QMediaRecorder::StoppedState || m_job.get() != raw)
-            return;
-        if (raw->canceled) {
-            QFile::remove(raw->tmpPath);
-            finishJob(Async::fail(QStringLiteral("Renderização cancelada.")));
-            return;
-        }
-        if (!raw->error.isEmpty() || !QFileInfo::exists(raw->tmpPath)) {
-            QFile::remove(raw->tmpPath);
-            finishJob(Async::fail(raw->error.isEmpty() ? QStringLiteral("O codificador não gerou o arquivo.") : raw->error));
-            return;
-        }
-        // Overwrite on purpose: channels that use this file pick it up.
-        QFile::remove(raw->finalPath);
-        if (!QFile::rename(raw->tmpPath, raw->finalPath)) {
-            finishJob(Async::fail(QStringLiteral("Não foi possível salvar o vídeo em Vídeos prontos.")));
-            return;
-        }
-        const QVariantList updated = Channels::instance()->resyncChannelsUsing(raw->filename);
-        Projects::instance()->recordExport(raw->projectId, raw->filename, raw->format, raw->renderFps);
-        Exports::instance()->refresh();
-        finishJob(Async::ok({{QStringLiteral("filename"), raw->filename}, {QStringLiteral("updatedChannels"), updated}}));
+        if (s == QMediaRecorder::StoppedState && m_job.get() == raw)
+            completeJob(raw);
     });
 
     m_job = std::move(job);
@@ -409,6 +441,82 @@ void Renderer::step()
     m_progress = (job->pcm.isEmpty() ? 0.0 : 0.05) + double(job->next) / job->outFrames * (job->pcm.isEmpty() ? 1.0 : 0.95);
     emit progressChanged();
     QTimer::singleShot(0, this, &Renderer::step);
+}
+
+// Native (Media Foundation) path: synchronous writes, one frame per turn.
+void Renderer::stepNative()
+{
+    Job *job = m_job.get();
+    if (!job)
+        return;
+    QString error;
+    const auto fail = [&](const QString &e) {
+        job->error = e;
+        job->mf->abort();
+        completeJob(job);
+    };
+    if (job->canceled) {
+        job->mf->abort();
+        completeJob(job);
+        return;
+    }
+    if (!job->pcm.isEmpty()) {
+        const qint64 total = job->pcm.size() / AudioMix::kChannels;
+        const qint64 target = job->next >= job->outFrames
+                                  ? total
+                                  : std::min<qint64>(total, qint64(job->next + 1) * AudioMix::kSampleRate / job->renderFps);
+        if (target > job->audioSent) {
+            if (!job->mf->writeAudio(job->pcm.constData() + job->audioSent * AudioMix::kChannels, target - job->audioSent,
+                                     job->audioSent, &error))
+                return fail(error);
+            job->audioSent = target;
+        }
+    }
+    if (job->next >= job->outFrames) {
+        setPhase(QStringLiteral("finalizing"));
+        if (!job->mf->finish(&error))
+            job->error = error;
+        completeJob(job);
+        return;
+    }
+    QImage img;
+    const double srcFrame = job->next * job->sourcePerOutput;
+    m_off->stage->setProperty("frameExact", srcFrame);
+    if (!renderFrame(int(std::floor(srcFrame)), &img, &error))
+        return fail(error);
+    if (!job->mf->writeVideo(img, job->next, &error))
+        return fail(error);
+    ++job->next;
+    m_progress = (job->pcm.isEmpty() ? 0.0 : 0.05) + double(job->next) / job->outFrames * (job->pcm.isEmpty() ? 1.0 : 0.95);
+    emit progressChanged();
+    QTimer::singleShot(0, this, &Renderer::stepNative);
+}
+
+// Both paths end here once the encoder has stopped.
+void Renderer::completeJob(Job *raw)
+{
+    if (raw->canceled) {
+        QFile::remove(raw->tmpPath);
+        finishJob(Async::fail(QStringLiteral("Renderização cancelada.")));
+        return;
+    }
+    if (!raw->error.isEmpty() || !QFileInfo::exists(raw->tmpPath)) {
+        QFile::remove(raw->tmpPath);
+        finishJob(Async::fail(raw->error.isEmpty() ? QStringLiteral("O codificador não gerou o arquivo.") : raw->error));
+        return;
+    }
+    // Overwrite on purpose: channels that use this file pick it up.
+    QFile::remove(raw->finalPath);
+    if (!QFile::rename(raw->tmpPath, raw->finalPath)) {
+        finishJob(Async::fail(QStringLiteral("Não foi possível salvar o vídeo em Vídeos prontos.")));
+        return;
+    }
+    const QVariantList updated = Channels::instance()->resyncChannelsUsing(raw->filename);
+    Projects::instance()->recordExport(raw->projectId, raw->filename, raw->format, raw->renderFps);
+    Exports::instance()->refresh();
+    finishJob(Async::ok({{QStringLiteral("filename"), raw->filename},
+                         {QStringLiteral("updatedChannels"), updated},
+                         {QStringLiteral("encoder"), m_encoderName}}));
 }
 
 void Renderer::cancel()

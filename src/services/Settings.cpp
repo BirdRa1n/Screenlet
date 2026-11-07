@@ -2,6 +2,7 @@
 
 #include "core/JsonIo.h"
 #include "core/Paths.h"
+#include "render/Gpu.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -17,6 +18,8 @@ QJsonObject defaults()
         {QStringLiteral("videoCodec"), QStringLiteral("h264")},
         {QStringLiteral("videoQuality"), QStringLiteral("medium")},
         {QStringLiteral("hardwareAcceleration"), true},
+        {QStringLiteral("graphicsApi"), QStringLiteral("auto")},
+        {QStringLiteral("gpuPreference"), QStringLiteral("auto")},
         {QStringLiteral("termsAcknowledged"), false},
         {QStringLiteral("backupDir"), QString()},
         {QStringLiteral("theme"), QStringLiteral("light")},
@@ -32,6 +35,9 @@ Settings::Settings(QObject *parent)
     const QJsonObject stored = JsonIo::readObject(Paths::appSettingsFile());
     for (auto it = stored.begin(); it != stored.end(); ++it)
         m_data.insert(it.key(), it.value());
+    // Older builds only had the hardware on/off switch.
+    if (!stored.contains(QStringLiteral("videoEncoder")))
+        m_data.insert(QStringLiteral("videoEncoder"), hardwareAcceleration() ? QStringLiteral("auto") : QStringLiteral("cpu"));
 }
 
 bool Settings::launchAtLogin() const { return m_data.value(QStringLiteral("launchAtLogin")).toBool(); }
@@ -39,6 +45,9 @@ bool Settings::autoStartIptv() const { return m_data.value(QStringLiteral("autoS
 QString Settings::videoCodec() const { return m_data.value(QStringLiteral("videoCodec")).toString(); }
 QString Settings::videoQuality() const { return m_data.value(QStringLiteral("videoQuality")).toString(); }
 bool Settings::hardwareAcceleration() const { return m_data.value(QStringLiteral("hardwareAcceleration")).toBool(); }
+QString Settings::graphicsApi() const { return m_data.value(QStringLiteral("graphicsApi")).toString(); }
+QString Settings::gpuPreference() const { return m_data.value(QStringLiteral("gpuPreference")).toString(); }
+QString Settings::videoEncoder() const { return m_data.value(QStringLiteral("videoEncoder")).toString(); }
 bool Settings::termsAcknowledged() const { return m_data.value(QStringLiteral("termsAcknowledged")).toBool(); }
 QString Settings::backupDir() const { return m_data.value(QStringLiteral("backupDir")).toString(); }
 QString Settings::theme() const { return m_data.value(QStringLiteral("theme")).toString(); }
@@ -69,6 +78,29 @@ void Settings::setVideoQuality(const QString &v)
         set(QStringLiteral("videoQuality"), v);
 }
 void Settings::setHardwareAcceleration(bool v) { set(QStringLiteral("hardwareAcceleration"), v); }
+void Settings::setGraphicsApi(const QString &v)
+{
+    static const QStringList ok = {QStringLiteral("auto"), QStringLiteral("metal"), QStringLiteral("d3d11"),
+                                   QStringLiteral("d3d12"), QStringLiteral("vulkan"), QStringLiteral("opengl")};
+    if (ok.contains(v))
+        set(QStringLiteral("graphicsApi"), v);
+}
+void Settings::setGpuPreference(const QString &v)
+{
+    if (v != QLatin1String("auto") && v != QLatin1String("high") && v != QLatin1String("low"))
+        return;
+    // Leaving a manual choice clears the Windows per-app entry we wrote.
+    if (v == QLatin1String("auto") && gpuPreference() != v)
+        Gpu::writeWindowsGpuPreference(v);
+    set(QStringLiteral("gpuPreference"), v);
+}
+void Settings::setVideoEncoder(const QString &v)
+{
+    if (v != QLatin1String("auto") && v != QLatin1String("cpu"))
+        return;
+    set(QStringLiteral("hardwareAcceleration"), v != QLatin1String("cpu")); // Electron-compatible key
+    set(QStringLiteral("videoEncoder"), v);
+}
 void Settings::setTermsAcknowledged(bool v) { set(QStringLiteral("termsAcknowledged"), v); }
 void Settings::setBackupDir(const QString &v) { set(QStringLiteral("backupDir"), v); }
 void Settings::setTheme(const QString &v)

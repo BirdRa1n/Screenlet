@@ -18,8 +18,11 @@ class QQmlEngine;
 // The SAME QML scene used for the live preview (AdStage.qml) is instantiated
 // in an offscreen QQuickWindow driven by QQuickRenderControl. For every
 // frame we set `frame`, wait until images/videos for that frame are ready,
-// render into an RHI texture, read it back and feed it to QMediaRecorder via
-// QVideoFrameInput (FFmpeg backend → H.264/H.265 MP4).
+// render into an RHI texture, read it back and feed it to the encoder:
+//  - Windows: Media Foundation sink writer with hardware MFTs (MfEncoder →
+//    NVENC / AMD / Quick Sync), falling back to the path below;
+//  - elsewhere (or "CPU" in Configurações): QMediaRecorder via
+//    QVideoFrameInput (FFmpeg backend → VideoToolbox on the Mac).
 //
 // Frames are produced cooperatively on the GUI thread (one per event-loop
 // turn) so the UI stays responsive during an export.
@@ -33,6 +36,8 @@ class Renderer : public QObject
     Q_PROPERTY(double progress READ progress NOTIFY progressChanged)
     Q_PROPERTY(QString phase READ phase NOTIFY stateChanged)
     Q_PROPERTY(QString currentFile READ currentFile NOTIFY stateChanged)
+    // Encoder of the current (or last) export, e.g. "NVIDIA H.264 Encoder MFT (GPU)".
+    Q_PROPERTY(QString encoderName READ encoderName NOTIFY stateChanged)
 
 public:
     explicit Renderer(QObject *parent);
@@ -44,6 +49,7 @@ public:
     double progress() const { return m_progress; }
     QString phase() const { return m_phase; }
     QString currentFile() const;
+    QString encoderName() const { return m_encoderName; }
 
     // payload: AdConfig (+width/height of the chosen format). Overwrites an
     // existing file of the same name on purpose (channels using it resync).
@@ -69,6 +75,8 @@ private:
     bool ensureOffscreen(const QSize &size, QString *error);
     bool renderFrame(int frame, QImage *out, QString *error);
     void step();
+    void stepNative();
+    void completeJob(Job *job);
     void finishJob(const QVariantMap &result);
     void setPhase(const QString &p);
 
@@ -77,6 +85,7 @@ private:
     std::unique_ptr<Job> m_job;
     double m_progress = 0;
     QString m_phase;
+    QString m_encoderName;
     QQueue<QPair<QString, QVariantMap>> m_thumbQueue;
     bool m_thumbRunning = false;
     bool m_preparing = false;   // mixing audio before the job starts
