@@ -48,7 +48,10 @@ void AppContext::startBackground(bool startedHidden)
     Q_UNUSED(startedHidden)
     // Unattended kiosk boot: only when BOTH settings are on (same rule as
     // the Electron build — a manual launch shouldn't silently open a port).
-    if (Settings::instance()->launchAtLogin() && Settings::instance()->autoStartIptv())
+    // Paired Screenlet Players are the exception: they sync and download
+    // through this server, so once one is paired the server is part of the
+    // setup the user asked for.
+    if ((Settings::instance()->launchAtLogin() && Settings::instance()->autoStartIptv()) || Players::instance()->hasPaired())
         Iptv::instance()->start();
     Updater::instance()->check(false);
 }

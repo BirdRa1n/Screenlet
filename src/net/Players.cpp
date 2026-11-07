@@ -7,7 +7,11 @@
 #include "core/SecretStore.h"
 #include "services/Channels.h"
 
+#include <QDateTime>
 #include <QDir>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QTimer>
 #include <QFile>
 #include <QNetworkAccessManager>
 #include <QNetworkInterface>
@@ -51,6 +55,12 @@ Players::Players(QObject *parent)
     const QString legacy = QDir(Paths::base()).filePath(QStringLiteral("player-devices.json"));
     if (QFile::exists(legacy) && !QFile::exists(Paths::playerDevicesFile()))
         QFile::copy(legacy, Paths::playerDevicesFile());
+
+    // Paired players that went quiet may be polling an old address of this PC.
+    auto *timer = new QTimer(this);
+    timer->setInterval(60000);
+    connect(timer, &QTimer::timeout, this, [this] { announceStudio(true); });
+    timer->start();
 }
 
 QList<QJsonObject> Players::readRaw() const
@@ -125,31 +135,59 @@ void Players::heartbeat(const QJsonObject &b, const QString &remoteIp)
     writeRaw(list);
 }
 
-QJsonObject Players::syncResponse(const QString &deviceId) const
+QJsonObject Players::syncChannel(const QString &deviceId) const
 {
-    const QJsonObject unpaired{{QStringLiteral("paired"), false}};
     if (deviceId.isEmpty())
-        return unpaired;
+        return {};
     for (const QJsonObject &d : readRaw()) {
         if (d.value(QStringLiteral("deviceId")).toString() != deviceId)
             continue;
         if (!d.value(QStringLiteral("paired")).toBool() || d.value(QStringLiteral("channelId")).toString().isEmpty())
-            return unpaired;
-        const QJsonObject ch = QJsonObject::fromVariantMap(Channels::instance()->find(d.value(QStringLiteral("channelId")).toString()));
-        if (ch.isEmpty())
-            return unpaired;
-        const QJsonObject manifest = Iptv::instance()->channelManifest(ch);
-        return {
-            {QStringLiteral("paired"), true},
-            {QStringLiteral("channelId"), ch.value(QStringLiteral("id"))},
-            {QStringLiteral("playlistUrl"), Iptv::instance()->baseUrl() + QStringLiteral("/channel/") + ch.value(QStringLiteral("id")).toString()},
-            {QStringLiteral("updatedAt"), ch.value(QStringLiteral("updatedAt"))},
-            {QStringLiteral("loop"), ch.value(QStringLiteral("loop")).toBool(true)},
-            {QStringLiteral("version"), manifest.value(QStringLiteral("version"))},
-            {QStringLiteral("items"), manifest.value(QStringLiteral("items"))},
-        };
+            return {};
+        return QJsonObject::fromVariantMap(Channels::instance()->find(d.value(QStringLiteral("channelId")).toString()));
     }
-    return unpaired;
+    return {};
+}
+
+bool Players::hasPaired() const
+{
+    for (const QJsonObject &d : readRaw())
+        if (d.value(QStringLiteral("paired")).toBool())
+            return true;
+    return false;
+}
+
+void Players::announceStudio(bool onlyOffline)
+{
+    if (!Iptv::instance()->running())
+        return;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    for (const QJsonObject &d : readRaw()) {
+        const QString deviceId = d.value(QStringLiteral("deviceId")).toString();
+        const QString apiUrl = d.value(QStringLiteral("apiUrl")).toString();
+        const QString tokenRef = d.value(kToken).toString();
+        if (!d.value(QStringLiteral("paired")).toBool() || apiUrl.isEmpty() || tokenRef.isEmpty())
+            continue;
+        if (onlyOffline) {
+            const QDateTime seen = QDateTime::fromString(d.value(QStringLiteral("lastSeenAt")).toString(), Qt::ISODateWithMs);
+            if (seen.isValid() && seen.msecsTo(QDateTime::currentDateTimeUtc()) < 90000)
+                continue; // heartbeats are arriving: it already knows where we are
+            if (now - m_lastAnnounce.value(deviceId) < 5 * 60000)
+                continue;
+        }
+        m_lastAnnounce.insert(deviceId, now);
+        const QString token = SecretStore::unprotect(tokenRef);
+        if (token.isEmpty())
+            continue;
+        const QUrl url(apiUrl + QStringLiteral("/studio"));
+        QNetworkRequest req(url);
+        req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+        req.setRawHeader("Authorization", "Bearer " + token.toUtf8());
+        req.setTransferTimeout(4000);
+        const QString studioUrl = Iptv::instance()->baseUrlFor(QHostAddress(url.host()));
+        QNetworkReply *reply = m_net->post(req, QJsonDocument(QJsonObject{{QStringLiteral("studioUrl"), studioUrl}}).toJson(QJsonDocument::Compact));
+        connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
+    }
 }
 
 void Players::upsertFound(const QJsonObject &f, const QString &ip)
@@ -277,7 +315,10 @@ void Players::claim(const QString &id, const QString &channelId, const QString &
     QNetworkRequest req(QUrl(apiUrl + QStringLiteral("/claim")));
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     req.setTransferTimeout(5000);
-    const QByteArray body = QJsonDocument(QJsonObject{{QStringLiteral("studioUrl"), Iptv::instance()->baseUrl()}}).toJson(QJsonDocument::Compact);
+    // The address on the player's own subnet — the "selected IP" may be a VPN
+    // or another NIC the device can't reach.
+    const QString studioUrl = Iptv::instance()->baseUrlFor(QHostAddress(QUrl(apiUrl).host()));
+    const QByteArray body = QJsonDocument(QJsonObject{{QStringLiteral("studioUrl"), studioUrl}}).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = m_net->post(req, body);
     connect(reply, &QNetworkReply::finished, this, [reply, cb, finish] {
         reply->deleteLater();

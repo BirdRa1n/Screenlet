@@ -12,7 +12,11 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QNetworkInterface>
+#include <QFutureWatcher>
+#include <QPointer>
 #include <QProcess>
+#include <QRegularExpression>
+#include <QtConcurrent/QtConcurrentRun>
 #include <QStandardPaths>
 #include <QTemporaryFile>
 #include <QUrl>
@@ -40,6 +44,18 @@ QByteArray mimeFor(const QString &file)
     if (ext == QLatin1String("mov")) return "video/quicktime";
     if (ext == QLatin1String("mkv")) return "video/x-matroska";
     return "application/octet-stream";
+}
+
+// The address the client used to reach us (Host header). Download URLs in
+// the player manifest must use it: the "selected IP" may be another NIC, a
+// VPN or a stale DHCP lease the device can't reach.
+QString requestBase(const HttpRequest &req)
+{
+    static const QRegularExpression re(QStringLiteral("^(\\[[0-9A-Fa-f:.]+\\]|[A-Za-z0-9.-]+)(:\\d{1,5})?$"));
+    const QString host = QString::fromLatin1(req.headers.value("host")).trimmed();
+    if (host.isEmpty() || !re.match(host).hasMatch())
+        return {};
+    return QStringLiteral("http://") + host;
 }
 
 int ipRank(const QString &ip)
@@ -136,6 +152,8 @@ bool Iptv::start()
     const bool ok = m_server->listen(kPort, &err);
     m_lastError = ok ? QString() : err;
     emit statusChanged();
+    if (ok) // our IP may have changed since the players were paired
+        Players::instance()->announceStudio(false);
     return ok;
 }
 
@@ -234,7 +252,7 @@ Iptv::HashEntry Iptv::hashExport(const QString &filename) const
     return e;
 }
 
-QJsonObject Iptv::channelManifest(const QJsonObject &channel) const
+QJsonObject Iptv::playerSyncPayload(const QJsonObject &channel, const QString &base) const
 {
     QJsonArray items;
     QByteArray sig;
@@ -248,7 +266,7 @@ QJsonObject Iptv::channelManifest(const QJsonObject &channel) const
             continue; // file gone — omit rather than advertise a 404
         items.append(QJsonObject{
             {QStringLiteral("filename"), file},
-            {QStringLiteral("url"), baseUrl() + QStringLiteral("/exports/") + QString::fromUtf8(QUrl::toPercentEncoding(file))},
+            {QStringLiteral("url"), base + QStringLiteral("/exports/") + QString::fromUtf8(QUrl::toPercentEncoding(file))},
             {QStringLiteral("size"), double(h.size)},
             {QStringLiteral("hash"), QStringLiteral("sha256:") + h.hash},
             {QStringLiteral("transition"), it.value(QStringLiteral("transition")).toString(QStringLiteral("cut"))},
@@ -257,8 +275,36 @@ QJsonObject Iptv::channelManifest(const QJsonObject &channel) const
             sig += '|';
         sig += file.toUtf8() + ":sha256:" + h.hash.toUtf8();
     }
-    const QString version = QString::fromLatin1(QCryptographicHash::hash(sig, QCryptographicHash::Sha256).toHex().left(16));
-    return {{QStringLiteral("version"), version}, {QStringLiteral("items"), items}};
+    const QString id = channel.value(QStringLiteral("id")).toString();
+    return {
+        {QStringLiteral("paired"), true},
+        {QStringLiteral("channelId"), id},
+        {QStringLiteral("playlistUrl"), base + QStringLiteral("/channel/") + id},
+        {QStringLiteral("updatedAt"), channel.value(QStringLiteral("updatedAt"))},
+        {QStringLiteral("loop"), channel.value(QStringLiteral("loop")).toBool(true)},
+        {QStringLiteral("version"), QString::fromLatin1(QCryptographicHash::hash(sig, QCryptographicHash::Sha256).toHex().left(16))},
+        {QStringLiteral("items"), items},
+    };
+}
+
+QString Iptv::baseUrlFor(const QHostAddress &peer) const
+{
+    bool isV4 = false;
+    const quint32 p = peer.toIPv4Address(&isV4);
+    if (isV4) {
+        for (const QNetworkInterface &iface : QNetworkInterface::allInterfaces()) {
+            if (!(iface.flags() & QNetworkInterface::IsUp) || (iface.flags() & QNetworkInterface::IsLoopBack))
+                continue;
+            for (const QNetworkAddressEntry &e : iface.addressEntries()) {
+                if (e.ip().protocol() != QAbstractSocket::IPv4Protocol)
+                    continue;
+                const quint32 mask = e.netmask().toIPv4Address();
+                if (mask && (e.ip().toIPv4Address() & mask) == (p & mask))
+                    return QStringLiteral("http://%1:%2").arg(e.ip().toString()).arg(kPort);
+            }
+        }
+    }
+    return baseUrl();
 }
 
 // ── Routing ───────────────────────────────────────────────────────────────────
@@ -282,8 +328,22 @@ void Iptv::handle(const HttpRequest &req, HttpResponse *res)
         return;
     }
     if (p == QLatin1String("/api/player/sync") && req.method == "GET") {
-        const QJsonObject r = Players::instance()->syncResponse(req.query.queryItemValue(QStringLiteral("deviceId")));
-        res->sendJson(200, QJsonDocument(r).toJson(QJsonDocument::Compact));
+        const QJsonObject ch = Players::instance()->syncChannel(req.query.queryItemValue(QStringLiteral("deviceId")));
+        if (ch.isEmpty()) {
+            res->sendJson(200, R"({"paired":false})");
+            return;
+        }
+        QString base = requestBase(req);
+        if (base.isEmpty())
+            base = baseUrlFor(req.remote);
+        QPointer<HttpResponse> guard(res);
+        auto *watcher = new QFutureWatcher<QJsonObject>(this);
+        connect(watcher, &QFutureWatcher<QJsonObject>::finished, this, [watcher, guard] {
+            if (guard)
+                guard->sendJson(200, QJsonDocument(watcher->result()).toJson(QJsonDocument::Compact));
+            watcher->deleteLater();
+        });
+        watcher->setFuture(QtConcurrent::run([this, ch, base] { return playerSyncPayload(ch, base); }));
         return;
     }
     if (p.startsWith(QLatin1String("/exports/")) && (req.method == "GET" || req.method == "HEAD")) {

@@ -2,6 +2,7 @@
 
 #include "core/AppContext.h"
 
+#include <QHash>
 #include <QJSValue>
 #include <QJsonObject>
 #include <QObject>
@@ -36,7 +37,13 @@ public:
     Q_INVOKABLE void remove(const QString &id);
 
     void heartbeat(const QJsonObject &body, const QString &remoteIp);
-    QJsonObject syncResponse(const QString &deviceId) const;
+    // Channel assigned to a paired device ({} when unpaired / no channel).
+    QJsonObject syncChannel(const QString &deviceId) const;
+    bool hasPaired() const;
+    // Tells paired players where this Studio is now (POST <player>/studio), so
+    // a PC whose IP changed (DHCP, other NIC) doesn't strand them. With
+    // onlyOffline, only devices silent for a while (throttled per device).
+    void announceStudio(bool onlyOffline);
 
 signals:
     void itemsChanged();
@@ -48,5 +55,6 @@ private:
     void upsertFound(const QJsonObject &identify, const QString &ip);
 
     QNetworkAccessManager *m_net = nullptr;
+    QHash<QString, qint64> m_lastAnnounce; // deviceId → ms since epoch
     bool m_scanning = false;
 };

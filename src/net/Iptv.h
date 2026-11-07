@@ -10,6 +10,7 @@
 #include <QtQml/qqmlregistration.h>
 
 class HttpServer;
+class QHostAddress;
 struct HttpRequest;
 class HttpResponse;
 
@@ -49,8 +50,14 @@ public:
     static QStringList localIps();
     static QString findFfmpeg();
 
-    // Manifest + hashes (used by the player sync route).
-    QJsonObject channelManifest(const QJsonObject &channel) const;
+    // Base URL a device at `peer` can actually reach: the local IPv4 on the
+    // same subnet as the peer, falling back to baseUrl() (selected IP).
+    QString baseUrlFor(const QHostAddress &peer) const;
+
+    // Full /api/player/sync payload for a channel, with URLs rooted at `base`.
+    // Thread-safe (hashing a freshly rendered video can take seconds, so the
+    // route builds it on the thread pool, never on the GUI thread).
+    QJsonObject playerSyncPayload(const QJsonObject &channel, const QString &base) const;
 
 signals:
     void statusChanged();

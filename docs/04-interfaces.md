@@ -79,7 +79,8 @@ O ffmpeg é procurado em caminhos fixos por plataforma (Homebrew, `/usr/bin`, `C
 }
 ```
 
-- Os hashes ficam em cache por `size:mtime`, para não recalcular a cada chamada do player, que acontece a cada ~15 s.
+- Os hashes ficam em cache por `size:mtime`, para não recalcular a cada chamada do player, que acontece a cada ~15 s. Na versão Qt, o manifesto é montado fora da thread da interface.
+- Na versão Qt, as URLs (`url`, `playlistUrl`) usam o cabeçalho `Host` da requisição, ou seja, o endereço que o player de fato alcança, e não o IP selecionado na tela IPTV.
 - Itens cujo arquivo sumiu são omitidos.
 - O player baixa os arquivos, guarda em cache e continua tocando mesmo sem o servidor.
 
@@ -105,7 +106,8 @@ O Screenlet Player é um projeto à parte, em Go, que usa o mpv. Sua API de cont
 | Chamada | Resposta |
 |---|---|
 | `GET /identify` (sem autenticação) | `{ deviceId, hostname, playerVersion, claimed: bool, … }` |
-| `POST /claim` com `{ studioUrl: "http://<ip>:7095" }` | `{ token }`. Responde 409 se já foi reivindicado |
+| `POST /claim` com `{ studioUrl: "http://<ip>:7095" }` | `{ token }`. Responde 409 se já foi reivindicado. Na versão Qt, o `<ip>` é o IP local na mesma sub-rede do player |
+| `POST /studio` com `{ studioUrl }` e `Authorization: Bearer <token>` | `204`. Atualiza o endereço do Studio no player (players ≥ esta versão; os antigos respondem 404). O Studio chama ao iniciar o servidor IPTV e, a cada minuto, para players pareados sem heartbeat há 90 s (no máximo uma vez a cada 5 min por player) |
 
 Depois do pareamento, o player passa a enviar heartbeats e a consultar `/api/player/sync` no Studio.
 

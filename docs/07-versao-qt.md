@@ -16,7 +16,8 @@ O código fica na raiz deste repositório, um projeto CMake + Qt 6.12. O código
 | Mídia (deduplicação SHA-256, arrastar e soltar), Vídeos prontos | ✅ |
 | Canais, Studio (playlist, prévia com corte/fade real, grade de 24 h) | ✅ |
 | Servidor IPTV (M3U, EPG, stream, `/exports` com Range, API do Screenlet Player) | ✅ Testado com curl de ponta a ponta |
-| Telas: Screenlet Player (varredura e pareamento) e Kodi (SSH + JSON-RPC) | ✅ Implementado; não testado com dispositivos reais |
+| Telas: Screenlet Player (varredura e pareamento) e Kodi (SSH + JSON-RPC) | ✅ Screenlet Player testado de ponta a ponta com o player real (heartbeat, sync, download, re-render, PC desligado e religado, troca de endereço). Kodi não testado com dispositivos reais |
+| Screenlet Player: robustez | ✅ O manifesto é montado fora da thread da interface, com URLs pelo cabeçalho `Host`; o pareamento envia o IP da mesma sub-rede do player; o Studio avisa os players do seu endereço atual (`POST /studio`) ao iniciar o servidor e quando eles ficam em silêncio; com algum player pareado, o servidor IPTV sobe junto com o app |
 | Configurações, backup/restauração seletiva, troca de pasta, bandeja, iniciar com o sistema | ✅ |
 | Backup com credenciais | ✅ Senhas de dispositivos, tokens de players e a chave do StockEasy vão no backup, que sai criptografado (ZIP AES-256, WinZip AE-2, senha obrigatória de 8+ caracteres) e regrava os segredos no Keychain ao restaurar |
 | Anúncios desatualizados | ✅ Aviso em Meus anúncios, no Painel e após sincronizar preços; "Atualizar e renderizar" aplica os dados da biblioteca e renderiza de novo nos mesmos arquivos, em fila; os canais que usam esses vídeos se atualizam sozinhos |
