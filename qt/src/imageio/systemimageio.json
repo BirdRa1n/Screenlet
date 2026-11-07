@@ -1,0 +1,4 @@
+{
+    "Keys": [ "webp", "avif", "heic", "heif" ],
+    "MimeTypes": [ "image/webp", "image/avif", "image/heic", "image/heif" ]
+}
