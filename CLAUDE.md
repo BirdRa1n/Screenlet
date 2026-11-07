@@ -19,6 +19,15 @@ ctest --test-dir build/debug --output-on-failure
 scripts/package-mac.sh            # → build/dist/Screenlet-<versão>-universal.dmg
 ```
 
+No Windows (Qt em `C:\Qt\6.12.0\mingw_64`, MinGW e CMake em `C:\Qt\Tools`, Inno Setup 6):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\package-win.ps1
+# → build\dist\Screenlet-Setup-<versão>.exe + latest.yml
+```
+
+O instalador (`installer/screenlet.iss`) instala por usuário em `%LOCALAPPDATA%\Programs\Screenlet`, com `Screenlet.exe` na raiz, e remove a versão Electron antes de instalar. O `latest.yml` vai junto na release: é por ele que o electron-updater das instalações Electron oferece a atualização para esta versão.
+
 O Qt fica em `~/Qt/6.12.0/macos`. O CMake e o Ninja estão em `~/Qt/Tools`. O Xcode completo (27) está em `/Applications/Xcode.app`, mas o `xcode-select` aponta para as Command Line Tools; o CMake encontra o `actool` sozinho. Commits e PRs são em **pt-BR**, sem coautoria.
 
 ## Arquitetura
