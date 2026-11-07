@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Hardened runtime (Developer ID builds). The QML engine JIT-compiles
+         JavaScript bindings, which needs writable executable memory. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <!-- FFmpeg dylibs shipped by Qt Multimedia are signed by us as part of the
+         bundle; keep library validation relaxed for the plugin loader. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>
