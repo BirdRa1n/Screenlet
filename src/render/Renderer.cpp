@@ -564,6 +564,10 @@ void Renderer::startNextThumbnail()
 {
     if (m_thumbRunning || m_job || m_thumbQueue.isEmpty())
         return;
+    if (!m_engine) { // queued during startup, before main() handed us the engine
+        QTimer::singleShot(500, this, &Renderer::startNextThumbnail);
+        return;
+    }
     m_thumbRunning = true;
     const auto [id, config] = m_thumbQueue.dequeue();
     const int frames = totalFrames(config);

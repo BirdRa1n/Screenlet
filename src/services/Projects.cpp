@@ -22,6 +22,14 @@ QString Projects::fileFor(const QString &id) const
 
 void Projects::refresh()
 {
+    // Thumbnails made by builds that couldn't decode WebP (Windows ≤ 2.0.1)
+    // came out black: redo them all once, and make any that are missing.
+    static constexpr int kThumbsVersion = 2;
+    const QString marker = QDir(Paths::projectThumbs()).filePath(QStringLiteral(".version"));
+    QFile mf(marker);
+    const bool redoAll = !(mf.open(QIODevice::ReadOnly) && mf.readAll().trimmed().toInt() >= kThumbsVersion);
+    mf.close();
+
     QVariantList list;
     for (const QJsonObject &o : JsonIo::readDir(Paths::projects())) {
         const QString id = o.value(QStringLiteral("id")).toString();
@@ -41,12 +49,16 @@ void Projects::refresh()
             }
         }
         const QString thumb = QStringLiteral("project-thumbs/%1.jpg").arg(id);
+        if (redoAll || !QFileInfo::exists(Paths::resolveMedia(thumb)))
+            Renderer::instance()->renderThumbnail(id, config.toVariantMap());
         list.append(QVariantMap{
             {QStringLiteral("id"), id},
             {QStringLiteral("name"), o.value(QStringLiteral("name")).toString()},
             {QStringLiteral("createdAt"), o.value(QStringLiteral("createdAt")).toString()},
             {QStringLiteral("updatedAt"), o.value(QStringLiteral("updatedAt")).toString()},
             {QStringLiteral("thumbnail"), QFileInfo::exists(Paths::resolveMedia(thumb)) ? thumb : QString()},
+            // Cache-buster for QML: changes whenever the JPEG is rewritten.
+            {QStringLiteral("thumbStamp"), QFileInfo(Paths::resolveMedia(thumb)).lastModified().toMSecsSinceEpoch()},
             {QStringLiteral("sceneCount"), scenes.size()},
             {QStringLiteral("durationFrames"), frames},
             {QStringLiteral("fps"), config.value(QStringLiteral("fps")).toInt(30)},
@@ -55,6 +67,8 @@ void Projects::refresh()
             {QStringLiteral("exports"), o.value(QStringLiteral("exports")).toArray().toVariantList()},
         });
     }
+    if (redoAll && Paths::ensureDir(Paths::projectThumbs()) && mf.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        mf.write(QByteArray::number(kThumbsVersion));
     m_items = JsonIo::sortedByDate(list, QStringLiteral("updatedAt"));
     emit itemsChanged();
 }

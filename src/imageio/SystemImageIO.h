@@ -6,7 +6,8 @@
 
 // Image formats the bundled Qt kit can't read (no Qt Image Formats add-on),
 // decoded with the operating system's own codecs:
-//   macOS  ImageIO — WebP, AVIF, HEIC/HEIF
+//   macOS    ImageIO — WebP, AVIF, HEIC/HEIF
+//   Windows  WIC — WebP (built in on 10/11), AVIF/HEIC with the Store extensions
 // Compiled into the app as a static plugin, so QImage, QML Image and the
 // exporter all read these files transparently.
 class SystemImageIOHandler : public QImageIOHandler

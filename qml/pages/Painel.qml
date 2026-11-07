@@ -408,7 +408,7 @@ Item {
                     clip: true
                     Image {
                         anchors.fill: parent
-                        source: row.project.thumbnail ? Storage.url(row.project.thumbnail) + "?t=" + row.project.updatedAt
+                        source: row.project.thumbnail ? Storage.url(row.project.thumbnail) + "?t=" + row.project.thumbStamp
                               : (row.project.coverImage ? Storage.url(row.project.coverImage) : "")
                         fillMode: row.project.thumbnail ? Image.PreserveAspectCrop : Image.PreserveAspectFit
                         anchors.margins: row.project.thumbnail ? 0 : 3

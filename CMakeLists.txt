@@ -5,7 +5,7 @@ if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)  # also repairs caches created empty
     set(CMAKE_OSX_DEPLOYMENT_TARGET "14.4" CACHE STRING "Minimum macOS version" FORCE)
 endif()
 
-project(Screenlet VERSION 2.0.1 LANGUAGES CXX)
+project(Screenlet VERSION 2.0.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -92,6 +92,15 @@ if(APPLE)
     set_source_files_properties(src/imageio/SystemImageIO_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
     target_link_libraries(screenlet_imageio PRIVATE Qt6::Gui
         "-framework ImageIO" "-framework CoreGraphics" "-framework Foundation")
+    target_link_libraries(Screenlet PRIVATE screenlet_imageio)
+    target_compile_definitions(Screenlet PRIVATE SCREENLET_SYSTEM_IMAGEIO)
+elseif(WIN32)
+    qt_add_plugin(screenlet_imageio STATIC
+        CLASS_NAME SystemImageIOPlugin
+        PLUGIN_TYPE imageformats
+        src/imageio/SystemImageIO.h
+        src/imageio/SystemImageIO_win.cpp)
+    target_link_libraries(screenlet_imageio PRIVATE Qt6::Gui windowscodecs ole32)
     target_link_libraries(Screenlet PRIVATE screenlet_imageio)
     target_compile_definitions(Screenlet PRIVATE SCREENLET_SYSTEM_IMAGEIO)
 endif()

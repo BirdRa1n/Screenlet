@@ -131,7 +131,7 @@ Item {
                             Image {
                                 anchors.fill: parent
                                 anchors.margins: card.modelData.p.thumbnail ? 0 : 18
-                                source: card.modelData.p.thumbnail ? Storage.url(card.modelData.p.thumbnail) + "?t=" + card.modelData.p.updatedAt
+                                source: card.modelData.p.thumbnail ? Storage.url(card.modelData.p.thumbnail) + "?t=" + card.modelData.p.thumbStamp
                                       : (card.modelData.p.coverImage ? Storage.url(card.modelData.p.coverImage) : "")
                                 fillMode: card.modelData.p.thumbnail ? Image.PreserveAspectCrop : Image.PreserveAspectFit
                                 asynchronous: true

@@ -68,7 +68,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            initialItem: Qt.resolvedUrl(win.pages[Nav.page])
+            // As a string: a `url` value here left the first page blank at
+            // startup (the page was created but never shown); replace() is fine.
+            initialItem: Qt.resolvedUrl(win.pages[Nav.page]).toString()
 
             replaceEnter: Transition {
                 ParallelAnimation {
@@ -93,7 +95,9 @@ ApplicationWindow {
         if (SystemInfo.env("SCREENLET_TEST_EXPORT")) {
             const t0 = Date.now()
             const cfgPath = SystemInfo.env("SCREENLET_TEST_CONFIG")
-            const cfg = cfgPath ? JSON.parse(SystemInfo.readTextFile("file://" + cfgPath)) : Doc.config
+            // "/Users/…" on the Mac, "C:/…" or "C:\…" on Windows.
+            const cfgUrl = cfgPath.startsWith("/") ? "file://" + cfgPath : "file:///" + cfgPath.replace(/\\/g, "/")
+            const cfg = cfgPath ? JSON.parse(SystemInfo.readTextFile(cfgUrl)) : Doc.config
             Renderer.exportVideo(Object.assign({}, cfg, { width: 1920, height: 1080 }), SystemInfo.env("SCREENLET_TEST_EXPORT"), 30, "tv", "", function (r) {
                 console.log("TEST_EXPORT", JSON.stringify(r), "ms=" + (Date.now() - t0))
                 Qt.quit()
