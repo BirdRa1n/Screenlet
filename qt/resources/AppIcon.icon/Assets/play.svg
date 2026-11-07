@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Play mark: the tag is a video ad. Rounded triangle on the tag body. -->
+  <g transform="translate(152 160) scale(30)">
+    <path fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.1" stroke-linejoin="round"
+      d="M11.2 10.1 L17.1 13.5 L11.2 16.9 Z"/>
+  </g>
+</svg>
