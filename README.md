@@ -1,215 +1,120 @@
-# Screenlet
+# Screenlet (Qt)
 
-Plataforma desktop de **digital signage** para criação, gerenciamento e transmissão de vídeos publicitários — TV, Instagram, Stories e TikTok.
+Edição nativa do Screenlet em **Qt 6.12 (C++20 + QML)**, com o design "Vitrine" (proposta B). Ela substitui a versão Electron + Next.js + Remotion e lê **os mesmos arquivos de dados**, sem nenhuma conversão.
 
-Crie anúncios com produtos, preços e logo da sua marca, exporte em **MP4**, organize em canais e transmita via **IPTV** para Smart TVs na rede local.
+## Compilar e rodar
 
----
+Pré-requisitos:
+- Qt 6.8 ou mais recente, com os módulos Quick, QuickControls2, Multimedia (com o backend FFmpeg), Network e Concurrent;
+- CMake 3.21 ou mais recente e Ninja (o instalador do Qt já traz os dois).
 
-## Funcionalidades
+```bash
+export PATH="$HOME/Qt/Tools/CMake/CMake.app/Contents/bin:$HOME/Qt/Tools/Ninja:$PATH"
+cmake -S . -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$HOME/Qt/6.12.0/macos
+cmake --build build/release
+open build/release/Screenlet.app
+```
 
-### Editor de anúncios
-- Painel de cenas com drag-and-drop para reordenar
-- Prévia em tempo real com `@remotion/player`
-- Ao selecionar uma cena, o preview avança automaticamente para aquele ponto
-- Inspetor de propriedades com edição de cores, textos, preços, logo e variáveis de template
+### Empacotar o .dmg (macOS)
 
-### Tipos de cena
-- **Produto** — imagem, nome, preço único ou oferta (de/por), sufixo, badge personalizável
-- **Logo/Chamada** — exibição da marca com tagline animada
-- **Template** — composição criada no Template Builder, com variáveis preenchíveis no inspetor
-- **Vídeo** — arquivo de vídeo local com controle de volume
+```bash
+scripts/package-mac.sh
+```
 
-### Template Builder
-- Canvas visual de arrastar e redimensionar (1920×1080 escalado para o container)
-- Timeline de frames por camada com controle de início/fim
-- Tipos de camada: texto, imagem, logo, forma, badge, preço, vídeo
-- Flip horizontal e vertical em camadas de imagem e logo
-- Variáveis tipadas (texto, número, imagem, cor) para personalização por instância
-- Galeria de templates com prévia, duplicar, exportar e importar JSON
-- Templates embutidos: Genérico, Açougue/Carnes, Natal, Páscoa
+O script gera `build/dist/Screenlet-<versão>-universal.dmg`, um app universal (Apple Silicon e Intel) para macOS 14.4 ou mais recente. Ele:
+1. compila em Release;
+2. roda o `macdeployqt` para embutir o Qt, os módulos QML e o backend FFmpeg;
+3. remove plugins que o app não usa;
+4. grava um `qt.conf` com caminhos relativos ao pacote;
+5. assina o app e cria a imagem com o atalho "Aplicativos".
 
-### Renderização
-- Diálogo de renderização com nome do arquivo e seleção de FPS (30 ou 60)
-- Nome em branco usa o nome do projeto (ex.: `projeto.mp4`); se o arquivo já existir, é **sobrescrito**
-- Ao sobrescrever um vídeo já usado por um canal, a programação é atualizada **mantendo a posição na grade** e as telas atribuídas são re-sincronizadas — com aviso por toast informando qual canal foi atualizado
-- Aceleração por GPU quando disponível (NVENC/AMF/QSV), com fallback automático para CPU
-- Chrome Headless baixado uma vez e em cache permanente no diretório do usuário
-- Concorrência de renderização ajustada automaticamente de acordo com a RAM disponível
-
-### Vídeos renderizados
-- Aba **Vídeos** lista todos os MP4s exportados
-- Pré-visualizar (player embutido), revelar no Finder ou excluir diretamente pela interface
-
-### Canais e Studio
-- Crie canais IPTV com nome, descrição e logo
-- **Studio** — modal full-screen para montar a playlist de cada canal, com 3 abas:
-  - **Playlist** — biblioteca de vídeos renderizados (painel esquerdo) + ordenação, transição por clipe (corte / fade) e loop (painel direito)
-  - **Pré-visualizar** — player que reproduz a playlist na ordem configurada, simulando a transmissão real do canal
-  - **Horários** — regras de programação por horário e dia da semana
-- Servidor IPTV embutido na porta 7095 com playlist M3U e guia EPG
-- Seletor de interface de rede — escolha por qual adaptador transmitir (rede local, Tailscale/VPN, etc.); preferência persistida entre sessões
-
-### Dispositivos
-- **Kodi/LibreELEC** — cadastre boxes Kodi via SSH, teste conexão, liste canais e reinicie/abra o IPTV remotamente. Credenciais armazenadas com criptografia.
-- **Screenlet Player** — pareie players Linux dedicados (projeto irmão `screenlet-player`, baseado em mpv) varrendo a rede local, associe a um canal e acompanhe o status de cada dispositivo pareado. O player baixa e cacheia o conteúdo do canal localmente (manifesto exposto em `/api/player/sync` + rota `/exports`), então continua reproduzindo a última programação mesmo após reiniciar sem o servidor disponível.
-
-### Media Hub
-- Catálogo central de todas as imagens e vídeos importados, com miniaturas (inclusive para vídeos, geradas a partir de um frame do clipe)
-- Deduplicação automática por hash do arquivo
-- Seletor de mídia reutilizado no editor, no Template Builder e no Wizard
-
-### Biblioteca de produtos
-- Cadastre produtos reutilizáveis com categorias e um campo opcional de **referência** (código no PDV/ERP)
-- Busca e filtro por categoria
-- Importe múltiplos produtos no editor com multi-seleção ordenada
-- **Sincronizar** preço a partir da integração StockEasy (por produto ou em lote); na primeira sincronização você escolhe a loja de referência
-- Ao abrir um projeto no editor, produtos importados da biblioteca que ficaram desatualizados (imagem, preço, descrição…) são detectados e podem ser atualizados sem reimportar tudo
-
-### Integrações
-- Seção **Integrações** nas configurações para conectar sistemas externos (PDV/ERP) aos dados dos produtos
-- **StockEasy** — informe a chave de API (armazenada criptografada via `safeStorage`, nunca exposta ao renderer) para buscar preços e dados pela referência do produto
-
-### Wizard de criação
-- 5 passos guiados: loja → produtos → template → preview → renderização
-- Importação de produtos via CSV
-
-### Projetos
-- Salve e carregue projetos com nome personalizado
-- Histórico com data de atualização
-- Miniatura gerada automaticamente para cada projeto salvo
-
-### Armazenamento
-- Todos os dados (projetos, assets, templates, canais, exports) salvos em `~/Documents/Screenlet/`
-- Sobrevive a reinstalações e sincroniza via iCloud / OneDrive automaticamente
-- Seção **Armazenamento** nas configurações para alterar e migrar a pasta com ou sem cópia dos arquivos
-
-### Configurações
-- Tema claro / escuro / sistema (acompanha a preferência do sistema operacional em tempo real)
-- Escolha e migração da pasta de armazenamento
-- **Inicialização (Windows)**: iniciar o Screenlet junto com o sistema (minimizado na bandeja/tray) e, opcionalmente, já iniciar o servidor IPTV automaticamente
-
----
-
-## Stack
-
-| Camada | Tecnologia |
+| Variável | Uso |
 |---|---|
-| Desktop | Electron 42 |
-| UI | Next.js 15 (App Router, static export) + React 19 |
-| Estilo | Tailwind CSS v4 + shadcn/ui (Radix) |
-| Animações | Framer Motion |
-| Vídeo | Remotion 4 |
-| Estado | Zustand 5 |
-| Drag & Drop | dnd-kit |
-| Ícones | Lucide React |
+| `SIGN_IDENTITY` | Padrão: detecta automaticamente um certificado "Developer ID Application" ou "Apple Development" (hardened runtime + `resources/entitlements.plist`); sem certificado, usa `-` (ad-hoc). Para distribuir, use "Developer ID Application" e notarize o `.dmg` com `xcrun notarytool` + `xcrun stapler` |
 
----
+> **Por que assinar com certificado:** o macOS amarra a permissão de acesso à pasta Documentos (e ao Keychain) à assinatura do app. Com assinatura ad-hoc, cada build ou cópia do app tem outra assinatura e o macOS volta a perguntar. Os builds de desenvolvimento (Qt Creator / CMake) também são assinados automaticamente após o link; para forçar outra identidade, use `-DSCREENLET_SIGN_IDENTITY=<sha1>` (ou `-` para ad-hoc).
+| `ARCHS` | `arm64;x86_64` (padrão) ou só uma arquitetura |
+| `QT_DIR` | Kit Qt (padrão `~/Qt/6.12.0/macos`) |
 
-## Requisitos
+Os avisos do `macdeployqt` sobre `libpq`, `libiodbc` e `libmimerapi` vêm de drivers SQL que o script remove em seguida; podem ser ignorados.
 
-- Node.js 18+
-- npm 9+
-- macOS (Apple Silicon ou Intel) ou Windows 10/11 x64
+**Fontes:** coloque `Inter-*.ttf` e `BricolageGrotesque-*.ttf` em `fonts/`. Elas são embutidas e carregadas automaticamente. Sem elas, o app usa fontes do sistema parecidas (Avenir Next ou Helvetica Neue).
 
----
+### Ícone do app
 
-## Instalação
+O ícone é um documento do **Icon Composer**, `resources/AppIcon.icon`. Ele tem duas camadas em SVG: a etiqueta e o "play" em vidro, sobre um fundo amarelo-alaranjado. No macOS 26+ o sistema aplica o Liquid Glass e as variações escura, clara e tingida. Para editar, abra o arquivo no Icon Composer (vem com o Xcode).
+
+O CMake compila o documento com o `actool` (Xcode 26+) e gera o `Assets.car` (`CFBundleIconName`) mais o `AppIcon.icns`. Os arquivos `icon.icns`, `icon.png` e `icon.ico` são versões pré-renderizadas com o `ictool`. Eles servem para builds sem Xcode, para o ícone da janela e para o Windows. Para regenerar depois de mudar o ícone:
 
 ```bash
-git clone https://github.com/BirdRa1n/AdFrame.git
-cd AdFrame
-npm install
+ICTOOL="/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents/Executables/ictool"
+"$ICTOOL" resources/AppIcon.icon --export-image --output-file resources/icon.png \
+  --platform macOS --rendition Default --width 1024 --height 1024 --scale 1
 ```
 
----
-
-## Desenvolvimento
-
-```bash
-# Inicia Next (dev server) + Electron juntos (recomendado)
-npm run electron:dev
-
-# Só o browser em http://localhost:3000 (sem Electron APIs)
-npm run dev
-```
-
----
-
-## Build
-
-```bash
-# Static export do Next (out/) + pré-bundle Remotion (out/remotion-bundle/)
-npm run build
-
-# Empacota instaladores macOS (Apple Silicon + Intel)
-npm run dist:mac
-
-# Só Apple Silicon
-npm run dist:mac:arm64
-
-# Só Intel
-npm run dist:mac:intel
-
-# Instalador Windows
-npm run dist:win
-
-# Linux
-npm run dist:linux
-```
-
-O script `install-cross-compositors.mjs` é executado automaticamente antes de cada `dist:mac*` para garantir que os binários do Remotion para ambas as arquiteturas estejam presentes — mesmo ao buildar em um Mac ARM64.
-
----
-
-## Estrutura do projeto
+## Estrutura
 
 ```
-app/                   # Next.js App Router (static export)
-  layout.tsx           # Root layout + providers.tsx (tema, tooltip, toaster, platform)
-  globals.css          # Tema: tokens da marca → variáveis shadcn (claro/escuro)
-  (app)/               # Grupo com a Sidebar; uma rota por página:
-                       # / projects library media-hub renders templates
-                       # templates/builder templates/wizard channels devices
-                       # iptv settings wizard editor
 src/
-  components/
-    ui/                # Primitivos shadcn (button, dialog, tabs, input, ...)
-    builder/           # CanvasEditor (drag/resize), Timeline (por camada)
-    media/             # MediaPicker, MediaPickerDialog (catálogo de mídia)
-    programming/       # ProgrammingTimeline, ProgrammingRuleBlock, ProgrammingRuleForm
-    RemotionPlayer.tsx # Wrapper client-only do <Player> (seguro no static export)
-  design-system/
-    components/        # Wrappers sobre shadcn com a API do app (Button, Dialog, Field, ...)
-  layout/              # Sidebar, Header, SceneListPanel, PreviewPanel, InspectorPanel, PageShell
-  lib/                 # utils.ts (cn), exportFormats.tsx, programmingEngine.ts
-  views/               # Dashboard, Wizard, Editor, Projects, Library, Settings, MediaHub,
-                       # Devices, Templates, TemplateBuilder, TemplateWizard,
-                       # Channels, Studio, Renders, IptvServer
-  remotion/            # DynamicAd, ProductScene, LogoScene, TemplateRenderer,
-                       # LayerRenderer, animations, types, template-types
-  store/               # useAdStore, useWizardStore, useLibraryStore, useProjectsStore,
-                       # useTemplateStore, useTemplateInstanceStore,
-                       # useChannelStore, useIptvStore, useThemeStore, useToastStore,
-                       # useMediaStore, useRendersStore, useAppSettingsStore,
-                       # useDeviceStore, usePlayerDeviceStore
-  templates/           # Templates embutidos (generico, carnes, natal, pascoa)
-  types/               # channel.ts, device.ts (Kodi), playerDevice.ts (Screenlet Player), media.ts
-electron/
-  main.cjs             # Processo principal: protocolo app:// (serve out/), dev asset server (7096),
-                       # armazenamento em ~/Documents/Screenlet/, exportação MP4 e thumbnails,
-                       # servidor IPTV, tray/autostart (Windows), Screenlet Player, SSH para Kodi
-  preload.cjs          # Bridge window.adFrame (selectImage, exportVideo, channelList, etc.)
-next.config.mjs        # output: export, distDir: out, rewrites dev p/ assets
-components.json        # Config do shadcn (alias @/* → src/*, base radix)
-scripts/
-  bundle-remotion.mjs            # Pré-compila as composições Remotion em out/remotion-bundle/
-  install-cross-compositors.mjs  # Baixa compositors ARM64 e x64 para builds cross-platform
-entitlements.plist     # Entitlements macOS para hardened runtime (dylibs do ffmpeg)
+  main.cpp                instância única, bandeja, carregamento do QML
+  core/                   Paths, JsonIo (gravação atômica), SecretStore (Keychain/DPAPI), Async
+  services/               Settings, Storage, Projects, Templates, Library, Media, Exports,
+                          Channels (motor de programação), StoreProfiles, Backup, SystemInfo, Updater
+  net/                    HttpServer (sobre QTcpServer), Iptv, Kodi (SSH + JSON-RPC), Players, StockEasy
+  render/Renderer         exportação MP4: QQuickRenderControl → QVideoFrameInput → QMediaRecorder
+  render/AudioMix         áudio dos clipes de vídeo: QAudioDecoder → mixagem → QAudioBufferInput (AAC)
+qml/
+  Main.qml                janela, sidebar, navegação com transições
+  singletons/             Theme (tokens), Motion, Nav, Doc (anúncio aberto), Insights, Toasts, Fmt
+  components/             design system (Btn, Card, Segmented, Inspector, MediaPicker…)
+  scene/                  motor de cenas: AdStage, ProductScene, LogoScene, TemplateScene,
+                          LayerItem, VideoScene, SceneMath.js (spring/interpolate do Remotion)
+  pages/                  Painel, Anúncios, Editor, Wizard, Templates, TemplateWizard,
+                          TemplateBuilder, Produtos, Mídia, Vídeos, Canais, Studio, Telas, IPTV, Configurações
+resources/                templates embutidos (JSON), imagens de exemplo, ícones
 ```
 
----
+### Decisões principais
 
-## Licença
+- **Prévia e exportação usam a mesma cena QML.** O `AdStage.qml` aparece no editor através do `AdPlayer`, sincronizado com a tela (`FrameAnimation`). O `Renderer` instancia o mesmo `AdStage` fora da tela e grava quadro a quadro, sem Chrome headless. Um anúncio de 15 s em 1080p fica pronto em cerca de 3 s.
+- **Serviços são singletons QML com uma única instância C++**, criada pelo `AppContext`. Os construtores exigem `parent`, para o QML não criar uma segunda cópia.
+- **Os dados ficam no formato JSON original.** Quase todos os campos novos são opcionais, como `exports[]` nos projetos e `*_secret` nos dispositivos. A única exceção é `player-devices.json`, que passou da pasta sincronizada para `userData`.
+- **I/O pesado roda fora da thread da interface.** É o caso de SHA-256, backup, migração de pasta e varredura de rede. O resultado volta por callback (`Servico.metodo(args, function (r) { … })`).
 
-Uso privado. Todos os direitos reservados.
+## Correções em relação à versão Electron
+
+Veja `docs/06-pontos-de-atencao.md` no repositório Screenlet:
+- editar um canal preserva as regras de horário;
+- o stream IPTV respeita as regras de horário;
+- o EPG usa as regras dos canais e o fuso correto;
+- o assistente aplica o visual escolhido;
+- exportar em 60 fps mantém a duração em segundos;
+- a troca de pasta copia vídeos e miniaturas;
+- os perfis de loja entram no backup;
+- o hash é calculado em streaming;
+- o M3U e o XML são escapados;
+- projetos são identificados por id, não por nome;
+- os Kodis só reiniciam quando a programação muda;
+- a cena de vídeo usa `cover`, sem distorcer.
+
+## Testes
+
+```bash
+cmake --build build/release-universal --target securezip_test && (cd build/release-universal && ctest --output-on-failure)
+```
+
+`tests/securezip_test` cobre o ZIP com AES-256 dos backups: ida e volta byte a byte, senha errada, adulteração detectada pelo HMAC e nomes em UTF-8.
+
+## Modo de desenvolvimento
+
+Estas variáveis de ambiente servem para testes automatizados:
+
+| Variável | Efeito |
+|---|---|
+| `SCREENLET_PAGE=<página>` (+ `SCREENLET_PARAMS='{"id":…}'`) | Abre uma página |
+| `SCREENLET_SNAPSHOT=<arquivo.png>` (+ `SCREENLET_SNAPSHOT_DELAY=ms`) | Salva um PNG da janela e encerra |
+| `SCREENLET_TEST_EXPORT=<nome>` | Exporta o anúncio padrão e encerra |
+| `SCREENLET_DEV_IPTV=1` | Inicia o servidor IPTV |
+| `SCREENLET_DATA_DIR` / `SCREENLET_USERDATA_DIR` | Usam pastas de dados e de configuração isoladas (testes sem tocar nos dados reais) |
+| `SCREENLET_NO_RELAUNCH=1` | Encerra em vez de reiniciar após restaurar um backup |
+| `SCREENLET_TEST_QUEUE=1` | Atualiza e renderiza todos os anúncios desatualizados e encerra |
