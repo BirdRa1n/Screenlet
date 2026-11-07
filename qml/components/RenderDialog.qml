@@ -3,7 +3,9 @@ import QtQuick.Layouts
 import Screenlet
 
 // "Renderizar" flow shared by the editor and both wizards: file name, format
-// and FPS, then progress until the MP4 lands in Vídeos prontos.
+// and FPS. The render itself goes to RenderQueue, so the user can watch it
+// here or send it to the background (the queue dock keeps showing it) and keep
+// working — and line up more renders while one is running.
 AppDialog {
     id: root
     property var config: null
@@ -12,12 +14,24 @@ AppDialog {
     property string format: "tv"
     property bool allowFormat: true
     property int fps: 30
+    property int uid: -1                     // job this dialog started
+    // Emitted when the render the user waited for here completes.
     signal finished(var result)
+    // Emitted when the job was left to the queue (background, or queued
+    // behind another render) — the caller should move on.
+    signal sentToBackground()
 
-    title: Renderer.busy ? "Renderizando…" : "Renderizar vídeo"
-    subtitle: Renderer.busy ? Renderer.currentFile : "O arquivo é salvo em Vídeos prontos. Se já existir, será substituído e os canais que o usam são atualizados."
+    readonly property var job: uid >= 0 ? RenderQueue.jobs.find(j => j.uid === uid) || null : null
+    readonly property bool rendering: !!job && job.status === "rendering"
+    readonly property bool waiting: !!job && job.status === "queued"
+    readonly property bool tracking: rendering || waiting
+    readonly property bool othersBusy: !tracking && RenderQueue.active
+
+    title: rendering ? "Renderizando…" : waiting ? "Na fila" : "Renderizar vídeo"
+    subtitle: tracking ? job.filename
+                       : "O arquivo é salvo em Vídeos prontos. Se já existir, será substituído e os canais que o usam são atualizados."
     dialogWidth: 560
-    closePolicy: Renderer.busy ? AppDialog.NoAutoClose : (AppDialog.CloseOnEscape | AppDialog.CloseOnPressOutside)
+    closePolicy: tracking ? AppDialog.NoAutoClose : (AppDialog.CloseOnEscape | AppDialog.CloseOnPressOutside)
 
     function start(cfg, name, pid, fmt) {
         config = cfg
@@ -25,30 +39,45 @@ AppDialog {
         projectId = pid || ""
         if (fmt) format = fmt
         nameBox.text = ""
+        // Re-opened while this dialog's own render is still going: show it.
+        if (!tracking) uid = -1
         open()
     }
 
     function run() {
         const f = Fmt.formats[format]
-        const payload = Object.assign({}, config, { width: f.width, height: f.height })
-        const filename = (nameBox.text.trim() || defaultName)
-        Renderer.exportVideo(payload, filename, fps, format, projectId, function (r) {
-            if (!r.ok) {
-                Toasts.error("Erro ao renderizar: " + r.error)
-                return
-            }
-            Toasts.success("Vídeo \"" + r.filename + "\" pronto!")
-            for (const c of r.updatedChannels || [])
-                Toasts.info("O canal \"" + c.name + "\" foi atualizado — as telas estão sendo sincronizadas.")
-            root.close()
-            root.finished(r)
+        const queuedBehind = RenderQueue.active
+        uid = RenderQueue.add({
+            config: Object.assign({}, config, { width: f.width, height: f.height }),
+            filename: nameBox.text.trim() || defaultName,
+            name: defaultName, fps: fps, format: format, projectId: projectId
         })
+        if (queuedBehind) {
+            Toasts.info("\"" + RenderQueue.job(uid).filename + "\" entrou na fila de renderização.")
+            moveToBackground()
+        }
+    }
+
+    function moveToBackground() {
+        root.close()
+        root.sentToBackground()
+    }
+
+    Connections {
+        target: RenderQueue
+        function onJobFinished(doneUid, r) {
+            if (doneUid !== root.uid) return
+            root.uid = -1
+            if (!root.opened) return
+            root.close()
+            if (r.ok) root.finished(r)
+        }
     }
 
     ColumnLayout {
         Layout.fillWidth: true
         spacing: 14
-        visible: !Renderer.busy
+        visible: !root.tracking
 
         Field {
             Layout.fillWidth: true
@@ -86,11 +115,16 @@ AppDialog {
 
     ColumnLayout {
         Layout.fillWidth: true
-        visible: Renderer.busy
+        visible: root.tracking
         spacing: 10
         RowLayout {
-            T { text: Renderer.phase === "finalizing" ? "Finalizando o arquivo…" : Renderer.phase === "audio" ? "Preparando o áudio…" : "Gerando quadros"; bold: true; Layout.fillWidth: true }
-            T { text: Math.round(Renderer.progress * 100) + "%"; tone: "muted" }
+            T {
+                Layout.fillWidth: true
+                bold: true
+                text: root.waiting ? "Aguardando " + RenderQueue.positionOf(root.uid) + " renderização(ões) antes desta"
+                      : Renderer.phase === "finalizing" ? "Finalizando o arquivo…" : Renderer.phase === "audio" ? "Preparando o áudio…" : "Gerando quadros"
+            }
+            T { visible: root.rendering; text: Math.round(Renderer.progress * 100) + "%"; tone: "muted" }
         }
         Rectangle {
             Layout.fillWidth: true
@@ -98,19 +132,26 @@ AppDialog {
             radius: 5
             color: Theme.sunken
             Rectangle {
-                width: parent.width * Renderer.progress
+                // No width Behavior: progress changes every frame, and the
+                // restarted animation left the bar far behind the percentage.
+                width: parent.width * (root.rendering ? Renderer.progress : 0)
                 height: parent.height
                 radius: 5
                 color: Theme.accent
-                Behavior on width { NumberAnimation { duration: Motion.base } }
             }
         }
+        T { tone: "muted"; size: 12; text: "Você pode continuar usando o app: a renderização segue na fila, no canto da tela." }
         T { tone: "muted"; size: 12; text: Settings.videoCodec.toUpperCase() + " · qualidade " + ({ high: "alta", medium: "média", low: "baixa" })[Settings.videoQuality] + " · " + root.fps + " fps"
-                                    + (Renderer.busy && Renderer.encoderName ? " · " + Renderer.encoderName : "") }
+                                    + (root.rendering && Renderer.encoderName ? " · " + Renderer.encoderName : "") }
     }
 
     actions: [
-        Btn { text: Renderer.busy ? "Cancelar renderização" : "Cancelar"; variant: Renderer.busy ? "danger" : "secondary"; onClicked: Renderer.busy ? Renderer.cancel() : root.close() },
-        Btn { visible: !Renderer.busy; text: "Renderizar"; variant: "primary"; iconName: "play"; onClicked: root.run() }
+        Btn {
+            text: root.tracking ? "Cancelar renderização" : "Cancelar"
+            variant: root.tracking ? "danger" : "secondary"
+            onClicked: root.tracking ? RenderQueue.cancelJob(root.uid) : root.close()
+        },
+        Btn { visible: root.tracking; text: "Continuar em segundo plano"; variant: "primary"; iconName: "chevronDown"; onClicked: root.moveToBackground() },
+        Btn { visible: !root.tracking; text: root.othersBusy ? "Adicionar à fila" : "Renderizar"; variant: "primary"; iconName: root.othersBusy ? "plus" : "play"; onClicked: root.run() }
     ]
 }

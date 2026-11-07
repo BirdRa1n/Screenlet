@@ -16,6 +16,7 @@
 #include <QMenu>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
+#include <QPixmapCache>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QTimer>
@@ -23,6 +24,15 @@
 #include <QtPlugin>
 
 #include <rhi/qrhi.h>
+
+#if defined(Q_OS_WIN)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#elif defined(Q_OS_MACOS)
+#include <malloc/malloc.h>
+#endif
 
 #ifdef SCREENLET_SYSTEM_IMAGEIO
 Q_IMPORT_PLUGIN(SystemImageIOPlugin)
@@ -120,6 +130,31 @@ int main(int argc, char *argv[])
 
     // Report the API and GPU really in use (Configurações → Vídeo).
     if (auto *w = engine.rootObjects().isEmpty() ? nullptr : qobject_cast<QQuickWindow *>(engine.rootObjects().first())) {
+        // Let a hidden window drop its scene graph and graphics device (swap
+        // chain, glyph and texture caches); recreated when shown again.
+        w->setPersistentGraphics(false);
+        w->setPersistentSceneGraph(false);
+        QObject::connect(SystemInfo::instance(), &SystemInfo::trimMemoryRequested, w, [w, &engine] {
+            if (w->isVisible())
+                return;
+            engine.collectGarbage();
+            engine.trimComponentCache();
+            QPixmapCache::clear();
+            w->releaseResources();
+            // Drop the native window too: its surfaces (swap chain / Metal
+            // drawables) stay allocated while merely hidden. show() recreates it.
+            w->destroy();
+            // The allocator keeps freed pages; give them back so the tray app
+            // shows what it actually uses.
+            QTimer::singleShot(1000, qApp, [] {
+#if defined(Q_OS_WIN)
+                SetProcessWorkingSetSizeEx(GetCurrentProcess(), SIZE_T(-1), SIZE_T(-1), 0);
+#elif defined(Q_OS_MACOS)
+                malloc_zone_pressure_relief(nullptr, 0);
+#endif
+            });
+            qInfo("Interface descarregada (bandeja)");
+        });
         QObject::connect(w, &QQuickWindow::sceneGraphInitialized, w, [w] {
             static const QHash<int, QString> names = {
                 {QSGRendererInterface::Direct3D11, QStringLiteral("Direct3D 11")},

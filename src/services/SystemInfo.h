@@ -37,6 +37,9 @@ public:
     void setStartedHidden(bool v) { m_hidden = v; }
     Q_INVOKABLE void quitApp();
     void requestShowWindow() { emit showWindowRequested(); }
+    // Called by Main.qml after unloading the UI in the tray: main() releases
+    // the window's graphics resources and hands freed memory back to the OS.
+    Q_INVOKABLE void trimMemory() { emit trimMemoryRequested(); }
     QString graphicsApiInUse() const { return m_api; }
     QString gpuName() const { return m_gpu; }
     QString graphicsNote() const;
@@ -52,6 +55,7 @@ signals:
     void trayChanged();
     void quittingChanged();
     void showWindowRequested();
+    void trimMemoryRequested();
     void graphicsChanged();
 
 private:

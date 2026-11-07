@@ -5,6 +5,7 @@
 #include <QImage>
 #include <QJSValue>
 #include <QObject>
+#include <QTimer>
 #include <QQueue>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
@@ -89,4 +90,9 @@ private:
     QQueue<QPair<QString, QVariantMap>> m_thumbQueue;
     bool m_thumbRunning = false;
     bool m_preparing = false;   // mixing audio before the job starts
+    // Drops m_off (its own graphics device, a 1080p target, the last scene's
+    // images and decoders) once nothing has rendered for a while: it was kept
+    // for the life of the process, which mostly runs as a tray server.
+    QTimer *m_releaseTimer = nullptr;
+    void scheduleRelease();
 };

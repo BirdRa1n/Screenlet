@@ -118,12 +118,16 @@ Item {
                 }
                 Btn { text: "Salvar"; onClicked: page.save(false) }
                 Btn {
-                    text: Renderer.busy ? Math.round(Renderer.progress * 100) + "%" : "Renderizar"
+                    // This ad's render in the queue (from this dialog or an earlier visit).
+                    readonly property var job: Doc.projectId ? RenderQueue.jobs.find(j => j.projectId === Doc.projectId && (j.status === "queued" || j.status === "rendering")) || null : null
+                    text: !job ? "Renderizar" : job.status === "rendering" ? Math.round(Renderer.progress * 100) + "%" : "Na fila"
                     variant: "primary"
                     iconName: "play"
-                    busy: Renderer.busy
+                    busy: !!job
                     enabled: Doc.scenes.length > 0
-                    onClicked: Renderer.busy ? renderDlg.open() : page.save(true)
+                    // While its render runs, reopen the progress; otherwise
+                    // save and start a new one (it queues if another is busy).
+                    onClicked: renderDlg.tracking ? renderDlg.open() : page.save(true)
                 }
             }
         }

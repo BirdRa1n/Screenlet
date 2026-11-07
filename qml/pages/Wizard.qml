@@ -197,6 +197,7 @@ Item {
         id: renderDlg
         allowFormat: false
         onFinished: page.finish()
+        onSentToBackground: page.finish()
     }
 
     // ── Steps ─────────────────────────────────────────────────────────────

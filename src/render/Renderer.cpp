@@ -122,9 +122,23 @@ struct Renderer::Job {
 };
 
 Renderer::Renderer(QObject *parent)
-    : QObject(parent)
+    : QObject(parent), m_releaseTimer(new QTimer(this))
 {
     registerInstance();
+    m_releaseTimer->setSingleShot(true);
+    m_releaseTimer->setInterval(30000);
+    connect(m_releaseTimer, &QTimer::timeout, this, [this] {
+        if (busy() || m_thumbRunning || !m_thumbQueue.isEmpty() || !m_off)
+            return;
+        m_off.reset();
+        qInfo("Renderer: cena de exportação liberada (ociosa)");
+    });
+}
+
+void Renderer::scheduleRelease()
+{
+    if (m_off)
+        m_releaseTimer->start();
 }
 
 Renderer::~Renderer() = default;
@@ -158,6 +172,7 @@ bool Renderer::ensureOffscreen(const QSize &size, QString *error)
         *error = QStringLiteral("Motor QML indisponível.");
         return false;
     }
+    m_releaseTimer->stop();
     if (!m_off) {
         auto off = std::make_unique<Offscreen>();
         off->rc = new QQuickRenderControl();
@@ -545,6 +560,7 @@ void Renderer::finishJob(const QVariantMap &result)
     Async::invoke(cb, result);
     emit exportFinished(result);
     startNextThumbnail();
+    scheduleRelease();
 }
 
 // ── Thumbnails ────────────────────────────────────────────────────────────────
@@ -590,4 +606,6 @@ void Renderer::startNextThumbnail()
     m_thumbRunning = false;
     if (!m_thumbQueue.isEmpty())
         QTimer::singleShot(50, this, &Renderer::startNextThumbnail);
+    else
+        scheduleRelease();
 }

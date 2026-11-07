@@ -77,7 +77,6 @@ Rectangle {
                 height: parent.height
                 radius: 3
                 color: Theme.accent
-                Behavior on width { NumberAnimation { duration: Motion.base } }
             }
         }
 
@@ -117,6 +116,15 @@ Rectangle {
                         color: modelData.status === "error" ? "#FF8A78" : root.sub
                         font.family: Theme.bodyFont; font.pixelSize: 11
                     }
+                }
+                IconBtn {
+                    visible: modelData.status === "queued" || modelData.status === "rendering"
+                    iconName: "x"
+                    label: modelData.status === "rendering" ? "Cancelar esta renderização" : "Tirar da fila"
+                    bordered: false
+                    box: 24
+                    iconColor: root.sub
+                    onClicked: RenderQueue.cancelJob(modelData.uid)
                 }
             }
         }

@@ -52,42 +52,104 @@ ApplicationWindow {
         configuracoes: "pages/Configuracoes.qml"
     })
 
-    RowLayout {
-        anchors.fill: parent
-        spacing: 0
-
-        Sidebar {
-            Layout.fillHeight: true
-            Layout.preferredWidth: width
-            compact: Nav.page === "editor" || Nav.page === "templateBuilder" || Nav.page === "studio"
-            onNewAd: Nav.go("wizard")
-        }
-
-        StackView {
-            id: stack
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            clip: true
-            // As a string: a `url` value here left the first page blank at
-            // startup (the page was created but never shown); replace() is fine.
-            initialItem: Qt.resolvedUrl(win.pages[Nav.page]).toString()
-
-            replaceEnter: Transition {
-                ParallelAnimation {
-                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Motion.base; easing.type: Easing.OutCubic }
-                    NumberAnimation { property: "y"; from: 14; to: 0; duration: Motion.slow; easing.type: Easing.OutBack; easing.overshoot: 1.2 }
-                }
-            }
-            replaceExit: Transition {
-                NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Motion.fast }
-            }
+    // The whole interface lives only while the window is visible. Started
+    // hidden at login (tray / server mode) it is never created, and closed to
+    // the tray it is unloaded after a short delay — pages, images, thumbnails
+    // and the window's GPU resources. The IPTV server, player sync and the
+    // render queue are C++ services / singletons and keep running.
+    property bool uiLoaded: visible
+    onVisibleChanged: {
+        if (visible) {
+            unloadTimer.stop()
+            uiLoaded = true
+        } else {
+            unloadTimer.restart()
         }
     }
+    Timer {
+        id: unloadTimer
+        interval: 15000
+        onTriggered: win.unloadUi()
+    }
+    // Pages holding work that isn't saved anywhere stay loaded.
+    function canUnload() {
+        if (Nav.page === "wizard" || Nav.page === "templateWizard") return false
+        if (Nav.page === "editor" && Doc.dirty) {
+            if (!Doc.projectId) return false
+            Doc.save()
+        }
+        const page = ui.item ? ui.item.currentPage : null
+        return !(page && page.dirty === true)
+    }
+    function unloadUi() {
+        if (win.visible || !win.uiLoaded || !canUnload()) return
+        win.uiLoaded = false
+        trimTimer.start() // after the unloaded items' deferred deletes ran
+    }
+    Timer { id: trimTimer; interval: 2000; onTriggered: if (!win.visible) SystemInfo.trimMemory() }
 
-    Connections {
-        target: Nav
-        function onNavigated(page, params) {
-            stack.replace(null, Qt.resolvedUrl(win.pages[page] || win.pages.painel), { params: params || ({}) })
+    Loader {
+        id: ui
+        anchors.fill: parent
+        active: win.uiLoaded
+        sourceComponent: Item {
+            readonly property var currentPage: stack.currentItem
+
+            RowLayout {
+                anchors.fill: parent
+                spacing: 0
+
+                Sidebar {
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: width
+                    compact: Nav.page === "editor" || Nav.page === "templateBuilder" || Nav.page === "studio"
+                    onNewAd: Nav.go("wizard")
+                }
+
+                StackView {
+                    id: stack
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    // As a string: a `url` value here left the first page blank at
+                    // startup (the page was created but never shown); replace() is fine.
+                    initialItem: Qt.resolvedUrl(win.pages[Nav.page]).toString()
+                    // Reloaded after a trip to the tray: restore the page's params too.
+                    Component.onCompleted: if (Object.keys(Nav.params || {}).length)
+                                               stack.replace(null, Qt.resolvedUrl(win.pages[Nav.page]), { params: Nav.params })
+
+                    replaceEnter: Transition {
+                        ParallelAnimation {
+                            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Motion.base; easing.type: Easing.OutCubic }
+                            NumberAnimation { property: "y"; from: 14; to: 0; duration: Motion.slow; easing.type: Easing.OutBack; easing.overshoot: 1.2 }
+                        }
+                    }
+                    replaceExit: Transition {
+                        NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Motion.fast }
+                    }
+                }
+            }
+
+            Connections {
+                target: Nav
+                function onNavigated(page, params) {
+                    stack.replace(null, Qt.resolvedUrl(win.pages[page] || win.pages.painel), { params: params || ({}) })
+                }
+            }
+
+            QueueDock {
+                x: (Nav.page === "editor" || Nav.page === "templateBuilder" || Nav.page === "studio" ? 72 : 248) + 20
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 20
+                z: 900
+            }
+
+            ToastHost {
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: 20
+                z: 1000
+            }
         }
     }
 
@@ -126,20 +188,6 @@ ApplicationWindow {
         }
         const devPage = SystemInfo.env("SCREENLET_PAGE")
         if (devPage) Qt.callLater(() => Nav.go(devPage, SystemInfo.env("SCREENLET_PARAMS") ? JSON.parse(SystemInfo.env("SCREENLET_PARAMS")) : ({})))
-    }
-
-    QueueDock {
-        x: (Nav.page === "editor" || Nav.page === "templateBuilder" || Nav.page === "studio" ? 72 : 248) + 20
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 20
-        z: 900
-    }
-
-    ToastHost {
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.margins: 20
-        z: 1000
     }
 
     // ── First run: terms ─────────────────────────────────────────────────
