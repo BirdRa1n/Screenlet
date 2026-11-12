@@ -45,18 +45,28 @@ jobs:
       - uses: actions/checkout@v4
 
       # Mesmo layout da máquina de desenvolvimento (C:\Qt\6.12.0\mingw_64 e
-      # C:\Qt\Tools), que são os padrões do package-win.ps1.
-      - name: Instalar o Qt
+      # C:\Qt\Tools), que são os padrões do package-win.ps1. O aqtinstall só
+      # instala as ferramentas: o kit do Qt 6.12+ no Windows vem por um script
+      # próprio (o aqt ainda não entende o layout novo do repositório).
+      - name: Instalar MinGW e Ninja
         uses: jurplel/install-qt-action@v4
         with:
-          version: ${{ env.QT_VERSION }}
-          host: windows
-          target: desktop
-          arch: win64_mingw
-          modules: ${{ env.QT_MODULES }}
+          tools-only: true
           tools: 'tools_mingw1310 tools_ninja'
           dir: 'C:\'
           cache: true
+
+      - name: Cache do Qt
+        id: qt-cache
+        uses: actions/cache@v4
+        with:
+          path: C:\Qt\${{ env.QT_VERSION }}
+          key: qt-win-mingw-${{ env.QT_VERSION }}-${{ env.QT_MODULES }}-${{ hashFiles('scripts/ci/install-qt-windows.py') }}
+
+      - name: Instalar o Qt
+        if: steps.qt-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: python scripts/ci/install-qt-windows.py $env:QT_VERSION C:\Qt $env:QT_MODULES.Split(' ')
 
       - name: Instalar o Inno Setup
         shell: pwsh
