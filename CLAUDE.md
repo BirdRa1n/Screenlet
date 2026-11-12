@@ -44,7 +44,8 @@ src/services/       Settings, Storage, Projects, Templates, Library, Media, Expo
                     StoreProfiles, Backup, SystemInfo, Updater
 src/net/            HttpServer (QTcpServer), Iptv (porta 7095), Kodi (SSH + JSON-RPC), Players, StockEasy
 src/render/         Renderer (exportação MP4/miniaturas), AudioMix (áudio AAC)
-src/imageio/        plugin QImageIO via ImageIO do macOS / WIC do Windows (WebP/AVIF/HEIC)
+src/imageio/        plugin QImageIO via ImageIO do macOS / WIC do Windows (WebP/AVIF/HEIC);
+                    no Windows o WebP usa a libwebp embutida (FetchContent, SCREENLET_BUNDLED_WEBP)
 qml/Main.qml        janela, sidebar, StackView de páginas, ganchos de teste
 qml/singletons/     Theme, Motion, Nav, Doc (anúncio aberto), Insights, RenderQueue, Toasts, Fmt
 qml/components/     design system (Btn, Card, Segmented, Inspector, MediaPicker, QueueDock…)

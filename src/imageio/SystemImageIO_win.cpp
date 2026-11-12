@@ -1,4 +1,5 @@
 #include "SystemImageIO.h"
+#include "WebpDecode.h"
 
 #include <QImage>
 #include <QIODevice>
@@ -10,10 +11,12 @@
 
 using Microsoft::WRL::ComPtr;
 
-// Windows: WIC (Windows Imaging Component). WebP comes with the "WebP Image
-// Extensions" that ship with Windows 10 1809+/11; AVIF and HEIC need the
-// AV1/HEIF extensions from the Store. Without the codec, read() fails and QML
-// shows its usual "image unavailable" state.
+// Windows: WebP is decoded with the bundled libwebp. WIC's WebP decoder is a
+// Store package ("WebP Image Extensions") that may be missing, removed, or not
+// usable from a desktop app, so relying on it left WebP images blank. WIC
+// (Windows Imaging Component) still handles AVIF and HEIC, which need the
+// AV1/HEIF extensions from the Store, and is the fallback for WebP. Without a
+// codec, read() fails and QML shows its usual "image unavailable" state.
 
 namespace {
 // Sniffs the container: RIFF/WEBP, or an ISO-BMFF "ftyp" box with an
@@ -45,7 +48,16 @@ private:
     HRESULT m_hr; // RPC_E_CHANGED_MODE: already initialized (STA) — fine
 };
 
-ComPtr<IWICBitmapFrameDecode> firstFrame(IWICImagingFactory *factory, const QByteArray &data, ComPtr<IWICStream> *keep)
+// The stream and decoder are handed back too: the frame doesn't necessarily
+// keep its decoder alive (third-party codecs), and the stream reads `data`.
+struct WicFrame
+{
+    ComPtr<IWICStream> stream;
+    ComPtr<IWICBitmapDecoder> decoder;
+    ComPtr<IWICBitmapFrameDecode> frame;
+};
+
+ComPtr<IWICBitmapFrameDecode> firstFrame(IWICImagingFactory *factory, const QByteArray &data, WicFrame *keep)
 {
     ComPtr<IWICStream> stream;
     if (FAILED(factory->CreateStream(&stream))
@@ -57,7 +69,9 @@ ComPtr<IWICBitmapFrameDecode> firstFrame(IWICImagingFactory *factory, const QByt
     ComPtr<IWICBitmapFrameDecode> frame;
     if (FAILED(decoder->GetFrame(0, &frame)))
         return {};
-    *keep = stream;
+    keep->stream = stream;
+    keep->decoder = decoder;
+    keep->frame = frame;
     return frame;
 }
 
@@ -88,12 +102,15 @@ bool SystemImageIOHandler::read(QImage *image)
     if (data.isEmpty())
         return false;
 
+    if (WebpDecode::isWebp(data) && WebpDecode::decode(data, m_scaledSize, image))
+        return true;
+
     ComScope com;
     ComPtr<IWICImagingFactory> factory = wicFactory();
     if (!factory)
         return false;
-    ComPtr<IWICStream> stream;
-    ComPtr<IWICBitmapFrameDecode> frame = firstFrame(factory.Get(), data, &stream);
+    WicFrame keep;
+    ComPtr<IWICBitmapFrameDecode> frame = firstFrame(factory.Get(), data, &keep);
     if (!frame)
         return false;
 
@@ -138,13 +155,20 @@ QVariant SystemImageIOHandler::option(ImageOption option) const
     if (option != Size || !device())
         return {};
     // Header-only size query (doesn't consume the device).
+    const QByteArray head = device()->peek(64);
+    if (WebpDecode::isWebp(head)) {
+        // The size lives in the first chunk header: no need to read the file.
+        const QSize s = WebpDecode::size(head);
+        if (s.isValid())
+            return s;
+    }
     const QByteArray data = device()->peek(device()->size() > 0 ? device()->size() : 1 << 20);
     ComScope com;
     ComPtr<IWICImagingFactory> factory = wicFactory();
     if (!factory)
         return {};
-    ComPtr<IWICStream> stream;
-    ComPtr<IWICBitmapFrameDecode> frame = firstFrame(factory.Get(), data, &stream);
+    WicFrame keep;
+    ComPtr<IWICBitmapFrameDecode> frame = firstFrame(factory.Get(), data, &keep);
     UINT w = 0, h = 0;
     if (!frame || FAILED(frame->GetSize(&w, &h)) || !w || !h)
         return {};

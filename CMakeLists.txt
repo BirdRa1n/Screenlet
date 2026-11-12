@@ -81,6 +81,34 @@ qt_add_qml_module(Screenlet
 
 target_include_directories(Screenlet PRIVATE src src/core src/services src/net src/render)
 
+# libwebp, bundled (static) on Windows: WIC only decodes WebP through an
+# optional Store extension. Elsewhere it's only built on request, for the test.
+if(WIN32)
+    set(_bundled_webp_default ON)
+else()
+    set(_bundled_webp_default OFF)
+endif()
+option(SCREENLET_BUNDLED_WEBP "Decode WebP with a bundled libwebp" ${_bundled_webp_default})
+if(SCREENLET_BUNDLED_WEBP)
+    include(FetchContent)
+    set(WEBP_LINK_STATIC ON CACHE BOOL "" FORCE)
+    foreach(_opt ANIM_UTILS CWEBP DWEBP GIF2WEBP IMG2WEBP VWEBP WEBPINFO LIBWEBPMUX WEBPMUX EXTRAS)
+        set(WEBP_BUILD_${_opt} OFF CACHE BOOL "" FORCE)
+    endforeach()
+    set(_saved_shared ${BUILD_SHARED_LIBS})
+    set(BUILD_SHARED_LIBS OFF)
+    FetchContent_Declare(libwebp
+        URL https://github.com/webmproject/libwebp/archive/refs/tags/v1.5.0.tar.gz
+        URL_HASH SHA256=668c9aba45565e24c27e17f7aaf7060a399f7f31dba6c97a044e1feacb930f37
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        EXCLUDE_FROM_ALL)
+    FetchContent_MakeAvailable(libwebp)
+    set(BUILD_SHARED_LIBS ${_saved_shared})
+    add_library(screenlet_webp STATIC src/imageio/WebpDecode.h src/imageio/WebpDecode.cpp)
+    target_include_directories(screenlet_webp PUBLIC src/imageio)
+    target_link_libraries(screenlet_webp PUBLIC Qt6::Gui PRIVATE webpdemux webp)
+endif()
+
 # WebP / AVIF / HEIC via the OS codecs (the Qt kit has no Image Formats
 # add-on). Static plugin, imported in main.cpp with Q_IMPORT_PLUGIN.
 if(APPLE)
@@ -95,12 +123,15 @@ if(APPLE)
     target_link_libraries(Screenlet PRIVATE screenlet_imageio)
     target_compile_definitions(Screenlet PRIVATE SCREENLET_SYSTEM_IMAGEIO)
 elseif(WIN32)
+    if(NOT SCREENLET_BUNDLED_WEBP)
+        message(FATAL_ERROR "SCREENLET_BUNDLED_WEBP is required on Windows")
+    endif()
     qt_add_plugin(screenlet_imageio STATIC
         CLASS_NAME SystemImageIOPlugin
         PLUGIN_TYPE imageformats
         src/imageio/SystemImageIO.h
         src/imageio/SystemImageIO_win.cpp)
-    target_link_libraries(screenlet_imageio PRIVATE Qt6::Gui windowscodecs ole32)
+    target_link_libraries(screenlet_imageio PRIVATE Qt6::Gui screenlet_webp windowscodecs ole32)
     target_link_libraries(Screenlet PRIVATE screenlet_imageio)
     target_compile_definitions(Screenlet PRIVATE SCREENLET_SYSTEM_IMAGEIO)
 endif()
@@ -218,6 +249,13 @@ if(WIN32)
     target_link_libraries(securezip_test PRIVATE bcrypt)
 endif()
 add_test(NAME securezip COMMAND securezip_test ${CMAKE_CURRENT_BINARY_DIR}/securezip-work)
+
+if(SCREENLET_BUNDLED_WEBP)
+    qt_add_executable(webp_test tests/webp_test.cpp)
+    set_target_properties(webp_test PROPERTIES MACOSX_BUNDLE FALSE WIN32_EXECUTABLE FALSE)
+    target_link_libraries(webp_test PRIVATE screenlet_webp webp webpdemux Qt6::Gui)
+    add_test(NAME webp COMMAND webp_test)
+endif()
 
 include(GNUInstallDirs)
 install(TARGETS Screenlet
