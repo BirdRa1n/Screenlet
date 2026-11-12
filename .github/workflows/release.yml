@@ -1,0 +1,153 @@
+# Compila o Screenlet para Windows e macOS ao criar uma tag v* e anexa os
+# instaladores a uma release em rascunho (o Updater ignora rascunhos: revise as
+# notas e publique no GitHub). Pela aba Actions ("Run workflow") só compila e
+# deixa os arquivos como artefatos, sem mexer em releases.
+#
+# Segredos opcionais (macOS). Sem eles o app sai com assinatura ad-hoc e o
+# macOS volta a pedir acesso à pasta Documentos e ao Keychain após atualizar:
+#   MACOS_CERTIFICATE           .p12 em base64 ("Developer ID Application" ou "Apple Development")
+#   MACOS_CERTIFICATE_PASSWORD  senha do .p12
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  QT_VERSION: '6.12.0'
+  QT_MODULES: 'qtmultimedia qtshadertools'
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: Conferir a versão do CMakeLists com a tag
+        run: |
+          version=$(sed -n 's/^project(Screenlet VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::A tag $GITHUB_REF_NAME não bate com a versão $version do CMakeLists.txt"
+            exit 1
+          fi
+
+  windows:
+    needs: version
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      # Mesmo layout da máquina de desenvolvimento (C:\Qt\6.12.0\mingw_64 e
+      # C:\Qt\Tools), que são os padrões do package-win.ps1.
+      - name: Instalar o Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          modules: ${{ env.QT_MODULES }}
+          tools: 'tools_mingw1310 tools_ninja'
+          dir: 'C:\'
+          cache: true
+
+      - name: Instalar o Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+
+      - name: Compilar e empacotar
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File scripts\package-win.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          if-no-files-found: error
+          path: |
+            build/dist/Screenlet-Setup-${{ needs.version.outputs.version }}.exe
+            build/dist/latest.yml
+
+  macos:
+    needs: version
+    # Xcode 26: o actool compila o ícone do Icon Composer (resources/AppIcon.icon).
+    runs-on: macos-26
+    env:
+      HAS_CERT: ${{ secrets.MACOS_CERTIFICATE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar o Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: mac
+          target: desktop
+          arch: clang_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+
+      - name: Instalar o Ninja
+        run: command -v ninja || brew install ninja
+
+      - name: Importar o certificado de assinatura
+        env:
+          CERT: ${{ secrets.MACOS_CERTIFICATE }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        if: env.HAS_CERT == 'true'
+        run: |
+          kc="$RUNNER_TEMP/build.keychain-db"
+          kcpass=$(uuidgen)
+          echo "$CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$kcpass" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kcpass" "$kc"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kcpass" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+
+      - name: Compilar e empacotar
+        env:
+          QT_DIR: ${{ env.QT_ROOT_DIR }}
+        run: scripts/package-mac.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          if-no-files-found: error
+          path: build/dist/Screenlet-${{ needs.version.outputs.version }}-universal.dmg
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [version, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # Usa a release da tag se ela já existir (inclusive um rascunho criado à
+      # mão com as notas); senão cria um rascunho novo.
+      - name: Anexar à release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          ls -la dist
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --draft --verify-tag --title "$VERSION" --notes ""
+          fi
+          gh release upload "$TAG" dist/* --clobber

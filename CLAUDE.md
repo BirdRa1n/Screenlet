@@ -26,6 +26,8 @@ powershell -ExecutionPolicy Bypass -File scripts\package-win.ps1
 # → build\dist\Screenlet-Setup-<versão>.exe + latest.yml
 ```
 
+**Release automática:** ao enviar uma tag `v<versão>` (igual à do `CMakeLists.txt`), o `.github/workflows/release.yml` roda os dois scripts no GitHub Actions e anexa `.exe`, `latest.yml` e `.dmg` a uma release em rascunho (a existente da tag, se houver). Publique o rascunho no GitHub para o Updater oferecer a versão. Segredos opcionais `MACOS_CERTIFICATE`/`MACOS_CERTIFICATE_PASSWORD` assinam o app do Mac; sem eles a assinatura é ad-hoc.
+
 O instalador (`installer/screenlet.iss`) instala por usuário em `%LOCALAPPDATA%\Programs\Screenlet`, com `Screenlet.exe` na raiz, e remove a versão Electron antes de instalar. O `latest.yml` vai junto na release: é por ele que o electron-updater das instalações Electron oferece a atualização para esta versão.
 
 O Qt fica em `~/Qt/6.12.0/macos`. O CMake e o Ninja estão em `~/Qt/Tools`. O Xcode completo (27) está em `/Applications/Xcode.app`, mas o `xcode-select` aponta para as Command Line Tools; o CMake encontra o `actool` sozinho. Commits e PRs são em **pt-BR**, sem coautoria.
