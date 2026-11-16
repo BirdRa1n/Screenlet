@@ -3,6 +3,7 @@
 #include "services/Settings.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QDir>
 #include <QOffscreenSurface>
 #include <QQuickWindow>
@@ -18,9 +19,15 @@
 #include <QtGui/private/qvulkandefaultinstance_p.h>
 #endif
 
+#if defined(Q_OS_MACOS)
+// Gpu_mac.mm: Metal device of the UI is Apple Silicon or a discrete GPU.
+bool screenletMacDedicatedGpu(QString *name);
+#endif
+
 #if defined(Q_OS_WIN)
 #include <windows.h>
 #include <d3d11.h>
+#include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 using Microsoft::WRL::ComPtr;
@@ -162,6 +169,52 @@ bool isSoftware(IDXGIAdapter1 *a)
     a->GetDesc1(&d);
     return (d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) || (d.VendorId == 0x1414 && d.DeviceId == 0x8c); // Basic Render
 }
+
+// D3D12 tells integrated (UMA: shares system memory) from discrete GPUs
+// directly. 1 = UMA, 0 = discrete, -1 = unknown (no D3D12 runtime/driver).
+// d3d12.dll is loaded on demand so the app still starts without it.
+int d3d12Uma(IDXGIAdapter1 *a)
+{
+    static const auto create = [] {
+        HMODULE dll = LoadLibraryW(L"d3d12.dll");
+        return dll ? reinterpret_cast<PFN_D3D12_CREATE_DEVICE>(reinterpret_cast<void *>(GetProcAddress(dll, "D3D12CreateDevice")))
+                   : nullptr;
+    }();
+    if (!create)
+        return -1;
+    ComPtr<ID3D12Device> dev;
+    if (FAILED(create(a, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&dev))))
+        return -1;
+    D3D12_FEATURE_DATA_ARCHITECTURE arch{};
+    if (FAILED(dev->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE, &arch, sizeof arch)))
+        return -1;
+    return arch.UMA ? 1 : 0;
+}
+
+// Discrete GPU: own VRAM, not sharing system memory. AMD also makes APUs
+// (Ryzen with Radeon graphics) whose BIOS carve-out shows up as "dedicated"
+// memory, so the vendor alone isn't enough: D3D12's UMA flag decides, and
+// without D3D12 a large VRAM (≥ 2 GB) does.
+bool isDedicated(const DXGI_ADAPTER_DESC1 &d, IDXGIAdapter1 *a)
+{
+    const qint64 vramMb = qint64(d.DedicatedVideoMemory / (1024 * 1024));
+    if (vramMb < 256) // Intel HD/UHD/Iris report ~128 MB
+        return false;
+    const int uma = d3d12Uma(a);
+    if (uma >= 0)
+        return uma == 0;
+    if (d.VendorId == 0x10DE) // NVIDIA: no PC iGPUs
+        return true;
+    return vramMb >= 2048;
+}
+
+QString vendorKey(UINT id)
+{
+    return id == 0x10DE ? QStringLiteral("nvidia")
+           : id == 0x1002 ? QStringLiteral("amd")
+           : id == 0x8086 ? QStringLiteral("intel")
+                          : QStringLiteral("other");
+}
 #endif
 
 } // namespace
@@ -207,39 +260,49 @@ QString apiLabel(const QString &value)
 
 QVariantList adapters()
 {
-    QVariantList out;
+    static const QVariantList cached = [] {
+        QVariantList out;
 #if defined(Q_OS_WIN)
-    ComPtr<IDXGIFactory1> factory;
-    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))
-        return out;
-    ComPtr<IDXGIAdapter1> a;
-    QList<LUID> seenLuids;
-    QStringList seenNames;
-    for (UINT i = 0; factory->EnumAdapters1(i, &a) != DXGI_ERROR_NOT_FOUND; ++i, a.Reset()) {
-        if (isSoftware(a.Get()))
-            continue;
-        DXGI_ADAPTER_DESC1 d{};
-        a->GetDesc1(&d);
-        // The same GPU can be listed again through a virtual display driver
-        // (Parsec, remote desktop…): show each card once.
-        const QString key = QString::fromWCharArray(d.Description) + QString::number(d.DedicatedVideoMemory);
-        if (std::any_of(seenLuids.cbegin(), seenLuids.cend(), [&](const LUID &l) { return sameLuid(l, d.AdapterLuid); })
-            || seenNames.contains(key))
-            continue;
-        seenLuids << d.AdapterLuid;
-        seenNames << key;
-        const QString vendor = d.VendorId == 0x10DE ? QStringLiteral("nvidia")
-                               : d.VendorId == 0x1002 ? QStringLiteral("amd")
-                               : d.VendorId == 0x8086 ? QStringLiteral("intel")
-                                                      : QStringLiteral("other");
-        const qint64 vramMb = qint64(d.DedicatedVideoMemory / (1024 * 1024));
-        out << QVariantMap{{QStringLiteral("name"), QString::fromWCharArray(d.Description)},
-                           {QStringLiteral("vendor"), vendor},
-                           {QStringLiteral("vramMb"), vramMb},
-                           // Integrated GPUs carve out little or no dedicated VRAM.
-                           {QStringLiteral("integrated"), vramMb < 1024}};
-    }
+        ComPtr<IDXGIFactory1> factory;
+        if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))
+            return out;
+        ComPtr<IDXGIAdapter1> a;
+        QList<LUID> seenLuids;
+        QStringList seenNames;
+        for (UINT i = 0; factory->EnumAdapters1(i, &a) != DXGI_ERROR_NOT_FOUND; ++i, a.Reset()) {
+            if (isSoftware(a.Get()))
+                continue;
+            DXGI_ADAPTER_DESC1 d{};
+            a->GetDesc1(&d);
+            // The same GPU can be listed again through a virtual display driver
+            // (Parsec, remote desktop…): show each card once.
+            const QString key = QString::fromWCharArray(d.Description) + QString::number(d.DedicatedVideoMemory);
+            if (std::any_of(seenLuids.cbegin(), seenLuids.cend(), [&](const LUID &l) { return sameLuid(l, d.AdapterLuid); })
+                || seenNames.contains(key))
+                continue;
+            seenLuids << d.AdapterLuid;
+            seenNames << key;
+            const bool dedicated = isDedicated(d, a.Get());
+            out << QVariantMap{{QStringLiteral("name"), QString::fromWCharArray(d.Description)},
+                               {QStringLiteral("vendor"), vendorKey(d.VendorId)},
+                               {QStringLiteral("vramMb"), qint64(d.DedicatedVideoMemory / (1024 * 1024))},
+                               {QStringLiteral("integrated"), !dedicated},
+                               {QStringLiteral("dedicated"), dedicated}};
+        }
 #endif
+        return out;
+    }();
+    return cached;
+}
+
+QStringList dedicatedAdapterNames()
+{
+    QStringList out;
+    for (const QVariant &v : adapters()) {
+        const QVariantMap m = v.toMap();
+        if (m.value(QStringLiteral("dedicated")).toBool())
+            out << m.value(QStringLiteral("name")).toString();
+    }
     return out;
 }
 
@@ -356,6 +419,31 @@ void applyAtStartup()
     }
 #endif
     g_status.active = chosen == QLatin1String("auto") ? platformDefault() : chosen;
+
+    // Dedicated GPU? Without one, videos playing in the UI (Painel, Canais,
+    // wizard previews) stay on a still frame unless the user turns them on.
+#if defined(Q_OS_WIN)
+    const QStringList dedicated = dedicatedAdapterNames();
+    g_status.dedicated = !dedicated.isEmpty() && !g_status.lowEnd;
+    g_status.dedicatedName = dedicated.value(0);
+#elif defined(Q_OS_MACOS)
+    g_status.dedicated = screenletMacDedicatedGpu(&g_status.dedicatedName);
+#endif
+    // Test hook: SCREENLET_DEDICATED_GPU=0 / 1 forces the result.
+    if (qEnvironmentVariableIsSet("SCREENLET_DEDICATED_GPU"))
+        g_status.dedicated = qEnvironmentVariableIntValue("SCREENLET_DEDICATED_GPU") != 0;
+    QStringList found;
+    for (const QVariant &v : adapters()) {
+        const QVariantMap m = v.toMap();
+        found << QStringLiteral("%1 [%2, %3 MB]")
+                     .arg(m.value(QStringLiteral("name")).toString(),
+                          m.value(QStringLiteral("dedicated")).toBool() ? QStringLiteral("dedicada") : QStringLiteral("integrada"))
+                     .arg(m.value(QStringLiteral("vramMb")).toLongLong());
+    }
+    qInfo().noquote() << "GPU dedicada:" << (g_status.dedicated ? QStringLiteral("sim") : QStringLiteral("não"))
+                      << (g_status.dedicatedName.isEmpty() ? QString() : QStringLiteral("(%1)").arg(g_status.dedicatedName))
+                      << (found.isEmpty() ? QString() : QStringLiteral("· placas: ") + found.join(QStringLiteral(", ")))
+                      << (g_status.lowEnd ? QStringLiteral("· placa antiga (efeitos reduzidos)") : QString());
 }
 
 bool isSoftwareRenderer(const QString &deviceName)

@@ -26,6 +26,14 @@ class SystemInfo : public QObject
     // Old GPU or software rendering: the UI drops continuous animations and
     // masks (Motion.reduced) unless the user forces full effects.
     Q_PROPERTY(bool lowEndGpu READ lowEndGpu NOTIFY graphicsChanged)
+    // The UI renders on a dedicated GPU (NVIDIA/AMD/Intel Arc with its own
+    // VRAM, Apple Silicon or a discrete Mac GPU). Without one, videos that
+    // play by themselves in the UI stay still (Motion.liveVideos) unless the
+    // user turns them on. Export is not affected.
+    Q_PROPERTY(bool dedicatedGpu READ dedicatedGpu NOTIFY graphicsChanged)
+    // That GPU's name even when the UI runs elsewhere (hybrid notebook on the
+    // integrated one): Configurações suggests "Alto desempenho".
+    Q_PROPERTY(QString dedicatedGpuName READ dedicatedGpuName CONSTANT)
     // Settings as read at launch: {graphicsApi, gpuPreference, videoEncoder}.
     Q_PROPERTY(QVariantMap startupGraphics READ startupGraphics CONSTANT)
 
@@ -44,6 +52,8 @@ public:
     QString gpuName() const { return m_gpu; }
     QString graphicsNote() const;
     bool lowEndGpu() const;
+    bool dedicatedGpu() const;
+    QString dedicatedGpuName() const;
     QVariantMap startupGraphics() const;
     void setGraphicsInfo(const QString &api, const QString &gpu) { m_api = api; m_gpu = gpu; emit graphicsChanged(); }
 

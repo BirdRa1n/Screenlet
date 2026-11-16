@@ -21,4 +21,12 @@ QtObject {
     // makes Qt Quick redraw the whole window at each vsync.
     readonly property bool reduced: Settings.uiEffects === "reduced"
                                     || (Settings.uiEffects === "auto" && SystemInfo.lowEndGpu)
+
+    // Videos and ad previews that play by themselves in the UI (Painel,
+    // Canais, wizard previews). Decoding plus a full-window redraw per frame
+    // is heavy on integrated GPUs: there they stay on a still frame unless
+    // Configurações → "Vídeos animados na interface" says otherwise. Only the
+    // UI: export (Renderer → AdStage) never reads this.
+    readonly property bool liveVideos: Settings.uiVideos === "on"
+                                       || (Settings.uiVideos !== "off" && SystemInfo.dedicatedGpu && !reduced)
 }

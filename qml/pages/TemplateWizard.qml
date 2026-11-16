@@ -126,7 +126,7 @@ Item {
                 Layout.fillHeight: true
                 radius: Theme.radiusXL
                 color: Theme.stage
-                AdPlayer { id: player; anchors.fill: parent; anchors.margins: 22; config: page.config; backdrop: "transparent"; Component.onCompleted: play() }
+                AdPlayer { id: player; anchors.fill: parent; anchors.margins: 22; config: page.config; backdrop: "transparent"; tapToPlay: true; Component.onCompleted: Motion.liveVideos ? play() : seek(90) }
             }
             T { tone: "muted"; size: 12; text: "Templates usam as posições do formato original (" + (page.tpl.width || 1920) + "×" + (page.tpl.height || 1080) + "); em outros formatos as camadas podem ficar fora da área." }
         }

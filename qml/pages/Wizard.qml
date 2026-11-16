@@ -364,7 +364,7 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: width * 9 / 16
                                 config: Doc.buildPreset(modelData.id)
-                                playing: parent.parent.hovered || parent.parent.on
+                                playing: parent.parent.hovered || (parent.parent.on && Motion.liveVideos)
                                 frame: 90
                             }
                             RowLayout {
@@ -400,7 +400,7 @@ Item {
                 height: width * 9 / 16
                 radius: 20
                 color: Theme.stage
-                AdPlayer { id: pv; anchors.fill: parent; anchors.margins: 18; config: page.buildConfig(); Component.onCompleted: play() }
+                AdPlayer { id: pv; anchors.fill: parent; anchors.margins: 18; config: page.buildConfig(); tapToPlay: true; Component.onCompleted: Motion.liveVideos ? play() : seek(90) }
             }
         }
     }
@@ -444,7 +444,7 @@ Item {
                                     width: Math.min(parent.width, parent.height * f.width / f.height)
                                     height: width * f.height / f.width
                                     config: Object.assign({}, page.buildConfig(), { width: f.width, height: f.height })
-                                    playing: true
+                                    playing: Motion.liveVideos
                                     frame: 80 + index * 12
                                 }
                             }

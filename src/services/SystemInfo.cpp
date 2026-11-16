@@ -187,6 +187,29 @@ void SystemInfo::relaunch(int delayMs)
 
 QString SystemInfo::graphicsNote() const { return Gpu::status().note; }
 bool SystemInfo::lowEndGpu() const { return Gpu::status().lowEnd || Gpu::isSoftwareRenderer(m_gpu); }
+bool SystemInfo::dedicatedGpu() const
+{
+    if (!Gpu::status().dedicated || lowEndGpu())
+        return false;
+#if defined(Q_OS_WIN)
+    // Hybrid notebooks: the dedicated card only counts if the window really
+    // renders on it. D3D gives the adapter's description; OpenGL/Vulkan a
+    // renderer string that contains it ("NVIDIA GeForce GTX 1650/PCIe/SSE2").
+    if (!m_gpu.isEmpty() && !qEnvironmentVariableIsSet("SCREENLET_DEDICATED_GPU")) {
+        const auto matches = [this](const QString &name) {
+            return !name.isEmpty()
+                   && (m_gpu.contains(name, Qt::CaseInsensitive) || name.contains(m_gpu, Qt::CaseInsensitive));
+        };
+        for (const QVariant &v : Gpu::adapters()) {
+            const QVariantMap a = v.toMap();
+            if (matches(a.value(QStringLiteral("name")).toString()))
+                return a.value(QStringLiteral("dedicated")).toBool();
+        }
+    }
+#endif
+    return true;
+}
+QString SystemInfo::dedicatedGpuName() const { return Gpu::status().dedicatedName; }
 QVariantMap SystemInfo::startupGraphics() const
 {
     const Gpu::Status &s = Gpu::status();

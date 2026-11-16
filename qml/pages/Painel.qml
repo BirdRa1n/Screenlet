@@ -185,22 +185,18 @@ Item {
                             radius: 14
                             color: "#000"
                             clip: true
-                            MediaPlayer {
-                                id: nowPlayer
+                            LiveVideo {
+                                id: nowVideo
+                                anchors.fill: parent
                                 source: page.nowPlaying ? Storage.exportUrl(page.nowPlaying.file) : ""
-                                videoOutput: nowOut
-                                loops: MediaPlayer.Infinite
-                                Component.onCompleted: if (source != "") play()
-                                onSourceChanged: if (source != "") play()
                             }
-                            VideoOutput { id: nowOut; anchors.fill: parent; fillMode: VideoOutput.PreserveAspectCrop }
                             Rectangle {
                                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                                 height: 4
                                 color: Theme.alpha("#FFFFFF", 0.25)
                                 Rectangle {
                                     height: parent.height
-                                    width: nowPlayer.duration > 0 ? parent.width * nowPlayer.position / nowPlayer.duration : 0
+                                    width: nowVideo.player.duration > 0 ? parent.width * nowVideo.player.position / nowVideo.player.duration : 0
                                     color: "#FFFFFF"
                                 }
                             }

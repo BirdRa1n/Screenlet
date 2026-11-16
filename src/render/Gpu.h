@@ -27,7 +27,8 @@ namespace Gpu {
 QVariantList apis();
 
 // "auto" | "high" | "low" — DXGI GPU preference on Windows.
-// Detected adapters: [{ name, vendor, vramMb, integrated }].
+// Detected adapters: [{ name, vendor, vramMb, integrated, dedicated }].
+// Cached: the list is built once (the D3D12 memory-architecture query is not free).
 QVariantList adapters();
 
 // Applies `graphicsApi` / `gpuPreference` / `videoEncoder` from Settings.
@@ -40,10 +41,17 @@ struct Status {
     QString active;      // value really in use ("auto" → resolved name)
     QString note;        // fallback reason, empty when all went as asked
     bool lowEnd = false; // old GPU (D3D feature level < 11_1): lighter UI effects
+    // The machine has a dedicated GPU (NVIDIA/AMD/Intel Arc with its own
+    // VRAM) or an Apple Silicon/discrete Mac GPU: UI videos play by default.
+    bool dedicated = false;
+    QString dedicatedName; // that GPU, for the log and Configurações
     QString gpuPreference; // values read at startup (restart detection)
     QString videoEncoder;
 };
 const Status &status();
+
+// Names of the dedicated adapters (see Status::dedicated); empty on macOS.
+QStringList dedicatedAdapterNames();
 
 // WARP, llvmpipe, GDI Generic…: the "GPU" is the processor.
 bool isSoftwareRenderer(const QString &deviceName);

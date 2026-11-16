@@ -50,15 +50,11 @@ Item {
                             Layout.preferredHeight: width * 9 / 16 * 0.62
                             color: "#000"
                             clip: true
-                            MediaPlayer {
-                                id: cp
+                            LiveVideo {
+                                anchors.fill: parent
                                 source: cc.now && cc.on ? Storage.exportUrl(cc.now) : ""
-                                videoOutput: cvo
-                                loops: MediaPlayer.Infinite
-                                onSourceChanged: if (source != "") play()
-                                Component.onCompleted: if (source != "") play()
+                                opacity: cc.on ? 1 : 0.3
                             }
-                            VideoOutput { id: cvo; anchors.fill: parent; fillMode: VideoOutput.PreserveAspectCrop; opacity: cc.on ? 1 : 0.3 }
                             ColumnLayout {
                                 anchors.centerIn: parent
                                 visible: !cc.now

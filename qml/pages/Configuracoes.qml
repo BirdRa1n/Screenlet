@@ -209,6 +209,22 @@ Item {
                     onPicked: (v) => Settings.uiEffects = v
                 }
             }
+            Field {
+                Layout.fillWidth: true
+                label: "Vídeos animados na interface"
+                hint: Settings.uiVideos === "auto"
+                      ? (SystemInfo.dedicatedGpu && !Motion.reduced
+                         ? "Placa de vídeo dedicada detectada: as prévias e os vídeos do Painel e dos Canais tocam sozinhos."
+                         : (SystemInfo.isWindows && SystemInfo.dedicatedGpuName !== ""
+                            ? "A interface está usando a placa integrada: os vídeos ficam parados num quadro. Para usar a " + SystemInfo.dedicatedGpuName + ", escolha \"Alto desempenho\" em GPU usada."
+                            : "Sem placa de vídeo dedicada: os vídeos do Painel, dos Canais e as prévias ficam parados num quadro para a interface não pesar."))
+                      : (Settings.uiVideos === "off" ? "Mostra um quadro parado no lugar dos vídeos. A exportação não muda." : "Pode deixar a interface lenta em placas integradas. A exportação não muda.")
+                Select {
+                    options: [{ value: "auto", text: SystemInfo.dedicatedGpu && !Motion.reduced ? "Automático (ligados)" : "Automático (desligados)" }, { value: "on", text: "Ligados" }, { value: "off", text: "Desligados" }]
+                    value: Settings.uiVideos
+                    onPicked: (v) => Settings.uiVideos = v
+                }
+            }
             T {
                 Layout.fillWidth: true
                 size: 12

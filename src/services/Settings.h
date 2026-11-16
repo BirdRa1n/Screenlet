@@ -28,6 +28,10 @@ class Settings : public QObject
     Q_PROPERTY(QString videoEncoder READ videoEncoder WRITE setVideoEncoder NOTIFY changed)
     // "auto" | "full" | "reduced" — interface animations/effects (auto = reduced on old GPUs).
     Q_PROPERTY(QString uiEffects READ uiEffects WRITE setUiEffects NOTIFY changed)
+    // "auto" | "on" | "off" — videos that play by themselves in the UI
+    // (Painel, Canais, wizard previews). auto = only with a dedicated GPU.
+    // New key, optional in the JSON (missing → "auto").
+    Q_PROPERTY(QString uiVideos READ uiVideos WRITE setUiVideos NOTIFY changed)
     Q_PROPERTY(bool termsAcknowledged READ termsAcknowledged WRITE setTermsAcknowledged NOTIFY changed)
     Q_PROPERTY(QString backupDir READ backupDir WRITE setBackupDir NOTIFY changed)
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY changed)
@@ -44,6 +48,7 @@ public:
     QString gpuPreference() const;
     QString videoEncoder() const;
     QString uiEffects() const;
+    QString uiVideos() const;
     bool termsAcknowledged() const;
     QString backupDir() const;
     QString theme() const;
@@ -57,6 +62,7 @@ public:
     void setGpuPreference(const QString &v);
     void setVideoEncoder(const QString &v);
     void setUiEffects(const QString &v);
+    void setUiVideos(const QString &v);
     void setTermsAcknowledged(bool v);
     void setBackupDir(const QString &v);
     void setTheme(const QString &v);

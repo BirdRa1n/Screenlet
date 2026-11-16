@@ -101,5 +101,6 @@ Use estas variáveis de ambiente, sempre com pastas isoladas, para não tocar no
 | `SCREENLET_NO_RELAUNCH=1` | Encerra em vez de reiniciar após uma restauração |
 | `SCREENLET_D3D_FEATURE_LEVEL=0xa100` | Finge uma GPU antiga no Windows (`0xa100` = D3D 10.1, Intel HD 3000; `0xb000` = 11.0, HD 4000) |
 | `QSG_RHI_PREFER_SOFTWARE_RENDERER=1` | Força o WARP (renderização por software), útil para simular máquina fraca |
+| `SCREENLET_DEDICATED_GPU=0` ou `1` | Força a detecção de GPU dedicada (sem ela, os vídeos da interface ficam parados; ver `Motion.liveVideos`) |
 
 Os ganchos de captura e de exportação ignoram a instância única, então funcionam com o app aberto.

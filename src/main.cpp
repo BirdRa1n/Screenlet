@@ -169,6 +169,14 @@ int main(int argc, char *argv[])
             QMetaObject::invokeMethod(SystemInfo::instance(), [api, gpu] {
                 qInfo().noquote() << "Graphics:" << api << "·" << gpu;
                 SystemInfo::instance()->setGraphicsInfo(api, gpu);
+                // Same rule as Motion.liveVideos (QML), for the log.
+                const SystemInfo *si = SystemInfo::instance();
+                const Settings *st = Settings::instance();
+                const bool reduced = st->uiEffects() == QLatin1String("reduced")
+                                     || (st->uiEffects() == QLatin1String("auto") && si->lowEndGpu());
+                const bool live = st->uiVideos() == QLatin1String("on")
+                                  || (st->uiVideos() != QLatin1String("off") && si->dedicatedGpu() && !reduced);
+                qInfo().noquote() << "Vídeos da interface:" << (live ? "animados" : "parados") << "(" + st->uiVideos() + ")";
             },
                                       Qt::QueuedConnection);
         }, Qt::DirectConnection);

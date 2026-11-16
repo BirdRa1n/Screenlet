@@ -55,8 +55,8 @@ set(CPP_SOURCES
     src/render/MfEncoder.h       src/render/MfEncoder.cpp
 )
 if(APPLE)
-    list(APPEND CPP_SOURCES src/core/SecretStore_mac.mm)
-    set_source_files_properties(src/core/SecretStore_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    list(APPEND CPP_SOURCES src/core/SecretStore_mac.mm src/render/Gpu_mac.mm)
+    set_source_files_properties(src/core/SecretStore_mac.mm src/render/Gpu_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 endif()
 
 file(GLOB_RECURSE QML_FILES CONFIGURE_DEPENDS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} qml/*.qml qml/*.js)
@@ -141,7 +141,7 @@ target_link_libraries(Screenlet PRIVATE
     Qt6::Multimedia Qt6::Network Qt6::Concurrent Qt6::CorePrivate Qt6::GuiPrivate)
 
 if(APPLE)
-    target_link_libraries(Screenlet PRIVATE "-framework Security")
+    target_link_libraries(Screenlet PRIVATE "-framework Security" "-framework Metal")
     # App icon: resources/AppIcon.icon is an Icon Composer document (layered,
     # Liquid Glass on macOS 26+). actool (Xcode 26+) compiles it into
     # Assets.car (CFBundleIconName) plus AppIcon.icns for older macOS.

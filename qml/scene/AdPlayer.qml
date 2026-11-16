@@ -10,6 +10,7 @@ Item {
     property var config: ({ scenes: [], fps: 30, width: 1920, height: 1080 })
     property bool playing: false
     property bool loop: true
+    property bool tapToPlay: false
     property real frame: 0
     property real radius: 0
     property color backdrop: "#000000"
@@ -52,6 +53,26 @@ Item {
             config: root.config
             frameExact: root.frame
             playing: root.playing
+        }
+    }
+
+    // Click to play/pause, with a play badge while paused: for previews that
+    // don't start by themselves (Motion.liveVideos off).
+    MouseArea {
+        anchors.fill: parent
+        visible: root.tapToPlay
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.toggle()
+        Accessible.role: Accessible.Button
+        Accessible.name: root.playing ? "Pausar prévia" : "Reproduzir prévia"
+        Rectangle {
+            visible: !root.playing
+            anchors.centerIn: parent
+            width: 56
+            height: 56
+            radius: 28
+            color: Theme.alpha("#000000", 0.55)
+            Icon { anchors.centerIn: parent; name: "play"; size: 22; color: "#fff"; filled: true }
         }
     }
 
